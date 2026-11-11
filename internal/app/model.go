@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -577,7 +578,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				} else if m.SidebarView == SidebarGit && m.GitView != nil {
 					relLine := msg.Y - 2
-					targetFile, _ := m.GitView.HandleMouseClick(relLine)
+					targetFile, _ := m.GitView.HandleMouseClick(msg.X, relLine)
 					if targetFile != nil {
 						m.openDiff(targetFile.Path)
 					}
@@ -827,13 +828,39 @@ func (m *Model) openFile(path string) {
 	m.StatusBar.ShowToast("Dibuka: "+tab.Name, false, 1500*time.Millisecond)
 }
 
+func isBinaryBytes(data []byte) bool {
+	limit := len(data)
+	if limit > 512 {
+		limit = 512
+	}
+	return bytes.IndexByte(data[:limit], 0x00) != -1
+}
+
 func (m *Model) openDiff(relPath string) {
 	if m.GitRepo == nil {
 		return
 	}
-	orig, _ := m.GitRepo.GetFileContentAtHEAD(relPath)
 	fullPath := filepath.Join(m.GitRepo.RootPath, relPath)
+	info, err := os.Stat(fullPath)
+	if err == nil {
+		if info.Size() > editor.MaxFileSize {
+			m.StatusBar.ShowToast(fmt.Sprintf("File terlalu besar (%d MB > 10MB)", info.Size()/(1024*1024)), true, 3*time.Second)
+			return
+		}
+	}
+
 	modBytes, _ := os.ReadFile(fullPath)
+	if isBinaryBytes(modBytes) {
+		m.StatusBar.ShowToast("Diff file biner tidak didukung", true, 3*time.Second)
+		return
+	}
+
+	orig, _ := m.GitRepo.GetFileContentAtHEAD(relPath)
+	if isBinaryBytes([]byte(orig)) {
+		m.StatusBar.ShowToast("Diff file biner tidak didukung", true, 3*time.Second)
+		return
+	}
+
 	m.TabManager.OpenDiff(relPath, orig, string(modBytes))
 	m.Focus = FocusEditor
 	m.syncStatusBarWithActiveTab()

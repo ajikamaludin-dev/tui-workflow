@@ -1,8 +1,10 @@
 package editor
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -48,5 +50,24 @@ func TestTabManager(t *testing.T) {
 	}
 	if tab.IsDirty() {
 		t.Errorf("Tab should not be dirty after save")
+	}
+}
+
+func TestTabBarSingleLineGuarantee(t *testing.T) {
+	tm := NewTabManager()
+	for i := 0; i < 20; i++ {
+		tm.Tabs = append(tm.Tabs, &Tab{
+			Path:   fmt.Sprintf("file_%d.txt", i),
+			Buffer: NewBuffer("test"),
+		})
+	}
+	tm.ActiveIndex = 3
+
+	for _, w := range []int{40, 60, 80, 100, 120} {
+		rendered := tm.RenderTabBar(w)
+		lines := strings.Split(rendered, "\n")
+		if len(lines) != 1 {
+			t.Errorf("RenderTabBar at width %d produced %d lines (expected 1): %q", w, len(lines), rendered)
+		}
 	}
 }

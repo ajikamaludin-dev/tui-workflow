@@ -280,7 +280,7 @@ func (gv *GitView) Update(msg tea.Msg) (tea.Cmd, *GitFileStatus) {
 	return nil, fileToOpen
 }
 
-func (gv *GitView) HandleMouseClick(relY int) (*GitFileStatus, bool) {
+func (gv *GitView) HandleMouseClick(relX, relY int) (*GitFileStatus, bool) {
 	target, ok := gv.ItemClickMap[relY]
 	if !ok {
 		return nil, false
@@ -308,7 +308,13 @@ func (gv *GitView) HandleMouseClick(relY int) (*GitFileStatus, bool) {
 		gv.FocusArea = GitFocusStaged
 		gv.StagedIdx = target.Index
 		gv.CommitInput.Blur()
-		if target.Index < len(gv.Staged) {
+		// Clicking [-] button (columns 2..6) unstages the file
+		if relX >= 2 && relX <= 6 {
+			_ = gv.Repo.UnstageFile(target.Path)
+			gv.Refresh()
+			return nil, true
+		}
+		if target.Index >= 0 && target.Index < len(gv.Staged) {
 			return &gv.Staged[target.Index], true
 		}
 
@@ -316,7 +322,13 @@ func (gv *GitView) HandleMouseClick(relY int) (*GitFileStatus, bool) {
 		gv.FocusArea = GitFocusChanges
 		gv.ChangesIdx = target.Index
 		gv.CommitInput.Blur()
-		if target.Index < len(gv.Changes) {
+		// Clicking [+] button (columns 2..6) stages the file
+		if relX >= 2 && relX <= 6 {
+			_ = gv.Repo.StageFile(target.Path)
+			gv.Refresh()
+			return nil, true
+		}
+		if target.Index >= 0 && target.Index < len(gv.Changes) {
 			return &gv.Changes[target.Index], true
 		}
 

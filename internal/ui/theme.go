@@ -119,9 +119,7 @@ func NewDarkTheme() Theme {
 		Padding(0, 1).
 		Background(t.BgActiveTab).
 		Foreground(t.FgHighlight).
-		BorderTop(true).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(t.Accent)
+		Bold(true)
 
 	t.TabInactiveStyle = lipgloss.NewStyle().
 		Padding(0, 1).

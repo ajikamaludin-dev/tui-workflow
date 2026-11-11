@@ -29,7 +29,7 @@ type MenuBar struct {
 }
 
 func NewMenuBar() *MenuBar {
-	return &MenuBar{
+	mb := &MenuBar{
 		ActiveMenu:   -1,
 		SelectedItem: 0,
 		Categories: []MenuCategory{
@@ -61,6 +61,21 @@ func NewMenuBar() *MenuBar {
 				},
 			},
 		},
+	}
+	mb.updatePositions()
+	return mb
+}
+
+func (m *MenuBar) updatePositions() {
+	currX := 1
+	for i := range m.Categories {
+		cat := &m.Categories[i]
+		cat.StartX = currX
+		titleText := " " + cat.Title + " "
+		renderedItem := CurrentTheme.TopMenuItemStyle.Render(titleText)
+		currX += lipgloss.Width(renderedItem)
+		cat.EndX = currX - 1
+		currX++
 	}
 }
 

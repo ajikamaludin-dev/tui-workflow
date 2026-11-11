@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"tui-workflow/internal/git"
 	"tui-workflow/internal/ui"
 )
@@ -204,7 +204,7 @@ func (tm *TabManager) RenderTabBar(width int) string {
 	tm.MarkdownBtnEndX = -1
 
 	if len(tm.Tabs) == 0 {
-		return ui.CurrentTheme.TabBarContainer.Width(width).Render(" (Tidak ada file terbuka)")
+		return ui.CurrentTheme.TabBarContainer.Width(width).MaxHeight(1).Render(" (Tidak ada file terbuka)")
 	}
 
 	var rightButton string
@@ -216,57 +216,105 @@ func (tm *TabManager) RenderTabBar(width int) string {
 			rightButton = ui.CurrentTheme.StatusBarBadgeStyle.Render(" [Preview] ")
 		}
 	}
-	rightButtonWidth := lipgloss.Width(rightButton)
+	rightButtonWidth := ansi.StringWidth(rightButton)
 
 	availWidth := width - rightButtonWidth
 	if availWidth < 10 {
 		availWidth = 10
 	}
 
+	// 1. Calculate ideal max title length per tab
 	maxTabTitleLen := 18
-	if len(tm.Tabs)*14 > availWidth && len(tm.Tabs) > 0 {
-		maxTabTitleLen = (availWidth / len(tm.Tabs)) - 6
-		if maxTabTitleLen < 4 {
-			maxTabTitleLen = 4
+	if len(tm.Tabs) > 0 && len(tm.Tabs)*16 > availWidth {
+		maxTabTitleLen = (availWidth / len(tm.Tabs)) - 4
+		if maxTabTitleLen < 6 {
+			maxTabTitleLen = 6
+		}
+	}
+
+	// 2. Pre-render tabs and record widths
+	type renderedTabInfo struct {
+		Index    int
+		Rendered string
+		Width    int
+	}
+	renderedTabs := make([]renderedTabInfo, len(tm.Tabs))
+	for i, t := range tm.Tabs {
+		rawTitle := t.Title()
+		if len(rawTitle) > maxTabTitleLen {
+			rawTitle = rawTitle[:maxTabTitleLen-2] + ".."
+		}
+		titleWithClose := rawTitle + " ×"
+		var r string
+		if i == tm.ActiveIndex {
+			r = ui.CurrentTheme.TabActiveStyle.Render(titleWithClose)
+		} else {
+			r = ui.CurrentTheme.TabInactiveStyle.Render(titleWithClose)
+		}
+		renderedTabs[i] = renderedTabInfo{
+			Index:    i,
+			Rendered: r,
+			Width:    ansi.StringWidth(r),
+		}
+	}
+
+	// 3. Determine startIdx to ensure active tab is visible
+	startIdx := 0
+	totalW := 0
+	for _, rt := range renderedTabs {
+		totalW += rt.Width
+	}
+
+	if totalW > availWidth {
+		curW := 0
+		startIdx = tm.ActiveIndex
+		for startIdx > 0 && curW+renderedTabs[startIdx-1].Width < availWidth/2 {
+			startIdx--
+			curW += renderedTabs[startIdx].Width
 		}
 	}
 
 	var sb strings.Builder
 	currX := 0
 
-	for i, t := range tm.Tabs {
-		rawTitle := t.Title()
-		if len(rawTitle) > maxTabTitleLen {
-			rawTitle = rawTitle[:maxTabTitleLen-2] + ".."
+	if startIdx > 0 {
+		sb.WriteString("< ")
+		currX += 2
+	}
+
+	hasMoreRight := false
+	for i := startIdx; i < len(renderedTabs); i++ {
+		rt := renderedTabs[i]
+		if currX+rt.Width > availWidth-2 && i < len(renderedTabs)-1 {
+			hasMoreRight = true
+			break
+		}
+		if currX+rt.Width > availWidth {
+			break
 		}
 
-		titleWithClose := rawTitle + " ×"
 		startX := currX
-
-		var renderedTab string
-		if i == tm.ActiveIndex {
-			renderedTab = ui.CurrentTheme.TabActiveStyle.Render(titleWithClose)
-		} else {
-			renderedTab = ui.CurrentTheme.TabInactiveStyle.Render(titleWithClose)
-		}
-
-		tabW := lipgloss.Width(renderedTab)
-		endX := startX + tabW - 1
+		endX := startX + rt.Width - 1
 		closeX := endX - 2 // Position of '×'
 
 		tm.ClickRegions = append(tm.ClickRegions, TabClickRegion{
-			TabIdx: i,
+			TabIdx: rt.Index,
 			StartX: startX,
 			EndX:   endX,
 			CloseX: closeX,
 		})
 
-		sb.WriteString(renderedTab)
-		currX = endX + 1
+		sb.WriteString(rt.Rendered)
+		currX += rt.Width
+	}
+
+	if hasMoreRight {
+		sb.WriteString(" >")
+		currX += 2
 	}
 
 	barContent := sb.String()
-	barLen := lipgloss.Width(barContent)
+	barLen := ansi.StringWidth(barContent)
 	if barLen < availWidth {
 		barContent += strings.Repeat(" ", availWidth-barLen)
 	}
@@ -277,5 +325,9 @@ func (tm *TabManager) RenderTabBar(width int) string {
 		barContent += rightButton
 	}
 
-	return ui.CurrentTheme.TabBarContainer.Width(width).Render(barContent)
+	if ansi.StringWidth(barContent) > width {
+		barContent = ansi.Truncate(barContent, width, "")
+	}
+
+	return ui.CurrentTheme.TabBarContainer.Width(width).MaxHeight(1).Render(barContent)
 }

@@ -39,14 +39,39 @@ type Model struct {
 	ClosingTabIdx  int
 }
 
-func NewModel() Model {
-	tm := editor.NewTabManager()
-	// Open PRD.md by default if present
-	if _, err := os.Stat("PRD.md"); err == nil {
-		_, _ = tm.OpenFile("PRD.md")
+func NewModelWithPath(targetPath string) (Model, error) {
+	if targetPath == "" {
+		targetPath = "."
+	}
+	cleanPath, err := filepath.Abs(targetPath)
+	if err != nil {
+		cleanPath = targetPath
+	}
+	fi, err := os.Stat(cleanPath)
+	if err != nil {
+		return Model{}, fmt.Errorf("path tidak ditemukan: %w", err)
 	}
 
-	repo, _ := git.OpenRepo(".")
+	var rootDir string
+	var initialFile string
+
+	if fi.IsDir() {
+		rootDir = cleanPath
+		prdPath := filepath.Join(rootDir, "PRD.md")
+		if _, err := os.Stat(prdPath); err == nil {
+			initialFile = prdPath
+		}
+	} else {
+		rootDir = filepath.Dir(cleanPath)
+		initialFile = cleanPath
+	}
+
+	tm := editor.NewTabManager()
+	if initialFile != "" {
+		_, _ = tm.OpenFile(initialFile)
+	}
+
+	repo, _ := git.OpenRepo(rootDir)
 	var gv *git.GitView
 	if repo != nil {
 		gv = git.NewGitView(repo)
@@ -59,7 +84,7 @@ func NewModel() Model {
 		SidebarView:    SidebarFiles,
 		MenuBar:        ui.NewMenuBar(),
 		StatusBar:      ui.NewStatusBar(),
-		Explorer:       explorer.NewTree("."),
+		Explorer:       explorer.NewTree(rootDir),
 		GitRepo:        repo,
 		GitView:        gv,
 		TabManager:     tm,
@@ -71,17 +96,37 @@ func NewModel() Model {
 		ShowAbout:      false,
 		ClosingTabIdx:  -1,
 	}
-
 	m.syncStatusBarWithActiveTab()
+	return m, nil
+}
+
+func NewModel() Model {
+	m, _ := NewModelWithPath(".")
 	return m
 }
 
+type MarqueeTickMsg time.Time
+
+func marqueeTickCmd() tea.Cmd {
+	return tea.Tick(250*time.Millisecond, func(t time.Time) tea.Msg {
+		return MarqueeTickMsg(t)
+	})
+}
+
 func (m Model) Init() tea.Cmd {
-	return nil
+	return marqueeTickCmd()
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case MarqueeTickMsg:
+		if m.SidebarVisible && m.SidebarView == SidebarFiles && m.Focus == FocusSidebar && m.Explorer != nil {
+			if m.Explorer.SelectedNameExceeds(m.SidebarWidth - 1) {
+				m.Explorer.TickMarquee()
+			}
+		}
+		return m, marqueeTickCmd()
+
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
 		m.Height = msg.Height
@@ -479,6 +524,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		editorStartX := 0
+		if m.SidebarVisible {
+			editorStartX = m.SidebarWidth
+		}
+
+		// Mouse scroll wheel on Tab Bar (Row 1): scroll tabs horizontally
+		if msg.Y == 1 && msg.X >= editorStartX {
+			if msg.Button == tea.MouseButtonWheelUp {
+				m.TabManager.ScrollTabsLeft()
+				return m, nil
+			} else if msg.Button == tea.MouseButtonWheelDown {
+				m.TabManager.ScrollTabsRight()
+				return m, nil
+			}
+		}
+
 		// Mouse scroll wheel in editor
 		if m.Focus == FocusEditor && m.TabManager.ActiveTab() != nil {
 			tab := m.TabManager.ActiveTab()
@@ -529,6 +590,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Y == 1 && msg.X >= editorStartX {
 				relX := msg.X - editorStartX
 				action, clickedTabIdx := m.TabManager.HandleTabClick(relX)
+				if action == "scroll_left" {
+					m.TabManager.ScrollTabsLeft()
+					return m, nil
+				}
+				if action == "scroll_right" {
+					m.TabManager.ScrollTabsRight()
+					return m, nil
+				}
 				if action == "toggle_markdown" {
 					m.TabManager.ToggleActiveMarkdown()
 					m.syncStatusBarWithActiveTab()

@@ -9,7 +9,17 @@ import (
 )
 
 func main() {
-	model := app.NewModel()
+	targetPath := "."
+	if len(os.Args) > 1 {
+		targetPath = os.Args[1]
+	}
+
+	model, err := app.NewModelWithPath(targetPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error opening path %q: %v\n", targetPath, err)
+		os.Exit(1)
+	}
+
 	p := tea.NewProgram(
 		model,
 		tea.WithAltScreen(),

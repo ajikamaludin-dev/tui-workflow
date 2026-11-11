@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"tui-workflow/internal/ui"
 )
 
@@ -16,6 +17,7 @@ type Tree struct {
 	SelectedIndex int
 	ScrollOffset  int
 	ShowHidden    bool
+	MarqueeOffset int
 }
 
 func NewTree(rootPath string) *Tree {
@@ -112,6 +114,7 @@ func (t *Tree) SelectedNode() *Node {
 func (t *Tree) MoveUp() {
 	if t.SelectedIndex > 0 {
 		t.SelectedIndex--
+		t.MarqueeOffset = 0
 		t.adjustScroll()
 	}
 }
@@ -119,6 +122,7 @@ func (t *Tree) MoveUp() {
 func (t *Tree) MoveDown() {
 	if t.SelectedIndex < len(t.FlatNodes)-1 {
 		t.SelectedIndex++
+		t.MarqueeOffset = 0
 		t.adjustScroll()
 	}
 }
@@ -206,6 +210,7 @@ func (t *Tree) HandleClick(relativeLine int) (action string, node *Node) {
 	}
 
 	t.SelectedIndex = targetIdx
+	t.MarqueeOffset = 0
 	node = t.FlatNodes[targetIdx]
 
 	if node.IsDir {
@@ -214,6 +219,24 @@ func (t *Tree) HandleClick(relativeLine int) (action string, node *Node) {
 	}
 
 	return "open", node
+}
+
+func (t *Tree) TickMarquee() {
+	t.MarqueeOffset++
+}
+
+func (t *Tree) ResetMarquee() {
+	t.MarqueeOffset = 0
+}
+
+func (t *Tree) SelectedNameExceeds(width int) bool {
+	node := t.SelectedNode()
+	if node == nil {
+		return false
+	}
+	prefixWidth := (node.Depth - 1) * 2 + 2
+	availForName := width - prefixWidth
+	return ansi.StringWidth(node.Name) > availForName
 }
 
 func (t *Tree) Render(width, height int, focused bool) string {
@@ -247,7 +270,6 @@ func (t *Tree) Render(width, height int, focused bool) string {
 		if indent < "" {
 			indent = ""
 		}
-
 		var icon string
 		if node.IsDir {
 			if node.IsExpanded {
@@ -259,10 +281,45 @@ func (t *Tree) Render(width, height int, focused bool) string {
 			icon = "  "
 		}
 
-		lineText := indent + icon + node.Name
-		lineWidth := lipgloss.Width(lineText)
+		prefix := indent + icon
+		prefixWidth := ansi.StringWidth(prefix)
+		availForName := width - prefixWidth
+		if availForName < 1 {
+			availForName = 1
+		}
+
+		var displayName string
+		nameWidth := ansi.StringWidth(node.Name)
+
+		if i == t.SelectedIndex {
+			if nameWidth > availForName {
+				// Marquee horizontally for selected item
+				loopText := node.Name + "   "
+				loopRunes := []rune(loopText)
+				start := t.MarqueeOffset % len(loopRunes)
+				var nameRunes []rune
+				for k := 0; k < availForName; k++ {
+					nameRunes = append(nameRunes, loopRunes[(start+k)%len(loopRunes)])
+				}
+				displayName = string(nameRunes)
+			} else {
+				displayName = node.Name
+			}
+		} else {
+			if nameWidth > availForName {
+				// Truncate with ... for inactive items
+				displayName = ansi.Truncate(node.Name, availForName, "...")
+			} else {
+				displayName = node.Name
+			}
+		}
+
+		lineText := prefix + displayName
+		lineWidth := ansi.StringWidth(lineText)
 		if lineWidth < width {
 			lineText += strings.Repeat(" ", width-lineWidth)
+		} else if lineWidth > width {
+			lineText = ansi.Truncate(lineText, width, "")
 		}
 
 		if i == t.SelectedIndex {

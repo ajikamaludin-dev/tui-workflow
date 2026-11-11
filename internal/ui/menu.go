@@ -187,26 +187,22 @@ func (m *MenuBar) HandleMouse(msg tea.MouseMsg) (action string, handled bool) {
 	// Click inside dropdown if open
 	if m.IsOpen() {
 		cat := m.Categories[m.ActiveMenu]
-		dropStartY := 1
-		dropEndY := dropStartY + len(cat.Items)
-		dropStartX := cat.StartX
+		box, dropStartX, dropStartY := m.RenderDropdown()
+		boxWidth := lipgloss.Width(box)
+		boxHeight := lipgloss.Height(box)
 
-		maxItemLen := 0
-		for _, it := range cat.Items {
-			l := len(it.Label) + len(it.Shortcut) + 4
-			if l > maxItemLen {
-				maxItemLen = l
-			}
-		}
-		dropEndX := dropStartX + maxItemLen + 2
-
-		if msg.Y >= dropStartY && msg.Y <= dropEndY && msg.X >= dropStartX && msg.X <= dropEndX {
-			clickedItem := msg.Y - dropStartY
-			if clickedItem >= 0 && clickedItem < len(cat.Items) {
-				actionID := cat.Items[clickedItem].ActionID
+		// Check if click is within the dropdown box boundaries
+		if msg.X >= dropStartX && msg.X < dropStartX+boxWidth &&
+			msg.Y >= dropStartY && msg.Y < dropStartY+boxHeight {
+			// Item rows are inside the border (Y = dropStartY + 1 up to dropStartY + len(cat.Items))
+			itemY := msg.Y - (dropStartY + 1)
+			if itemY >= 0 && itemY < len(cat.Items) {
+				actionID := cat.Items[itemY].ActionID
 				m.Close()
 				return actionID, true
 			}
+			// Clicked on border of dropdown box
+			return "", true
 		}
 
 		// Clicked outside dropdown

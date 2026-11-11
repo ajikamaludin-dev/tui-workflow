@@ -25,18 +25,28 @@ type TabClickRegion struct {
 type TabManager struct {
 	Tabs              []*Tab
 	ActiveIndex       int
+	TabScrollOffset   int
 	ClickRegions      []TabClickRegion
 	MarkdownBtnStartX int
 	MarkdownBtnEndX   int
+	ScrollLeftStartX  int
+	ScrollLeftEndX    int
+	ScrollRightStartX int
+	ScrollRightEndX   int
 }
 
 func NewTabManager() *TabManager {
 	return &TabManager{
 		Tabs:              make([]*Tab, 0),
 		ActiveIndex:       -1,
+		TabScrollOffset:   0,
 		ClickRegions:      make([]TabClickRegion, 0),
 		MarkdownBtnStartX: -1,
 		MarkdownBtnEndX:   -1,
+		ScrollLeftStartX:  -1,
+		ScrollLeftEndX:    -1,
+		ScrollRightStartX: -1,
+		ScrollRightEndX:   -1,
 	}
 }
 
@@ -56,6 +66,7 @@ func (tm *TabManager) OpenFile(path string) (*Tab, error) {
 	for i, t := range tm.Tabs {
 		if t.Path == path && !t.IsDiff {
 			tm.ActiveIndex = i
+			tm.EnsureActiveTabVisible()
 			return t, nil
 		}
 	}
@@ -92,6 +103,7 @@ func (tm *TabManager) OpenFile(path string) (*Tab, error) {
 	tab := NewFileTab(path, string(content))
 	tm.Tabs = append(tm.Tabs, tab)
 	tm.ActiveIndex = len(tm.Tabs) - 1
+	tm.EnsureActiveTabVisible()
 	return tab, nil
 }
 
@@ -108,6 +120,7 @@ func (tm *TabManager) OpenDiff(path, original, modified string) *Tab {
 	tab := NewDiffTab(path, original, modified)
 	tm.Tabs = append(tm.Tabs, tab)
 	tm.ActiveIndex = len(tm.Tabs) - 1
+	tm.EnsureActiveTabVisible()
 	return tab
 }
 
@@ -156,11 +169,38 @@ func (tm *TabManager) CloseTab(idx int) {
 	if tm.ActiveIndex < 0 && len(tm.Tabs) > 0 {
 		tm.ActiveIndex = 0
 	}
+	if tm.TabScrollOffset >= len(tm.Tabs) && len(tm.Tabs) > 0 {
+		tm.TabScrollOffset = len(tm.Tabs) - 1
+	} else if len(tm.Tabs) == 0 {
+		tm.TabScrollOffset = 0
+	}
+}
+
+func (tm *TabManager) ScrollTabsLeft() {
+	if tm.TabScrollOffset > 0 {
+		tm.TabScrollOffset--
+	}
+}
+
+func (tm *TabManager) ScrollTabsRight() {
+	if tm.TabScrollOffset < len(tm.Tabs)-1 {
+		tm.TabScrollOffset++
+	}
+}
+
+func (tm *TabManager) EnsureActiveTabVisible() {
+	if tm.ActiveIndex < 0 || tm.ActiveIndex >= len(tm.Tabs) {
+		return
+	}
+	if tm.TabScrollOffset > tm.ActiveIndex {
+		tm.TabScrollOffset = tm.ActiveIndex
+	}
 }
 
 func (tm *TabManager) NextTab() {
 	if len(tm.Tabs) > 1 {
 		tm.ActiveIndex = (tm.ActiveIndex + 1) % len(tm.Tabs)
+		tm.EnsureActiveTabVisible()
 	}
 }
 
@@ -170,6 +210,7 @@ func (tm *TabManager) PrevTab() {
 		if tm.ActiveIndex < 0 {
 			tm.ActiveIndex = len(tm.Tabs) - 1
 		}
+		tm.EnsureActiveTabVisible()
 	}
 }
 
@@ -185,6 +226,12 @@ func (tm *TabManager) ToggleActiveMarkdown() bool {
 func (tm *TabManager) HandleTabClick(clickX int) (action string, tabIdx int) {
 	if tm.MarkdownBtnStartX >= 0 && clickX >= tm.MarkdownBtnStartX && clickX <= tm.MarkdownBtnEndX {
 		return "toggle_markdown", -1
+	}
+	if tm.ScrollLeftStartX >= 0 && clickX >= tm.ScrollLeftStartX && clickX <= tm.ScrollLeftEndX {
+		return "scroll_left", -1
+	}
+	if tm.ScrollRightStartX >= 0 && clickX >= tm.ScrollRightStartX && clickX <= tm.ScrollRightEndX {
+		return "scroll_right", -1
 	}
 
 	for _, reg := range tm.ClickRegions {
@@ -202,6 +249,10 @@ func (tm *TabManager) RenderTabBar(width int) string {
 	tm.ClickRegions = make([]TabClickRegion, 0)
 	tm.MarkdownBtnStartX = -1
 	tm.MarkdownBtnEndX = -1
+	tm.ScrollLeftStartX = -1
+	tm.ScrollLeftEndX = -1
+	tm.ScrollRightStartX = -1
+	tm.ScrollRightEndX = -1
 
 	if len(tm.Tabs) == 0 {
 		return ui.CurrentTheme.TabBarContainer.Width(width).MaxHeight(1).Render(" (Tidak ada file terbuka)")
@@ -223,14 +274,8 @@ func (tm *TabManager) RenderTabBar(width int) string {
 		availWidth = 10
 	}
 
-	// 1. Calculate ideal max title length per tab
-	maxTabTitleLen := 18
-	if len(tm.Tabs) > 0 && len(tm.Tabs)*16 > availWidth {
-		maxTabTitleLen = (availWidth / len(tm.Tabs)) - 4
-		if maxTabTitleLen < 6 {
-			maxTabTitleLen = 6
-		}
-	}
+	// 1. Fixed max title length per tab (clean limit, truncate with .. if longer)
+	const maxTabTitleLen = 16
 
 	// 2. Pre-render tabs and record widths
 	type renderedTabInfo struct {
@@ -241,8 +286,8 @@ func (tm *TabManager) RenderTabBar(width int) string {
 	renderedTabs := make([]renderedTabInfo, len(tm.Tabs))
 	for i, t := range tm.Tabs {
 		rawTitle := t.Title()
-		if len(rawTitle) > maxTabTitleLen {
-			rawTitle = rawTitle[:maxTabTitleLen-2] + ".."
+		if ansi.StringWidth(rawTitle) > maxTabTitleLen {
+			rawTitle = ansi.Truncate(rawTitle, maxTabTitleLen, "..")
 		}
 		titleWithClose := rawTitle + " ×"
 		var r string
@@ -258,26 +303,22 @@ func (tm *TabManager) RenderTabBar(width int) string {
 		}
 	}
 
-	// 3. Determine startIdx to ensure active tab is visible
-	startIdx := 0
-	totalW := 0
-	for _, rt := range renderedTabs {
-		totalW += rt.Width
+	// 3. Ensure TabScrollOffset is within valid bounds
+	if tm.TabScrollOffset < 0 {
+		tm.TabScrollOffset = 0
+	}
+	if len(renderedTabs) > 0 && tm.TabScrollOffset >= len(renderedTabs) {
+		tm.TabScrollOffset = len(renderedTabs) - 1
 	}
 
-	if totalW > availWidth {
-		curW := 0
-		startIdx = tm.ActiveIndex
-		for startIdx > 0 && curW+renderedTabs[startIdx-1].Width < availWidth/2 {
-			startIdx--
-			curW += renderedTabs[startIdx].Width
-		}
-	}
+	startIdx := tm.TabScrollOffset
 
 	var sb strings.Builder
 	currX := 0
 
 	if startIdx > 0 {
+		tm.ScrollLeftStartX = currX
+		tm.ScrollLeftEndX = currX + 1
 		sb.WriteString("< ")
 		currX += 2
 	}
@@ -285,11 +326,12 @@ func (tm *TabManager) RenderTabBar(width int) string {
 	hasMoreRight := false
 	for i := startIdx; i < len(renderedTabs); i++ {
 		rt := renderedTabs[i]
-		if currX+rt.Width > availWidth-2 && i < len(renderedTabs)-1 {
-			hasMoreRight = true
-			break
+		reservedRight := 0
+		if i < len(renderedTabs)-1 {
+			reservedRight = 2 // " >"
 		}
-		if currX+rt.Width > availWidth {
+		if currX+rt.Width > availWidth-reservedRight {
+			hasMoreRight = true
 			break
 		}
 
@@ -309,6 +351,8 @@ func (tm *TabManager) RenderTabBar(width int) string {
 	}
 
 	if hasMoreRight {
+		tm.ScrollRightStartX = currX
+		tm.ScrollRightEndX = currX + 1
 		sb.WriteString(" >")
 		currX += 2
 	}

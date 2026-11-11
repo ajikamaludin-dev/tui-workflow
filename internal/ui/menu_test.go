@@ -41,3 +41,59 @@ func TestMenuBarNavigation(t *testing.T) {
 		t.Errorf("Menu should be closed after Esc")
 	}
 }
+
+func TestMenuBarMouseClick(t *testing.T) {
+	mb := NewMenuBar()
+	mb.SetWidth(100)
+	_ = mb.Render() // ensure positions are calculated
+
+	// 1. Click on "File" (Row 0, inside StartX..EndX)
+	fileCat := mb.Categories[0]
+	action, handled := mb.HandleMouse(tea.MouseMsg{
+		X:      fileCat.StartX,
+		Y:      0,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+	})
+	if !handled || !mb.IsOpen() || mb.ActiveMenu != 0 {
+		t.Fatalf("Expected File menu to open on click, handled=%v, open=%v, active=%d", handled, mb.IsOpen(), mb.ActiveMenu)
+	}
+
+	// 2. Click on item 0 "New File" at Y = 2
+	action, handled = mb.HandleMouse(tea.MouseMsg{
+		X:      fileCat.StartX + 2,
+		Y:      2,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+	})
+	if !handled || action != "file.new" {
+		t.Errorf("Expected action 'file.new', got %q (handled=%v)", action, handled)
+	}
+	if mb.IsOpen() {
+		t.Errorf("Menu should close after item click")
+	}
+
+	// 3. Re-open File menu and click on item 1 "Save File" at Y = 3
+	mb.Toggle(0)
+	action, handled = mb.HandleMouse(tea.MouseMsg{
+		X:      fileCat.StartX + 2,
+		Y:      3,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+	})
+	if !handled || action != "file.save" {
+		t.Errorf("Expected action 'file.save', got %q (handled=%v)", action, handled)
+	}
+
+	// 4. Re-open File menu and click outside dropdown
+	mb.Toggle(0)
+	action, handled = mb.HandleMouse(tea.MouseMsg{
+		X:      80,
+		Y:      10,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+	})
+	if !handled || action != "" || mb.IsOpen() {
+		t.Errorf("Expected menu to close when clicking outside, open=%v", mb.IsOpen())
+	}
+}

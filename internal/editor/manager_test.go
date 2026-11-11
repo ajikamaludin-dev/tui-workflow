@@ -71,3 +71,66 @@ func TestTabBarSingleLineGuarantee(t *testing.T) {
 		}
 	}
 }
+
+func TestTabBarScrollingAndTitleLimit(t *testing.T) {
+	tm := NewTabManager()
+
+	// 1. Title limit test
+	longPath := "very_long_file_name_exceeding_sixteen_chars.go"
+	tm.Tabs = append(tm.Tabs, &Tab{
+		Path:   longPath,
+		Name:   longPath,
+		Buffer: NewBuffer("package main"),
+	})
+	tm.ActiveIndex = 0
+
+	rendered := tm.RenderTabBar(60)
+	if !strings.Contains(rendered, "..") {
+		t.Errorf("Expected long tab title to be truncated with '..', got: %s", rendered)
+	}
+
+	// 2. Multi-tab scrolling
+	for i := 1; i < 15; i++ {
+		name := fmt.Sprintf("file_%02d.txt", i)
+		tm.Tabs = append(tm.Tabs, &Tab{
+			Path:   name,
+			Name:   name,
+			Buffer: NewBuffer("test"),
+		})
+	}
+
+	// Render at narrow width (e.g. 40)
+	_ = tm.RenderTabBar(40)
+	if tm.ScrollRightStartX < 0 {
+		t.Fatalf("Expected ScrollRightStartX to be active when tabs overflow")
+	}
+
+	// Clicking '>' scrolls right
+	action, _ := tm.HandleTabClick(tm.ScrollRightStartX)
+	if action != "scroll_right" {
+		t.Errorf("Expected action 'scroll_right', got %q", action)
+	}
+
+	initialOffset := tm.TabScrollOffset
+	tm.ScrollTabsRight()
+	if tm.TabScrollOffset <= initialOffset {
+		t.Errorf("Expected TabScrollOffset to increase after ScrollTabsRight()")
+	}
+
+	// Re-render, '<' button should now be visible
+	_ = tm.RenderTabBar(40)
+	if tm.ScrollLeftStartX < 0 {
+		t.Fatalf("Expected ScrollLeftStartX to be active after scrolling right")
+	}
+
+	// Clicking '<' scrolls left
+	action, _ = tm.HandleTabClick(tm.ScrollLeftStartX)
+	if action != "scroll_left" {
+		t.Errorf("Expected action 'scroll_left', got %q", action)
+	}
+
+	tm.ScrollTabsLeft()
+	if tm.TabScrollOffset != initialOffset {
+		t.Errorf("Expected TabScrollOffset to return to %d, got %d", initialOffset, tm.TabScrollOffset)
+	}
+}

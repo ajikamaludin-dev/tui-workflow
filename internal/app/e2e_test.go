@@ -9,6 +9,41 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+func TestNewModelWithPath(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "tui-test-path-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	testFilePath := filepath.Join(tempDir, "sample.txt")
+	_ = os.WriteFile(testFilePath, []byte("hello world"), 0644)
+
+	// 1. Directory path
+	mDir, err := NewModelWithPath(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to open dir: %v", err)
+	}
+	if mDir.Explorer.RootPath != tempDir {
+		t.Errorf("Expected Explorer RootPath %s, got %s", tempDir, mDir.Explorer.RootPath)
+	}
+
+	// 2. Specific file path
+	mFile, err := NewModelWithPath(testFilePath)
+	if err != nil {
+		t.Fatalf("Failed to open file: %v", err)
+	}
+	if mFile.TabManager.ActiveTab() == nil || mFile.TabManager.ActiveTab().Path != testFilePath {
+		t.Errorf("Expected active tab opening %s", testFilePath)
+	}
+
+	// 3. Non-existent path
+	_, err = NewModelWithPath(filepath.Join(tempDir, "does_not_exist"))
+	if err == nil {
+		t.Errorf("Expected error for non-existent path")
+	}
+}
+
 func TestE2EStartupAndResize(t *testing.T) {
 	m := NewModel()
 

@@ -1,0 +1,155 @@
+package dialog
+
+import (
+	"strings"
+
+	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"tui-workflow/internal/ui"
+)
+
+type InputDialogType int
+
+const (
+	InputNewFile InputDialogType = iota
+	InputNewFolder
+	InputRename
+)
+
+type InputDialog struct {
+	Active     bool
+	Type       InputDialogType
+	Title      string
+	TargetPath string // target folder or existing file path
+	TextInput  textinput.Model
+	FocusedBtn int // 0: Input, 1: OK, 2: Cancel
+	Width      int
+}
+
+func NewInputDialog() *InputDialog {
+	ti := textinput.New()
+	ti.Prompt = "❯ "
+	ti.CharLimit = 128
+	ti.Width = 36
+
+	return &InputDialog{
+		Active:    false,
+		TextInput: ti,
+		Width:     46,
+	}
+}
+
+func (d *InputDialog) Open(t InputDialogType, title, targetPath, initialVal string) {
+	d.Active = true
+	d.Type = t
+	d.Title = title
+	d.TargetPath = targetPath
+	d.TextInput.SetValue(initialVal)
+	d.TextInput.CursorEnd()
+	d.TextInput.Focus()
+	d.FocusedBtn = 0
+}
+
+func (d *InputDialog) Close() {
+	d.Active = false
+	d.TextInput.Blur()
+}
+
+func (d *InputDialog) Value() string {
+	return strings.TrimSpace(d.TextInput.Value())
+}
+
+func (d *InputDialog) Update(msg tea.Msg) (confirmed bool, canceled bool, cmd tea.Cmd) {
+	if !d.Active {
+		return false, false, nil
+	}
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "esc":
+			d.Close()
+			return false, true, nil
+
+		case "tab":
+			d.FocusedBtn = (d.FocusedBtn + 1) % 3
+			if d.FocusedBtn == 0 {
+				d.TextInput.Focus()
+			} else {
+				d.TextInput.Blur()
+			}
+			return false, false, nil
+
+		case "enter":
+			if d.FocusedBtn == 2 { // Cancel
+				d.Close()
+				return false, true, nil
+			}
+			val := d.Value()
+			if val != "" {
+				d.Close()
+				return true, false, nil
+			}
+			return false, false, nil
+		}
+	}
+
+	if d.FocusedBtn == 0 {
+		var textCmd tea.Cmd
+		d.TextInput, textCmd = d.TextInput.Update(msg)
+		return false, false, textCmd
+	}
+
+	return false, false, nil
+}
+
+func (d *InputDialog) Render() string {
+	if !d.Active {
+		return ""
+	}
+
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(ui.CurrentTheme.FgHighlight).
+		MarginBottom(1)
+
+	renderedTitle := titleStyle.Render(d.Title)
+	renderedInput := d.TextInput.View()
+
+	btnOKStyle := lipgloss.NewStyle().
+		Padding(0, 2).
+		MarginRight(1).
+		Foreground(ui.CurrentTheme.FgPrimary).
+		Background(ui.CurrentTheme.BgTopMenu)
+
+	btnCancelStyle := lipgloss.NewStyle().
+		Padding(0, 2).
+		Foreground(ui.CurrentTheme.FgPrimary).
+		Background(ui.CurrentTheme.BgTopMenu)
+
+	if d.FocusedBtn == 1 {
+		btnOKStyle = btnOKStyle.Background(ui.CurrentTheme.Accent).Foreground(ui.CurrentTheme.FgHighlight).Bold(true)
+	} else if d.FocusedBtn == 2 {
+		btnCancelStyle = btnCancelStyle.Background(ui.CurrentTheme.Red).Foreground(ui.CurrentTheme.FgHighlight).Bold(true)
+	}
+
+	buttons := lipgloss.JoinHorizontal(lipgloss.Center, btnOKStyle.Render("OK (Enter)"), btnCancelStyle.Render("Cancel (Esc)"))
+
+	content := lipgloss.JoinVertical(
+		lipgloss.Left,
+		renderedTitle,
+		renderedInput,
+		"\n",
+		buttons,
+	)
+
+	boxStyle := lipgloss.NewStyle().
+		Width(d.Width).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(ui.CurrentTheme.Accent).
+		Background(ui.CurrentTheme.BgTopMenu).
+		Padding(1, 2)
+
+	return boxStyle.Render(content)
+}

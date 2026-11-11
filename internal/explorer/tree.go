@@ -36,7 +36,7 @@ func NewTree(rootPath string) *Tree {
 		FlatNodes:     make([]*Node, 0),
 		SelectedIndex: 0,
 		ScrollOffset:  0,
-		ShowHidden:    false,
+		ShowHidden:    true,
 	}
 
 	_ = t.LoadChildren(t.RootNode)

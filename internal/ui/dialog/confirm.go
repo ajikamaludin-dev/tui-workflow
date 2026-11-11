@@ -1,6 +1,8 @@
 package dialog
 
 import (
+	"strings"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"tui-workflow/internal/ui"
@@ -97,6 +99,44 @@ func (d *ConfirmDialog) Update(msg tea.Msg) (confirmed bool, canceled bool, disc
 	return false, false, false
 }
 
+// HandleMouse handles mouse clicks on confirm dialog buttons.
+func (d *ConfirmDialog) HandleMouse(relX, relY int) (confirmed bool, canceled bool, discard bool, handled bool) {
+	if !d.Active {
+		return false, false, false, false
+	}
+
+	rendered := d.Render()
+	lines := strings.Split(rendered, "\n")
+	boxH := len(lines)
+	boxW := d.Width
+
+	if relX < 0 || relX >= boxW || relY < 0 || relY >= boxH {
+		return false, false, false, true
+	}
+
+	buttonY := boxH - 3
+	if relY == buttonY || relY == buttonY+1 {
+		d.Close()
+		if d.Type == ConfirmUnsavedChanges {
+			if relX >= 2 && relX <= 12 {
+				return true, false, false, true // Save
+			} else if relX >= 13 && relX <= 24 {
+				return false, false, true, true // Discard
+			} else {
+				return false, true, false, true // Cancel
+			}
+		} else {
+			if relX >= 2 && relX <= 16 {
+				return true, false, false, true // Delete
+			} else {
+				return false, true, false, true // Cancel
+			}
+		}
+	}
+
+	return false, false, false, true
+}
+
 func (d *ConfirmDialog) Render() string {
 	if !d.Active {
 		return ""
@@ -110,10 +150,12 @@ func (d *ConfirmDialog) Render() string {
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(titleColor).
+		Background(ui.CurrentTheme.BgTopMenu).
 		MarginBottom(1)
 
 	msgStyle := lipgloss.NewStyle().
 		Foreground(ui.CurrentTheme.FgPrimary).
+		Background(ui.CurrentTheme.BgTopMenu).
 		MarginBottom(1)
 
 	renderedTitle := titleStyle.Render(d.Title)
@@ -124,6 +166,8 @@ func (d *ConfirmDialog) Render() string {
 		MarginRight(1).
 		Foreground(ui.CurrentTheme.FgPrimary).
 		Background(ui.CurrentTheme.BgTopMenu)
+
+	btnSep := lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Render(" ")
 
 	var buttons string
 	if d.Type == ConfirmUnsavedChanges {
@@ -142,7 +186,9 @@ func (d *ConfirmDialog) Render() string {
 		buttons = lipgloss.JoinHorizontal(
 			lipgloss.Center,
 			btnSave.Render("Save"),
+			btnSep,
 			btnDiscard.Render("Discard"),
+			btnSep,
 			btnCancel.Render("Cancel"),
 		)
 	} else {
@@ -158,6 +204,7 @@ func (d *ConfirmDialog) Render() string {
 		buttons = lipgloss.JoinHorizontal(
 			lipgloss.Center,
 			btnConfirm.Render("Delete"),
+			btnSep,
 			btnCancel.Render("Cancel"),
 		)
 	}
@@ -176,5 +223,5 @@ func (d *ConfirmDialog) Render() string {
 		Background(ui.CurrentTheme.BgTopMenu).
 		Padding(1, 2)
 
-	return boxStyle.Render(content)
+	return NormalizeDialogBackground(boxStyle.Render(content), ui.CurrentTheme.BgTopMenu)
 }

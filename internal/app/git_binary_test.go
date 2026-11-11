@@ -42,7 +42,7 @@ func TestGitClickStageButtonAndBinaryGuard(t *testing.T) {
 	if m.GitView != nil {
 		// Set up changes with a mock item
 		// Column 4 is [+]
-		targetFile, handled := m.GitView.HandleMouseClick(4, 999) // non-existent row
+		targetFile, _, handled := m.GitView.HandleMouseClick(4, 999) // non-existent row
 		if handled || targetFile != nil {
 			t.Errorf("Expected unhandled for invalid row")
 		}

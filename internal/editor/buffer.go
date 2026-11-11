@@ -18,14 +18,19 @@ type VisualLine struct {
 }
 
 type Buffer struct {
-	Lines        [][]rune
-	CursorRow    int
-	CursorCol    int
-	ScrollRow    int
-	IsDirty      bool
-	Highlighter  *syntax.Highlighter
-	cachedHigh   []string
-	cachedDirty  bool
+	Lines       [][]rune
+	CursorRow   int
+	CursorCol   int
+	ScrollRow   int
+	IsDirty     bool
+	Highlighter *syntax.Highlighter
+	cachedHigh  []string
+	cachedDirty bool
+
+	// Selection state
+	HasSelection    bool
+	SelectAnchorRow int
+	SelectAnchorCol int
 }
 
 func NewBuffer(content string) *Buffer {
@@ -77,6 +82,9 @@ func (b *Buffer) CurrentLineLen() int {
 }
 
 func (b *Buffer) InsertRune(r rune) {
+	if b.HasSelection {
+		b.DeleteSelection()
+	}
 	b.clampCursor()
 	line := b.Lines[b.CursorRow]
 
@@ -127,6 +135,10 @@ func (b *Buffer) InsertNewline() {
 }
 
 func (b *Buffer) Backspace() {
+	if b.HasSelection {
+		b.DeleteSelection()
+		return
+	}
 	b.clampCursor()
 
 	if b.CursorCol > 0 {
@@ -161,6 +173,10 @@ func (b *Buffer) Backspace() {
 }
 
 func (b *Buffer) Delete() {
+	if b.HasSelection {
+		b.DeleteSelection()
+		return
+	}
 	b.clampCursor()
 	line := b.Lines[b.CursorRow]
 
@@ -275,6 +291,204 @@ func (b *Buffer) SetCursor(row, col int) {
 	b.clampCursor()
 }
 
+// NormalizedSelection returns (startRow, startCol, endRow, endCol) with start <= end.
+func (b *Buffer) NormalizedSelection() (int, int, int, int) {
+	if !b.HasSelection {
+		return b.CursorRow, b.CursorCol, b.CursorRow, b.CursorCol
+	}
+	if b.SelectAnchorRow < b.CursorRow || (b.SelectAnchorRow == b.CursorRow && b.SelectAnchorCol <= b.CursorCol) {
+		return b.SelectAnchorRow, b.SelectAnchorCol, b.CursorRow, b.CursorCol
+	}
+	return b.CursorRow, b.CursorCol, b.SelectAnchorRow, b.SelectAnchorCol
+}
+
+// IsSelected returns true if the position (row, col) is within the current selection.
+func (b *Buffer) IsSelected(row, col int) bool {
+	if !b.HasSelection {
+		return false
+	}
+	sRow, sCol, eRow, eCol := b.NormalizedSelection()
+	if sRow == eRow && sCol == eCol {
+		return false
+	}
+	if row < sRow || row > eRow {
+		return false
+	}
+	if row > sRow && row < eRow {
+		return true
+	}
+	if sRow == eRow {
+		return col >= sCol && col < eCol
+	}
+	if row == sRow {
+		return col >= sCol
+	}
+	if row == eRow {
+		return col < eCol
+	}
+	return false
+}
+
+// StartSelection initiates a selection anchor at (row, col).
+func (b *Buffer) StartSelection(row, col int) {
+	b.SelectAnchorRow = row
+	b.SelectAnchorCol = col
+	b.CursorRow = row
+	b.CursorCol = col
+	b.clampCursor()
+	b.HasSelection = false
+}
+
+// UpdateSelection extends the selection to (row, col).
+func (b *Buffer) UpdateSelection(row, col int) {
+	b.CursorRow = row
+	b.CursorCol = col
+	b.clampCursor()
+	if b.CursorRow != b.SelectAnchorRow || b.CursorCol != b.SelectAnchorCol {
+		b.HasSelection = true
+	}
+}
+
+// ClearSelection removes any active selection.
+func (b *Buffer) ClearSelection() {
+	b.HasSelection = false
+}
+
+// SelectAll selects the entire buffer content.
+func (b *Buffer) SelectAll() {
+	if len(b.Lines) == 0 {
+		return
+	}
+	b.SelectAnchorRow = 0
+	b.SelectAnchorCol = 0
+	b.CursorRow = len(b.Lines) - 1
+	b.CursorCol = len(b.Lines[b.CursorRow])
+	b.HasSelection = true
+}
+
+// GetSelectedText returns the currently selected text.
+func (b *Buffer) GetSelectedText() string {
+	if !b.HasSelection {
+		return ""
+	}
+	sRow, sCol, eRow, eCol := b.NormalizedSelection()
+	if sRow == eRow {
+		if sRow >= len(b.Lines) {
+			return ""
+		}
+		line := b.Lines[sRow]
+		if sCol >= len(line) || sCol >= eCol {
+			return ""
+		}
+		if eCol > len(line) {
+			eCol = len(line)
+		}
+		return string(line[sCol:eCol])
+	}
+
+	var sb strings.Builder
+	for r := sRow; r <= eRow && r < len(b.Lines); r++ {
+		line := b.Lines[r]
+		if r == sRow {
+			if sCol < len(line) {
+				sb.WriteString(string(line[sCol:]))
+			}
+			sb.WriteByte('\n')
+		} else if r == eRow {
+			if eCol > len(line) {
+				eCol = len(line)
+			}
+			if eCol > 0 {
+				sb.WriteString(string(line[:eCol]))
+			}
+		} else {
+			sb.WriteString(string(line))
+			sb.WriteByte('\n')
+		}
+	}
+	return sb.String()
+}
+
+// DeleteSelection removes selected text and places cursor at start of selection.
+func (b *Buffer) DeleteSelection() bool {
+	if !b.HasSelection {
+		return false
+	}
+	sRow, sCol, eRow, eCol := b.NormalizedSelection()
+	if sRow == eRow && sCol == eCol {
+		b.HasSelection = false
+		return false
+	}
+	if sRow >= len(b.Lines) {
+		b.HasSelection = false
+		return false
+	}
+
+	if sRow == eRow {
+		line := b.Lines[sRow]
+		if sCol < len(line) {
+			if eCol > len(line) {
+				eCol = len(line)
+			}
+			b.Lines[sRow] = append(line[:sCol], line[eCol:]...)
+		}
+	} else {
+		firstPart := b.Lines[sRow][:sCol]
+		var lastPart []rune
+		if eRow < len(b.Lines) {
+			if eCol < len(b.Lines[eRow]) {
+				lastPart = b.Lines[eRow][eCol:]
+			}
+		}
+		merged := append(firstPart, lastPart...)
+		newLines := make([][]rune, 0, len(b.Lines)-(eRow-sRow))
+		newLines = append(newLines, b.Lines[:sRow]...)
+		newLines = append(newLines, merged)
+		if eRow+1 < len(b.Lines) {
+			newLines = append(newLines, b.Lines[eRow+1:]...)
+		}
+		b.Lines = newLines
+	}
+
+	b.CursorRow = sRow
+	b.CursorCol = sCol
+	b.HasSelection = false
+	b.IsDirty = true
+	b.cachedDirty = true
+	b.clampCursor()
+	return true
+}
+
+// RowColFromVisual converts a visual row offset (from top of viewport) and visual column
+// offset into the corresponding physical line and column.
+func (b *Buffer) RowColFromVisual(relY, textX, textWidth int) (int, int) {
+	vLines := b.ComputeVisualLines(textWidth)
+	vIdx := b.ScrollRow + relY
+	if vIdx < 0 {
+		vIdx = 0
+	}
+	if vIdx >= len(vLines) {
+		if len(b.Lines) == 0 {
+			return 0, 0
+		}
+		lastRow := len(b.Lines) - 1
+		return lastRow, len(b.Lines[lastRow])
+	}
+
+	vl := vLines[vIdx]
+	physRow := vl.PhysicalLineIdx
+	physCol := vl.StartCol + textX
+	if physRow < len(b.Lines) {
+		if physCol > len(b.Lines[physRow]) {
+			physCol = len(b.Lines[physRow])
+		}
+	}
+	if physCol < 0 {
+		physCol = 0
+	}
+	return physRow, physCol
+}
+
 // ComputeVisualLines generates soft-wrapped visual lines for the given text width
 func (b *Buffer) ComputeVisualLines(textWidth int) []VisualLine {
 	if textWidth < 10 {
@@ -371,8 +585,13 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 		Bold(true).
 		Background(ui.CurrentTheme.BgPrimary)
 
-	cursorStyle := lipgloss.NewStyle().
-		Reverse(true).
+	selectionStyle := lipgloss.NewStyle().
+		Background(ui.CurrentTheme.Accent).
+		Foreground(ui.CurrentTheme.FgHighlight)
+
+	cursorIBeamStyle := lipgloss.NewStyle().
+		Foreground(ui.CurrentTheme.FgHighlight).
+		Background(ui.CurrentTheme.Accent).
 		Bold(true)
 
 	var renderedRows []string
@@ -401,20 +620,23 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 		lineRunes := vl.Runes
 		var textPart strings.Builder
 
-		if vIdx == visualCursorRow && focused {
-			// Render with cursor
-			for cIdx, r := range lineRunes {
-				if cIdx == visualCursorCol {
-					textPart.WriteString(cursorStyle.Render(string(r)))
-				} else {
-					textPart.WriteRune(r)
-				}
+		physRow := vl.PhysicalLineIdx
+		for cIdx, r := range lineRunes {
+			physCol := vl.StartCol + cIdx
+			isCursor := vIdx == visualCursorRow && cIdx == visualCursorCol && focused
+			isSelected := b.IsSelected(physRow, physCol)
+
+			if isCursor && !b.HasSelection {
+				textPart.WriteString(cursorIBeamStyle.Render(string(r)))
+			} else if isSelected {
+				textPart.WriteString(selectionStyle.Render(string(r)))
+			} else {
+				textPart.WriteRune(r)
 			}
-			if visualCursorCol >= len(lineRunes) {
-				textPart.WriteString(cursorStyle.Render(" "))
-			}
-		} else {
-			textPart.WriteString(string(lineRunes))
+		}
+
+		if vIdx == visualCursorRow && focused && !b.HasSelection && visualCursorCol >= len(lineRunes) {
+			textPart.WriteString(cursorIBeamStyle.Render("│"))
 		}
 
 		plainTextLen := lipgloss.Width(textPart.String())

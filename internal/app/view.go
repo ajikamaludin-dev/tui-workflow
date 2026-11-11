@@ -55,9 +55,12 @@ func (m Model) View() string {
 		baseView = overlayAt(baseView, dropBox, dropX, dropY, m.Width, m.Height)
 	}
 
-	// Overlay 2: Modals (Switcher, Input Dialog, Confirm Dialog, Help, or About)
+	// Overlay 2: Modals (Switcher, FilePicker, Input Dialog, Confirm Dialog, Help, or About)
 	if m.Switcher.Active {
 		modal := m.Switcher.Render()
+		baseView = placeCenter(baseView, modal, m.Width, m.Height)
+	} else if m.FilePicker != nil && m.FilePicker.Active {
+		modal := m.FilePicker.Render()
 		baseView = placeCenter(baseView, modal, m.Width, m.Height)
 	} else if m.InputDialog.Active {
 		modal := m.InputDialog.Render()
@@ -71,6 +74,12 @@ func (m Model) View() string {
 	} else if m.ShowAbout {
 		modal := renderAboutModal()
 		baseView = placeCenter(baseView, modal, m.Width, m.Height)
+	}
+
+	// Overlay 3: Context Menu
+	if m.ContextMenu != nil && m.ContextMenu.Active {
+		menuStr := m.ContextMenu.Render()
+		baseView = overlayAt(baseView, menuStr, m.ContextMenu.X, m.ContextMenu.Y, m.Width, m.Height)
 	}
 
 	lines := strings.Split(baseView, "\n")

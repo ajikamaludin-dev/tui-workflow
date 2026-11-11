@@ -114,4 +114,39 @@ func TestRepoOperations(t *testing.T) {
 	if headContent != "version 2" {
 		t.Errorf("Expected 'version 2', got '%s'", headContent)
 	}
+
+	// Check GetBranchName
+	branch, err := repo.GetBranchName()
+	if err != nil {
+		t.Fatalf("GetBranchName failed: %v", err)
+	}
+	if branch == "" {
+		t.Errorf("Expected non-empty branch name")
+	}
+
+	// Test GitView rendering and button click
+	gv := NewGitView(repo)
+	_ = gv.Render(30, 20, true)
+
+	// Hit test on buttons row (Type=10 is ClickButtonRow)
+	var buttonY int = -1
+	for y, tgt := range gv.ItemClickMap {
+		if tgt.Type == ClickButtonRow {
+			buttonY = y
+			break
+		}
+	}
+	if buttonY == -1 {
+		t.Fatalf("ClickButtonRow not found in ItemClickMap")
+	}
+
+	_, action, handled := gv.HandleMouseClick(4, buttonY)
+	if !handled || action != "commit" {
+		t.Errorf("Expected action 'commit', got %q (handled=%v)", action, handled)
+	}
+
+	_, action, handled = gv.HandleMouseClick(12, buttonY)
+	if !handled || action != "push" {
+		t.Errorf("Expected action 'push', got %q (handled=%v)", action, handled)
+	}
 }

@@ -1,10 +1,10 @@
 ---
-title: 
-status: planning
-started: 
-completed: 
-branch: main
-priority: medium
+title: # Nama task (sesuai objective utama)
+status: # planning | plan_approved | in_progress | blocked | review | done
+started: # YYYY-MM-DD
+completed: # YYYY-MM-DD (diisi saat pindah ke done/)
+branch: # branch git (jika ada)
+priority: # high | medium | low
 ---
 
 # {Title}

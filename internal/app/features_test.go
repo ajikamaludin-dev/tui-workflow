@@ -1,0 +1,455 @@
+package app
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	gogit "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
+	"tui-workflow/internal/git"
+	"tui-workflow/internal/ui/dialog"
+)
+
+func setupTestGitRepoWithBranch(t *testing.T) (string, *git.Repo) {
+	tempDir, err := os.MkdirTemp("", "tui-feature-git-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+
+	repo, err := gogit.PlainInit(tempDir, false)
+	if err != nil {
+		t.Fatalf("Failed to init git repo: %v", err)
+	}
+
+	wt, err := repo.Worktree()
+	if err != nil {
+		t.Fatalf("Failed to get worktree: %v", err)
+	}
+
+	initFile := filepath.Join(tempDir, "initial.txt")
+	_ = os.WriteFile(initFile, []byte("line1\n"), 0644)
+	_, _ = wt.Add("initial.txt")
+	_, err = wt.Commit("initial commit", &gogit.CommitOptions{
+		Author: &object.Signature{
+			Name:  "Test User",
+			Email: "test@example.com",
+			When:  time.Now(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Failed to commit: %v", err)
+	}
+
+	gRepo, err := git.OpenRepo(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to open git repo wrapper: %v", err)
+	}
+
+	return tempDir, gRepo
+}
+
+func TestBranchInStatusBarAndUntrackedOpen(t *testing.T) {
+	repoDir, _ := setupTestGitRepoWithBranch(t)
+	defer os.RemoveAll(repoDir)
+
+	m, err := NewModelWithPath(repoDir)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+
+	// 1. Verify branch name in status bar
+	if m.StatusBar.Branch == "" {
+		t.Errorf("Expected branch name in status bar, got empty string")
+	}
+
+	// 2. Create an untracked new file
+	untrackedPath := filepath.Join(repoDir, "newfile.go")
+	_ = os.WriteFile(untrackedPath, []byte("package main\n"), 0644)
+
+	m.SidebarView = SidebarGit
+	m.GitView.Refresh()
+
+	// Find the untracked file in Changes
+	foundUntracked := false
+	for _, ch := range m.GitView.Changes {
+		if ch.Path == "newfile.go" && (ch.Status == "?" || ch.Status == "U") {
+			foundUntracked = true
+			break
+		}
+	}
+	if !foundUntracked {
+		t.Fatalf("Untracked newfile.go not found in GitView changes")
+	}
+
+	// Simulate selecting and pressing Enter on untracked file
+	// Focus on GitView changes
+	m.Focus = FocusSidebar
+	m.GitView.FocusArea = git.GitFocusChanges
+	m.GitView.ChangesIdx = 0
+
+	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = newM.(Model)
+
+	// Untracked file should be opened DIRECTLY as editor tab, NOT diff tab
+	activeTab := m.TabManager.ActiveTab()
+	if activeTab == nil {
+		t.Fatalf("Expected active tab, got nil")
+	}
+	if activeTab.IsDiff {
+		t.Errorf("Untracked file should be opened directly, not as diff tab")
+	}
+	if activeTab.Path != untrackedPath {
+		t.Errorf("Expected active tab path %s, got %s", untrackedPath, activeTab.Path)
+	}
+}
+
+func TestOpenFileAndFolderDialogs(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "tui-feature-open-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	subDir := filepath.Join(tempDir, "subdir")
+	_ = os.Mkdir(subDir, 0755)
+	fileA := filepath.Join(tempDir, "fileA.txt")
+	_ = os.WriteFile(fileA, []byte("content A"), 0644)
+
+	m, err := NewModelWithPath(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+	m.Ready = true
+	m.Width = 100
+	m.Height = 30
+
+	// 1. Test Open File via shortcut Ctrl+O -> Opens FilePicker in PickerModeFile
+	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlO})
+	m = newM.(Model)
+
+	if !m.FilePicker.Active || m.FilePicker.Mode != dialog.PickerModeFile {
+		t.Fatalf("Expected FilePicker active in PickerModeFile")
+	}
+
+	// Find index of fileA in picker.Filtered
+	fileAIdx := -1
+	for i, it := range m.FilePicker.Filtered {
+		if it.Path == fileA {
+			fileAIdx = i
+			break
+		}
+	}
+	if fileAIdx == -1 {
+		t.Fatalf("fileA.txt not found in FilePicker filtered items: %v", m.FilePicker.Filtered)
+	}
+	m.FilePicker.SelectedIdx = fileAIdx
+	m.FilePicker.FocusArea = 1
+
+	// Simulate Enter on selected file item
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = newM.(Model)
+
+	if m.FilePicker.Active {
+		t.Errorf("FilePicker should be closed after Enter on file")
+	}
+	if m.TabManager.ActiveTab() == nil || m.TabManager.ActiveTab().Path != fileA {
+		t.Errorf("Expected active tab to be fileA, got: %v", m.TabManager.ActiveTab())
+	}
+
+	// 2. Test Open Folder via menu action "file.open_folder" -> Opens FilePicker in PickerModeFolder
+	_ = m.handleMenuAction("file.open_folder")
+	if !m.FilePicker.Active || m.FilePicker.Mode != dialog.PickerModeFolder {
+		t.Fatalf("Expected FilePicker active in PickerModeFolder")
+	}
+
+	// Navigate into subdir and confirm folder
+	m.FilePicker.CurrentDir = subDir
+	// Simulate click on "Buka Folder Ini" button (mouse test)
+	modalW := m.FilePicker.Width
+	modalH := m.FilePicker.Height
+	startX := (m.Width - modalW) / 2
+	startY := (m.Height - modalH) / 2
+	btnY := startY + modalH - 3
+	btnX := startX + 6
+
+	newM, _ = m.Update(tea.MouseMsg{
+		X:      btnX,
+		Y:      btnY,
+		Button: tea.MouseButtonLeft,
+		Action: tea.MouseActionPress,
+	})
+	m = newM.(Model)
+
+	if m.FilePicker.Active {
+		t.Errorf("FilePicker should be closed after clicking Buka Folder Ini")
+	}
+	if m.RootDir != subDir {
+		t.Errorf("Expected root dir to be %s, got %s", subDir, m.RootDir)
+	}
+	if m.Explorer.RootPath != subDir {
+		t.Errorf("Expected Explorer RootPath to be %s, got %s", subDir, m.Explorer.RootPath)
+	}
+}
+
+func TestModalMouseClicks(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "tui-feature-mouse-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	m, err := NewModelWithPath(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+	m.Ready = true
+	m.Width = 100
+	m.Height = 30
+
+	// 1. InputDialog Mouse Click Cancel
+	m.InputDialog.Open(dialog.InputNewFile, "New File", tempDir, "")
+	if !m.InputDialog.Active {
+		t.Fatalf("Expected InputDialog active")
+	}
+	modalW := m.InputDialog.Width
+	modalH := strings.Count(m.InputDialog.Render(), "\n") + 1
+	startX := (m.Width - modalW) / 2
+	startY := (m.Height - modalH) / 2
+	clickX := startX + 25
+	clickY := startY + modalH - 3
+	newM, _ := m.Update(tea.MouseMsg{
+		X:      clickX,
+		Y:      clickY,
+		Button: tea.MouseButtonLeft,
+		Action: tea.MouseActionPress,
+	})
+	m = newM.(Model)
+	if m.InputDialog.Active {
+		t.Errorf("InputDialog should be closed after clicking Cancel")
+	}
+
+	// 2. ConfirmDialog Mouse Click Cancel
+	m.ConfirmDialog.Open(dialog.ConfirmDelete, "Hapus File", "Yakin hapus?", "sample.txt")
+	if !m.ConfirmDialog.Active {
+		t.Fatalf("Expected ConfirmDialog active")
+	}
+	modalW = m.ConfirmDialog.Width
+	modalH = strings.Count(m.ConfirmDialog.Render(), "\n") + 1
+	startX = (m.Width - modalW) / 2
+	startY = (m.Height - modalH) / 2
+	// Click Cancel button (buttonY = boxH - 3, relX ~ 20)
+	newM, _ = m.Update(tea.MouseMsg{
+		X:      startX + 20,
+		Y:      startY + modalH - 3,
+		Button: tea.MouseButtonLeft,
+		Action: tea.MouseActionPress,
+	})
+	m = newM.(Model)
+	if m.ConfirmDialog.Active {
+		t.Errorf("ConfirmDialog should be closed after clicking Cancel")
+	}
+}
+
+func TestSettingsPersistence(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "tui-feature-config-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	m, err := NewModelWithPath(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+
+	// Toggle AutoSave
+	initialAutoSave := m.AutoSave
+	_ = m.handleMenuAction("setting.autosave")
+	if m.AutoSave == initialAutoSave {
+		t.Errorf("AutoSave should have toggled")
+	}
+	if m.Config.AutoSave != m.AutoSave {
+		t.Errorf("Config.AutoSave should be updated to %v", m.AutoSave)
+	}
+
+	// Toggle Hidden
+	initialHidden := m.Explorer.ShowHidden
+	_ = m.handleMenuAction("setting.hidden")
+	if m.Explorer.ShowHidden == initialHidden {
+		t.Errorf("ShowHidden should have toggled")
+	}
+	if m.Config.ShowHidden != m.Explorer.ShowHidden {
+		t.Errorf("Config.ShowHidden should be updated to %v", m.Explorer.ShowHidden)
+	}
+}
+
+func TestGitCommitAndPushButtonInteraction(t *testing.T) {
+	repoDir, _ := setupTestGitRepoWithBranch(t)
+	defer os.RemoveAll(repoDir)
+
+	m, err := NewModelWithPath(repoDir)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+	m.Ready = true
+	m.Width = 100
+	m.Height = 30
+	m.SidebarView = SidebarGit
+	m.GitView.Refresh()
+
+	// Modify file and stage it
+	filePath := filepath.Join(repoDir, "initial.txt")
+	_ = os.WriteFile(filePath, []byte("line1\nline2\n"), 0644)
+	m.GitView.Refresh()
+	_ = m.GitRepo.StageFile("initial.txt")
+	m.GitView.Refresh()
+
+	// Set commit message
+	m.GitView.CommitInput.SetValue("test commit via button")
+
+	// Render GitView so ItemClickMap is populated
+	_ = m.GitView.Render(30, 20, true)
+
+	// Find the button row
+	var buttonY int = -1
+	for y, tgt := range m.GitView.ItemClickMap {
+		if tgt.Type == git.ClickButtonRow {
+			buttonY = y
+			break
+		}
+	}
+	if buttonY == -1 {
+		t.Fatalf("ClickButtonRow not found")
+	}
+
+	// Click [Commit] (X = 4)
+	// Click Y is relative to sidebar content row (relLine = msg.Y - 2)
+	screenY := buttonY + 2
+	newM, _ := m.Update(tea.MouseMsg{
+		X:      4,
+		Y:      screenY,
+		Button: tea.MouseButtonLeft,
+		Action: tea.MouseActionPress,
+	})
+	m = newM.(Model)
+
+	if !strings.Contains(m.StatusBar.ToastMsg, "Commit sukses") {
+		t.Errorf("Expected toast commit sukses, got %q", m.StatusBar.ToastMsg)
+	}
+
+	// Click [Push] (X = 12)
+	newM, _ = m.Update(tea.MouseMsg{
+		X:      12,
+		Y:      screenY,
+		Button: tea.MouseButtonLeft,
+		Action: tea.MouseActionPress,
+	})
+	m = newM.(Model)
+
+	// Since there's no remote configured, it should show push error toast gracefully without crash
+	if !strings.Contains(m.StatusBar.ToastMsg, "Push gagal") && !strings.Contains(m.StatusBar.ToastMsg, "Push berhasil") {
+		t.Errorf("Expected push toast response, got %q", m.StatusBar.ToastMsg)
+	}
+}
+
+func TestContextMenuAndSelection(t *testing.T) {
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "test.txt")
+	_ = os.WriteFile(filePath, []byte("Hello World!\nSecond Line Here"), 0644)
+
+	m, err := NewModelWithPath(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create model: %v", err)
+	}
+
+	newM, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = newM.(Model)
+
+	m.openFile(filePath)
+	tab := m.TabManager.ActiveTab()
+	if tab == nil || tab.Buffer == nil {
+		t.Fatalf("failed to open buffer")
+	}
+
+	// 1. Mouse Drag Selection in Editor
+	// Editor starts at X = 28 (m.SidebarWidth)
+	// Gutter is ~6 columns, so editor text starts around X = 34
+	// Y = 2 is line 0 of buffer
+	newM, _ = m.Update(tea.MouseMsg{
+		X:      34,
+		Y:      2,
+		Button: tea.MouseButtonLeft,
+		Action: tea.MouseActionPress,
+	})
+	m = newM.(Model)
+
+	newM, _ = m.Update(tea.MouseMsg{
+		X:      39,
+		Y:      2,
+		Action: tea.MouseActionMotion,
+	})
+	m = newM.(Model)
+
+	newM, _ = m.Update(tea.MouseMsg{
+		X:      39,
+		Y:      2,
+		Button: tea.MouseButtonLeft,
+		Action: tea.MouseActionRelease,
+	})
+	m = newM.(Model)
+
+	tab = m.TabManager.ActiveTab()
+	if !tab.Buffer.HasSelection {
+		t.Errorf("expected buffer to have selection after mouse drag")
+	}
+
+	// 2. Right click to open ContextMenu
+	newM, _ = m.Update(tea.MouseMsg{
+		X:      40,
+		Y:      5,
+		Button: tea.MouseButtonRight,
+		Action: tea.MouseActionPress,
+	})
+	m = newM.(Model)
+
+	if m.ContextMenu == nil || !m.ContextMenu.Active {
+		t.Fatalf("expected ContextMenu to be active after right click")
+	}
+
+	// Right-click release at same position must NOT close menu
+	newM, _ = m.Update(tea.MouseMsg{
+		X:      40,
+		Y:      5,
+		Button: tea.MouseButtonRight,
+		Action: tea.MouseActionRelease,
+	})
+	m = newM.(Model)
+	if !m.ContextMenu.Active {
+		t.Fatalf("expected ContextMenu to stay active after right-click release")
+	}
+
+	// 3. Esc closes ContextMenu
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = newM.(Model)
+
+	if m.ContextMenu.Active {
+		t.Errorf("expected ContextMenu to close on Esc")
+	}
+
+	// 4. Ctrl+A selects all
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	m = newM.(Model)
+
+	tab = m.TabManager.ActiveTab()
+	if !tab.Buffer.HasSelection {
+		t.Errorf("expected buffer to have selection after Ctrl+A")
+	}
+	if tab.Buffer.GetSelectedText() != "Hello World!\nSecond Line Here" {
+		t.Errorf("unexpected selected text: %q", tab.Buffer.GetSelectedText())
+	}
+}
+

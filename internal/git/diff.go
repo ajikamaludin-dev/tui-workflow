@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"tui-workflow/internal/ui"
 )
 
@@ -275,19 +276,12 @@ func (dv *DiffView) Render(width, height int, isFocused bool) string {
 
 func truncateOrPad(s string, width int) string {
 	s = strings.ReplaceAll(s, "\t", "    ")
-	w := lipgloss.Width(s)
+	w := ansi.StringWidth(s)
 	if w > width {
-		// Truncate
-		runes := []rune(s)
-		curW := 0
-		for i, r := range runes {
-			rw := lipgloss.Width(string(r))
-			if curW+rw > width {
-				return string(runes[:i])
-			}
-			curW += rw
-		}
-		return s
+		return ansi.Truncate(s, width, "")
 	}
-	return s + strings.Repeat(" ", width-w)
+	if w < width {
+		return s + strings.Repeat(" ", width-w)
+	}
+	return s
 }

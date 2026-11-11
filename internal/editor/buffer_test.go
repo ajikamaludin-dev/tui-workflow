@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -55,5 +56,56 @@ func TestBufferSoftWrap(t *testing.T) {
 	}
 	if !vLines[1].IsContinuation {
 		t.Errorf("Second visual line should be marked as continuation")
+	}
+}
+
+func TestBufferSelection(t *testing.T) {
+	buf := NewBuffer("hello world\nsecond line")
+
+	// Select "world" (0, 6 to 0, 11)
+	buf.StartSelection(0, 6)
+	buf.UpdateSelection(0, 11)
+	if !buf.HasSelection {
+		t.Fatalf("Expected selection active")
+	}
+
+	selected := buf.GetSelectedText()
+	if selected != "world" {
+		t.Errorf("Expected 'world', got %q", selected)
+	}
+
+	// Delete selection
+	buf.DeleteSelection()
+	if string(buf.Lines[0]) != "hello " {
+		t.Errorf("Expected 'hello ', got %q", string(buf.Lines[0]))
+	}
+
+	// Multiline selection
+	buf = NewBuffer("line 1\nline 2\nline 3")
+	buf.StartSelection(0, 5)  // "1\n"
+	buf.UpdateSelection(2, 4) // "line"
+	selected = buf.GetSelectedText()
+	expected := "1\nline 2\nline"
+	if selected != expected {
+		t.Errorf("Expected multiline %q, got %q", expected, selected)
+	}
+
+	// SelectAll
+	buf.SelectAll()
+	if !buf.HasSelection {
+		t.Errorf("Expected HasSelection true after SelectAll")
+	}
+	allText := buf.GetSelectedText()
+	if allText != "line 1\nline 2\nline 3" {
+		t.Errorf("Expected full text, got %q", allText)
+	}
+}
+
+func TestBufferIBeamCursor(t *testing.T) {
+	buf := NewBuffer("hi")
+	buf.SetCursor(0, 2) // at end of line
+	rendered := buf.Render(20, 5, "test.txt", true)
+	if !strings.Contains(rendered, "│") {
+		t.Errorf("Expected I-beam vertical bar at end of line in rendered output")
 	}
 }

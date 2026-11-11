@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
+	"tui-workflow/internal/config"
 	"tui-workflow/internal/editor"
 	"tui-workflow/internal/explorer"
 	"tui-workflow/internal/git"
@@ -17,6 +20,8 @@ import (
 )
 
 type Model struct {
+	RootDir        string
+	Config         *config.Config
 	Width          int
 	Height         int
 	Ready          bool
@@ -30,9 +35,11 @@ type Model struct {
 	GitRepo        *git.Repo
 	GitView        *git.GitView
 	TabManager     *editor.TabManager
+	FilePicker     *dialog.FilePicker
 	InputDialog    *dialog.InputDialog
 	ConfirmDialog  *dialog.ConfirmDialog
 	Switcher       *dialog.BufferSwitcher
+	ContextMenu    *ui.ContextMenu
 	AutoSave       bool
 	ShowHelp       bool
 	ShowAbout      bool
@@ -77,7 +84,11 @@ func NewModelWithPath(targetPath string) (Model, error) {
 		gv = git.NewGitView(repo)
 	}
 
+	cfg, _ := config.LoadConfig()
+
 	m := Model{
+		RootDir:        rootDir,
+		Config:         cfg,
 		Focus:          FocusEditor,
 		SidebarVisible: true,
 		SidebarWidth:   30,
@@ -88,13 +99,22 @@ func NewModelWithPath(targetPath string) (Model, error) {
 		GitRepo:        repo,
 		GitView:        gv,
 		TabManager:     tm,
+		FilePicker:     dialog.NewFilePicker(),
 		InputDialog:    dialog.NewInputDialog(),
 		ConfirmDialog:  dialog.NewConfirmDialog(),
 		Switcher:       dialog.NewBufferSwitcher(),
-		AutoSave:       true,
+		ContextMenu:    ui.NewContextMenu(),
+		AutoSave:       cfg.AutoSave,
 		ShowHelp:       false,
 		ShowAbout:      false,
 		ClosingTabIdx:  -1,
+	}
+	m.Explorer.ShowHidden = cfg.ShowHidden
+	m.StatusBar.AutoSave = cfg.AutoSave
+	if repo != nil {
+		if branch, err := repo.GetBranchName(); err == nil {
+			m.StatusBar.Branch = branch
+		}
 	}
 	m.syncStatusBarWithActiveTab()
 	return m, nil
@@ -136,6 +156,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// 1. Context Menu Handling if active
+		if m.ContextMenu != nil && m.ContextMenu.Active {
+			switch msg.String() {
+			case "esc":
+				m.ContextMenu.Close()
+				return m, nil
+			case "up", "k":
+				m.ContextMenu.Prev()
+				return m, nil
+			case "down", "j":
+				m.ContextMenu.Next()
+				return m, nil
+			case "enter":
+				item := m.ContextMenu.SelectedItem()
+				m.ContextMenu.Close()
+				if item != nil && !item.Disabled {
+					cmd := m.handleContextMenuAction(item.ID)
+					return m, cmd
+				}
+				return m, nil
+			}
+			return m, nil
+		}
+
 		// 1. Buffer Switcher Modal Handling
 		if m.Switcher.Active {
 			targetIdx, closed, cmd := m.Switcher.Update(msg)
@@ -147,6 +191,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.TabManager.ActiveIndex = targetIdx
 					m.syncStatusBarWithActiveTab()
 				}
+			}
+			return m, cmd
+		}
+
+		// 1.5. File Picker Handling if active
+		if m.FilePicker != nil && m.FilePicker.Active {
+			confirmed, canceled, selectedPath, cmd := m.FilePicker.Update(msg)
+			if confirmed {
+				m.handleFilePickerConfirmed(selectedPath)
+			} else if canceled {
+				m.StatusBar.ShowToast("Operasi dibatalkan", false, 2*time.Second)
 			}
 			return m, cmd
 		}
@@ -250,8 +305,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.StatusBar.ShowToast("Commit gagal: "+err.Error(), true, 3*time.Second)
 				} else {
 					m.StatusBar.ShowToast("Commit sukses: "+hash, false, 3*time.Second)
+					if m.GitRepo != nil {
+						if branch, err := m.GitRepo.GetBranchName(); err == nil {
+							m.StatusBar.Branch = branch
+						}
+					}
 				}
 			}
+			return m, nil
+
+		case "ctrl+o":
+			m.FilePicker.Open(dialog.PickerModeFile, m.RootDir, m.Explorer.ShowHidden)
+			return m, nil
+
+		case "ctrl+k":
+			m.FilePicker.Open(dialog.PickerModeFolder, m.RootDir, m.Explorer.ShowHidden)
 			return m, nil
 
 		case "ctrl+p":
@@ -282,7 +350,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.SidebarView == SidebarGit && m.GitView != nil {
 				cmd, fileToOpen := m.GitView.Update(msg)
 				if fileToOpen != nil {
-					m.openDiff(fileToOpen.Path)
+					if fileToOpen.Status == "?" || fileToOpen.Status == "U" {
+						fullPath := filepath.Join(m.RootDir, fileToOpen.Path)
+						m.openFile(fullPath)
+						m.Focus = FocusEditor
+					} else {
+						m.openDiff(fileToOpen.Path)
+					}
 				}
 				return m, cmd
 			}
@@ -441,6 +515,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
+				case "ctrl+c":
+					text := buf.GetSelectedText()
+					if text != "" {
+						_ = clipboard.WriteAll(text)
+						m.StatusBar.ShowToast("Disalin ke clipboard ("+strconv.Itoa(len(text))+" karakter)", false, 2*time.Second)
+					}
+					return m, nil
+
+				case "ctrl+v":
+					text, err := clipboard.ReadAll()
+					if err == nil && text != "" {
+						buf.InsertString(text)
+						m.syncStatusBarWithActiveTab()
+						m.StatusBar.ShowToast("Ditempel dari clipboard", false, 2*time.Second)
+					}
+					return m, nil
+
+				case "ctrl+x":
+					text := buf.GetSelectedText()
+					if text != "" {
+						_ = clipboard.WriteAll(text)
+						buf.DeleteSelection()
+						m.syncStatusBarWithActiveTab()
+						m.StatusBar.ShowToast("Dipotong ke clipboard", false, 2*time.Second)
+					}
+					return m, nil
+
+				case "ctrl+a":
+					buf.SelectAll()
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+
 				case "enter":
 					buf.InsertNewline()
 					m.syncStatusBarWithActiveTab()
@@ -462,41 +568,49 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 
 				case "up":
+					buf.ClearSelection()
 					buf.MoveUp()
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
 				case "down":
+					buf.ClearSelection()
 					buf.MoveDown()
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
 				case "left":
+					buf.ClearSelection()
 					buf.MoveLeft()
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
 				case "right":
+					buf.ClearSelection()
 					buf.MoveRight()
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
 				case "home":
+					buf.ClearSelection()
 					buf.MoveHome()
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
 				case "end":
+					buf.ClearSelection()
 					buf.MoveEnd()
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
 				case "pgup":
+					buf.ClearSelection()
 					buf.MovePageUp(10)
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
 				case "pgdown":
+					buf.ClearSelection()
 					buf.MovePageDown(10)
 					m.syncStatusBarWithActiveTab()
 					return m, nil
@@ -515,6 +629,82 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseMsg:
+		// Forward mouse to context menu
+		if m.ContextMenu != nil && m.ContextMenu.Active {
+			action, handled := m.ContextMenu.HandleMouse(msg)
+			if handled {
+				if action != "" {
+					cmd := m.handleContextMenuAction(action)
+					return m, cmd
+				}
+				return m, nil
+			}
+		}
+
+		editorStartX := 0
+		if m.SidebarVisible {
+			editorStartX = m.SidebarWidth
+		}
+
+		// Update mouse pointer shape: text over editor, default elsewhere
+		if msg.X >= editorStartX && msg.Y >= 2 && msg.Y < m.Height-1 {
+			fmt.Print("\x1b]22;text\x1b\\")
+		} else {
+			fmt.Print("\x1b]22;default\x1b\\")
+		}
+
+		// Right-click inside editor area -> Open Context Menu
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonRight {
+			if msg.Y >= 2 && msg.Y < m.Height-1 && msg.X >= editorStartX {
+				m.Focus = FocusEditor
+				hasSelection := false
+				if tab := m.TabManager.ActiveTab(); tab != nil && tab.Buffer != nil {
+					hasSelection = tab.Buffer.HasSelection
+				}
+				clipText, _ := clipboard.ReadAll()
+				hasClipboard := len(clipText) > 0
+				m.ContextMenu.Open(msg.X, msg.Y, hasSelection, hasClipboard, m.Width, m.Height)
+				return m, nil
+			}
+		}
+
+		// Drag mouse inside editor buffer area to select text
+		if msg.Action == tea.MouseActionMotion && msg.Y >= 2 && msg.Y < m.Height-1 && msg.X >= editorStartX {
+			tab := m.TabManager.ActiveTab()
+			if tab != nil && tab.Buffer != nil {
+				relY := msg.Y - 2
+				gutterDigits := len(strconv.Itoa(tab.Buffer.LineCount()))
+				if gutterDigits < 2 {
+					gutterDigits = 2
+				}
+				gutterW := gutterDigits + 4
+				textX := msg.X - editorStartX - gutterW
+				if textX < 0 {
+					textX = 0
+				}
+				textW := m.Width - editorStartX - gutterW
+				if textW < 10 {
+					textW = 10
+				}
+				physRow, physCol := tab.Buffer.RowColFromVisual(relY, textX, textW)
+				tab.Buffer.UpdateSelection(physRow, physCol)
+				m.syncStatusBarWithActiveTab()
+			}
+			return m, nil
+		}
+
+		// Release mouse inside editor area
+		if msg.Action == tea.MouseActionRelease && msg.Button == tea.MouseButtonLeft {
+			tab := m.TabManager.ActiveTab()
+			if tab != nil && tab.Buffer != nil && tab.Buffer.HasSelection {
+				if tab.Buffer.SelectAnchorRow == tab.Buffer.CursorRow && tab.Buffer.SelectAnchorCol == tab.Buffer.CursorCol {
+					tab.Buffer.ClearSelection()
+					m.syncStatusBarWithActiveTab()
+				}
+			}
+			return m, nil
+		}
+
 		// Forward mouse to menu bar
 		if action, handled := m.MenuBar.HandleMouse(msg); handled {
 			if action != "" {
@@ -522,11 +712,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 			return m, nil
-		}
-
-		editorStartX := 0
-		if m.SidebarVisible {
-			editorStartX = m.SidebarWidth
 		}
 
 		// Mouse scroll wheel on Tab Bar (Row 1): scroll tabs horizontally
@@ -579,13 +764,84 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Intercept mouse clicks for active modals
+		if m.FilePicker != nil && m.FilePicker.Active {
+			modalW := m.FilePicker.Width
+			modalH := m.FilePicker.Height
+			startX := (m.Width - modalW) / 2
+			startY := (m.Height - modalH) / 2
+			relX := msg.X - startX
+			relY := msg.Y - startY
+			isWheelUp := msg.Button == tea.MouseButtonWheelUp
+			isWheelDown := msg.Button == tea.MouseButtonWheelDown
+			if msg.Action == tea.MouseActionPress || isWheelUp || isWheelDown {
+				confirmed, canceled, selectedPath, handled := m.FilePicker.HandleMouse(relX, relY, isWheelUp, isWheelDown)
+				if confirmed {
+					m.handleFilePickerConfirmed(selectedPath)
+				} else if canceled {
+					m.StatusBar.ShowToast("Operasi dibatalkan", false, 2*time.Second)
+				}
+				if handled {
+					return m, nil
+				}
+			}
+			return m, nil
+		}
+
+		if m.InputDialog.Active {
+			if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+				modalW := m.InputDialog.Width
+				modalH := strings.Count(m.InputDialog.Render(), "\n") + 1
+				startX := (m.Width - modalW) / 2
+				startY := (m.Height - modalH) / 2
+				relX := msg.X - startX
+				relY := msg.Y - startY
+				confirmed, canceled, handled := m.InputDialog.HandleMouse(relX, relY)
+				if confirmed {
+					m.handleInputConfirmed()
+				} else if canceled {
+					m.StatusBar.ShowToast("Operasi dibatalkan", false, 2*time.Second)
+				}
+				if handled {
+					return m, nil
+				}
+			}
+			return m, nil
+		}
+
+		if m.ConfirmDialog.Active {
+			if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+				modalW := m.ConfirmDialog.Width
+				modalH := strings.Count(m.ConfirmDialog.Render(), "\n") + 1
+				startX := (m.Width - modalW) / 2
+				startY := (m.Height - modalH) / 2
+				relX := msg.X - startX
+				relY := msg.Y - startY
+				confirmed, canceled, discard, handled := m.ConfirmDialog.HandleMouse(relX, relY)
+				if confirmed {
+					m.handleConfirmConfirmed()
+				} else if discard {
+					m.handleDiscardConfirmed()
+				} else if canceled {
+					m.StatusBar.ShowToast("Operasi dibatalkan", false, 2*time.Second)
+					m.ClosingTabIdx = -1
+				}
+				if handled {
+					return m, nil
+				}
+			}
+			return m, nil
+		}
+
+		if m.Switcher.Active {
+			if msg.Action == tea.MouseActionPress {
+				m.Switcher.Close()
+			}
+			return m, nil
+		}
+
 		// Mouse click handling
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-			editorStartX := 0
-			if m.SidebarVisible {
-				editorStartX = m.SidebarWidth
-			}
-
 			// Row 1: Tab Bar click (Editor columns)
 			if msg.Y == 1 && msg.X >= editorStartX {
 				relX := msg.X - editorStartX
@@ -647,9 +903,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				} else if m.SidebarView == SidebarGit && m.GitView != nil {
 					relLine := msg.Y - 2
-					targetFile, _ := m.GitView.HandleMouseClick(msg.X, relLine)
+					targetFile, action, _ := m.GitView.HandleMouseClick(msg.X, relLine)
+					if action == "commit" {
+						hash, err := m.GitView.DoCommit()
+						if err != nil {
+							m.StatusBar.ShowToast("Commit gagal: "+err.Error(), true, 3*time.Second)
+						} else {
+							m.StatusBar.ShowToast("Commit sukses: "+hash, false, 3*time.Second)
+							if m.GitRepo != nil {
+								if branch, err := m.GitRepo.GetBranchName(); err == nil {
+									m.StatusBar.Branch = branch
+								}
+							}
+						}
+					} else if action == "push" {
+						err := m.GitView.Push()
+						if err != nil {
+							m.StatusBar.ShowToast("Push gagal: "+err.Error(), true, 3*time.Second)
+						} else {
+							m.StatusBar.ShowToast("Push berhasil", false, 3*time.Second)
+						}
+					}
 					if targetFile != nil {
-						m.openDiff(targetFile.Path)
+						if targetFile.Status == "?" || targetFile.Status == "U" {
+							fullPath := filepath.Join(m.RootDir, targetFile.Path)
+							m.openFile(fullPath)
+							m.Focus = FocusEditor
+						} else {
+							m.openDiff(targetFile.Path)
+						}
 					}
 				}
 				return m, nil
@@ -660,10 +942,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Focus = FocusEditor
 				tab := m.TabManager.ActiveTab()
 				if tab != nil && tab.Buffer != nil {
-					// Approximate cursor positioning by row
 					relY := msg.Y - 2
-					targetRow := tab.Buffer.ScrollRow + relY
-					tab.Buffer.SetCursor(targetRow, 0)
+					gutterDigits := len(strconv.Itoa(tab.Buffer.LineCount()))
+					if gutterDigits < 2 {
+						gutterDigits = 2
+					}
+					gutterW := gutterDigits + 4
+					textX := msg.X - editorStartX - gutterW
+					if textX < 0 {
+						textX = 0
+					}
+					textW := m.Width - editorStartX - gutterW
+					if textW < 10 {
+						textW = 10
+					}
+					physRow, physCol := tab.Buffer.RowColFromVisual(relY, textX, textW)
+					tab.Buffer.StartSelection(physRow, physCol)
 					m.syncStatusBarWithActiveTab()
 				}
 				return m, nil
@@ -744,6 +1038,14 @@ func (m *Model) openBufferSwitcher() {
 }
 
 func (m *Model) syncStatusBarWithActiveTab() {
+	if m.GitRepo != nil {
+		if branch, err := m.GitRepo.GetBranchName(); err == nil {
+			m.StatusBar.Branch = branch
+		}
+	} else {
+		m.StatusBar.Branch = ""
+	}
+
 	tab := m.TabManager.ActiveTab()
 	if tab == nil {
 		m.StatusBar.FilePath = "[Tidak Ada File Terbuka]"
@@ -845,6 +1147,59 @@ func (m *Model) handleInputConfirmed() {
 			m.Explorer.Refresh()
 			m.StatusBar.ShowToast("Diubah ke: "+filepath.Base(newPath), false, 2*time.Second)
 		}
+
+	case dialog.InputOpenFile:
+		target := val
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(m.RootDir, target)
+		}
+		fi, err := os.Stat(target)
+		if err != nil {
+			m.StatusBar.ShowToast("File tidak ditemukan: "+err.Error(), true, 3*time.Second)
+		} else if fi.IsDir() {
+			m.StatusBar.ShowToast("Path adalah direktori, bukan file", true, 3*time.Second)
+		} else {
+			m.openFile(target)
+			m.Focus = FocusEditor
+		}
+
+	case dialog.InputOpenFolder:
+		target := val
+		if !filepath.IsAbs(target) {
+			target = filepath.Join(m.RootDir, target)
+		}
+		cleanPath, err := filepath.Abs(target)
+		if err != nil {
+			m.StatusBar.ShowToast("Path tidak valid: "+err.Error(), true, 3*time.Second)
+			return
+		}
+		fi, err := os.Stat(cleanPath)
+		if err != nil || !fi.IsDir() {
+			m.StatusBar.ShowToast("Direktori tidak ditemukan", true, 3*time.Second)
+			return
+		}
+
+		m.RootDir = cleanPath
+		if m.Config != nil {
+			m.Config.LastDir = cleanPath
+			_ = config.SaveConfig(m.Config)
+		}
+		m.Explorer = explorer.NewTree(cleanPath)
+		if m.Config != nil {
+			m.Explorer.ShowHidden = m.Config.ShowHidden
+		}
+		repo, _ := git.OpenRepo(cleanPath)
+		m.GitRepo = repo
+		if repo != nil {
+			m.GitView = git.NewGitView(repo)
+			branch, _ := repo.GetBranchName()
+			m.StatusBar.Branch = branch
+		} else {
+			m.GitView = nil
+			m.StatusBar.Branch = ""
+		}
+		m.syncStatusBarWithActiveTab()
+		m.StatusBar.ShowToast("Folder dibuka: "+cleanPath, false, 2*time.Second)
 	}
 }
 
@@ -956,6 +1311,12 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 		parentDir := m.getSelectedParentDir()
 		m.InputDialog.Open(dialog.InputNewFile, "Buat File Baru", parentDir, "")
 
+	case "file.open":
+		m.FilePicker.Open(dialog.PickerModeFile, m.RootDir, m.Explorer.ShowHidden)
+
+	case "file.open_folder":
+		m.FilePicker.Open(dialog.PickerModeFolder, m.RootDir, m.Explorer.ShowHidden)
+
 	case "file.save":
 		if err := m.TabManager.SaveActive(); err != nil {
 			m.StatusBar.ShowToast("Gagal simpan: "+err.Error(), true, 3*time.Second)
@@ -970,6 +1331,10 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 	case "setting.autosave":
 		m.AutoSave = !m.AutoSave
 		m.StatusBar.AutoSave = m.AutoSave
+		if m.Config != nil {
+			m.Config.AutoSave = m.AutoSave
+			_ = config.SaveConfig(m.Config)
+		}
 		if m.AutoSave {
 			m.StatusBar.ShowToast("Auto-Save Diaktifkan", false, 2*time.Second)
 		} else {
@@ -981,12 +1346,90 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 
 	case "setting.hidden":
 		m.Explorer.ToggleHidden()
+		if m.Config != nil {
+			m.Config.ShowHidden = m.Explorer.ShowHidden
+			_ = config.SaveConfig(m.Config)
+		}
 
 	case "setting.shortcuts":
 		m.ShowHelp = true
 
 	case "about.open":
 		m.ShowAbout = true
+	}
+	return nil
+}
+
+func (m *Model) handleFilePickerConfirmed(selectedPath string) {
+	if m.FilePicker.Mode == dialog.PickerModeFolder {
+		cleanPath, err := filepath.Abs(selectedPath)
+		if err != nil {
+			cleanPath = selectedPath
+		}
+		fi, err := os.Stat(cleanPath)
+		if err != nil || !fi.IsDir() {
+			m.StatusBar.ShowToast("Direktori tidak valid", true, 3*time.Second)
+			return
+		}
+
+		m.RootDir = cleanPath
+		if m.Config != nil {
+			m.Config.LastDir = cleanPath
+			_ = config.SaveConfig(m.Config)
+		}
+		m.Explorer = explorer.NewTree(cleanPath)
+		if m.Config != nil {
+			m.Explorer.ShowHidden = m.Config.ShowHidden
+		}
+		repo, _ := git.OpenRepo(cleanPath)
+		m.GitRepo = repo
+		if repo != nil {
+			m.GitView = git.NewGitView(repo)
+			branch, _ := repo.GetBranchName()
+			m.StatusBar.Branch = branch
+		} else {
+			m.GitView = nil
+			m.StatusBar.Branch = ""
+		}
+		m.syncStatusBarWithActiveTab()
+		m.StatusBar.ShowToast("Folder dibuka: "+cleanPath, false, 2*time.Second)
+	} else {
+		m.openFile(selectedPath)
+		m.Focus = FocusEditor
+	}
+}
+
+func (m *Model) handleContextMenuAction(action string) tea.Cmd {
+	tab := m.TabManager.ActiveTab()
+	if tab == nil || tab.Buffer == nil {
+		return nil
+	}
+	buf := tab.Buffer
+	switch action {
+	case "copy":
+		text := buf.GetSelectedText()
+		if text != "" {
+			_ = clipboard.WriteAll(text)
+			m.StatusBar.ShowToast("Disalin ke clipboard ("+strconv.Itoa(len(text))+" karakter)", false, 2*time.Second)
+		}
+	case "cut":
+		text := buf.GetSelectedText()
+		if text != "" {
+			_ = clipboard.WriteAll(text)
+			buf.DeleteSelection()
+			m.syncStatusBarWithActiveTab()
+			m.StatusBar.ShowToast("Dipotong ke clipboard", false, 2*time.Second)
+		}
+	case "paste":
+		text, err := clipboard.ReadAll()
+		if err == nil && text != "" {
+			buf.InsertString(text)
+			m.syncStatusBarWithActiveTab()
+			m.StatusBar.ShowToast("Ditempel dari clipboard", false, 2*time.Second)
+		}
+	case "select_all":
+		buf.SelectAll()
+		m.syncStatusBarWithActiveTab()
 	}
 	return nil
 }

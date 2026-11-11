@@ -15,6 +15,8 @@ const (
 	InputNewFile InputDialogType = iota
 	InputNewFolder
 	InputRename
+	InputOpenFile
+	InputOpenFolder
 )
 
 type InputDialog struct {
@@ -32,6 +34,8 @@ func NewInputDialog() *InputDialog {
 	ti.Prompt = "❯ "
 	ti.CharLimit = 128
 	ti.Width = 36
+	ti.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
+	ti.PromptStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent)
 
 	return &InputDialog{
 		Active:    false,
@@ -46,6 +50,8 @@ func (d *InputDialog) Open(t InputDialogType, title, targetPath, initialVal stri
 	d.Title = title
 	d.TargetPath = targetPath
 	d.TextInput.SetValue(initialVal)
+	d.TextInput.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
+	d.TextInput.PromptStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent)
 	d.TextInput.CursorEnd()
 	d.TextInput.Focus()
 	d.FocusedBtn = 0
@@ -104,6 +110,50 @@ func (d *InputDialog) Update(msg tea.Msg) (confirmed bool, canceled bool, cmd te
 	return false, false, nil
 }
 
+// HandleMouse handles mouse clicks on input dialog buttons.
+func (d *InputDialog) HandleMouse(relX, relY int) (confirmed bool, canceled bool, handled bool) {
+	if !d.Active {
+		return false, false, false
+	}
+
+	rendered := d.Render()
+	lines := strings.Split(rendered, "\n")
+	boxH := len(lines)
+	boxW := d.Width
+
+	if relX < 0 || relX >= boxW || relY < 0 || relY >= boxH {
+		return false, false, true
+	}
+
+	// Click on input row (Line 4)
+	if relY == 4 {
+		d.FocusedBtn = 0
+		d.TextInput.Focus()
+		return false, false, true
+	}
+
+	// Click on buttons row (boxH - 3)
+	buttonY := boxH - 3
+	if relY == buttonY {
+		// OK Button: col 3..18
+		if relX >= 3 && relX <= 18 {
+			val := d.Value()
+			if val != "" {
+				d.Close()
+				return true, false, true
+			}
+			return false, false, true
+		}
+		// Cancel Button: col 19..36
+		if relX >= 19 && relX <= 36 {
+			d.Close()
+			return false, true, true
+		}
+	}
+
+	return false, false, true
+}
+
 func (d *InputDialog) Render() string {
 	if !d.Active {
 		return ""
@@ -112,6 +162,7 @@ func (d *InputDialog) Render() string {
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(ui.CurrentTheme.FgHighlight).
+		Background(ui.CurrentTheme.BgTopMenu).
 		MarginBottom(1)
 
 	renderedTitle := titleStyle.Render(d.Title)
@@ -119,7 +170,6 @@ func (d *InputDialog) Render() string {
 
 	btnOKStyle := lipgloss.NewStyle().
 		Padding(0, 2).
-		MarginRight(1).
 		Foreground(ui.CurrentTheme.FgPrimary).
 		Background(ui.CurrentTheme.BgTopMenu)
 
@@ -134,7 +184,8 @@ func (d *InputDialog) Render() string {
 		btnCancelStyle = btnCancelStyle.Background(ui.CurrentTheme.Red).Foreground(ui.CurrentTheme.FgHighlight).Bold(true)
 	}
 
-	buttons := lipgloss.JoinHorizontal(lipgloss.Center, btnOKStyle.Render("OK (Enter)"), btnCancelStyle.Render("Cancel (Esc)"))
+	btnSep := lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Render(" ")
+	buttons := lipgloss.JoinHorizontal(lipgloss.Center, btnOKStyle.Render("OK (Enter)"), btnSep, btnCancelStyle.Render("Cancel (Esc)"))
 
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -151,5 +202,5 @@ func (d *InputDialog) Render() string {
 		Background(ui.CurrentTheme.BgTopMenu).
 		Padding(1, 2)
 
-	return boxStyle.Render(content)
+	return NormalizeDialogBackground(boxStyle.Render(content), ui.CurrentTheme.BgTopMenu)
 }

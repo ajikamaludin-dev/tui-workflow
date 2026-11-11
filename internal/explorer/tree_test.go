@@ -25,15 +25,7 @@ func TestTreeNavigation(t *testing.T) {
 		t.Fatalf("Tree should have nodes")
 	}
 
-	// Default ShowHidden is false, so .hidden should not be in FlatNodes
-	for _, n := range tree.FlatNodes {
-		if n.Name == ".hidden" {
-			t.Errorf(".hidden should not be visible when ShowHidden is false")
-		}
-	}
-
-	// Toggle hidden
-	tree.ToggleHidden()
+	// Default ShowHidden is true, so .hidden should be in FlatNodes
 	foundHidden := false
 	for _, n := range tree.FlatNodes {
 		if n.Name == ".hidden" {
@@ -42,7 +34,15 @@ func TestTreeNavigation(t *testing.T) {
 		}
 	}
 	if !foundHidden {
-		t.Errorf(".hidden should be visible after ToggleHidden")
+		t.Errorf(".hidden should be visible by default when ShowHidden is true")
+	}
+
+	// Toggle hidden to false
+	tree.ToggleHidden()
+	for _, n := range tree.FlatNodes {
+		if n.Name == ".hidden" {
+			t.Errorf(".hidden should not be visible after ToggleHidden to false")
+		}
 	}
 
 	// Navigation

@@ -20,6 +20,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Set cursor shape to steady I-beam (\x1b[6 q) and restore default at exit
+	fmt.Print("\x1b[6 q")
+	defer fmt.Print("\x1b[0 q\x1b]22;default\x1b\\")
+
 	p := tea.NewProgram(
 		model,
 		tea.WithAltScreen(),

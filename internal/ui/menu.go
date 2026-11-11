@@ -38,6 +38,8 @@ func NewMenuBar() *MenuBar {
 				Shortcut: "Alt+F",
 				Items: []MenuItem{
 					{Label: "New File", Shortcut: "a", ActionID: "file.new"},
+					{Label: "Open File", Shortcut: "Ctrl+O", ActionID: "file.open"},
+					{Label: "Open Folder", Shortcut: "Ctrl+K", ActionID: "file.open_folder"},
 					{Label: "Save File", Shortcut: "Ctrl+S", ActionID: "file.save"},
 					{Label: "Close Tab", Shortcut: "Ctrl+W", ActionID: "file.close"},
 					{Label: "Exit", Shortcut: "Ctrl+Q", ActionID: "app.exit"},

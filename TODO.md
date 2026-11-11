@@ -1,0 +1,14 @@
+- global search file contain seperti di vscode
+- quick open file from currect workspace with fuzzy search (crtl+p) tidak hanya search tab yang terbuka saja 
+- shift+ctrl+p menampilkan semua action menu yang dapat di panggil terdapat kolom search untuk mencari action dengan fuzzy 
+- tambahkan action untuk disable soft wrap di editor 
+- editor dengan software pointer mouse kadang berhenti di tempat yang tidak tepat ketika di klik 
+- klik kanan di tab untuk `close all tab` `close other tab` dan `close right/left tab`
+- hilangkan > pada  kolom input giit commit message
+- commit harus memiliki loading 
+- push hanya di ijinkan jika ada commit yyang belum di publish ke remote branch dan warna button biru sama dengan commit dan hanya muncul bergantian jika tidak ada file chage untuk dilakukan commit 
+- push button harus  ada loading 
+- button push dan commit baiknya fullwidth
+- git tab belum scroll able jika banyak perubahan file terjadi dengan mouse atau pun arrow
+- files list belum scrollable dengan mouse tapi dengan arrow bisa jika daftar file panjang 
+- di git tab perlu ditambahkan button untuuk - unstage all dan + untuk stage all di masing-masing stage changes dan changes

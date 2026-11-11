@@ -202,14 +202,22 @@ tui-workflow/
 │       ├── menu.go                  # Top Menu Bar component & dropdown handler
 │       ├── statusbar.go             # Status bar bawah adaptif 1 baris
 │       └── theme.go                 # Skema warna palet VS Code Dark & styling
+├── CONTRIBUTING.md                  # Panduan kontribusi proyek
 ├── go.mod
 ├── go.sum
+├── LICENSE                          # Lisensi MIT
 ├── PRD.md                           # Dokumen Spesifikasi Requirement Produk
 └── README.md                        # Dokumentasi Proyek
 ```
 
 ---
 
+## 🤝 Kontribusi (Contributing)
+
+Tertarik berkontribusi? Baca [Panduan Kontribusi](CONTRIBUTING.md) untuk memahami standar teknis, arsitektur TUI 60 FPS, dan alur pengiriman Pull Request.
+
+---
+
 ## 📄 Lisensi (License)
 
-Proyek ini dilisensikan di bawah lisensi **MIT**. Silakan gunakan, modifikasi, dan distribusikan secara bebas.
+Proyek ini dilisensikan di bawah lisensi [MIT](LICENSE). Silakan gunakan, modifikasi, dan distribusikan secara bebas.

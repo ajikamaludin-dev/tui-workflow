@@ -30,6 +30,8 @@ func NewBufferSwitcher() *BufferSwitcher {
 	ti.Prompt = "Cari Tab: "
 	ti.CharLimit = 64
 	ti.Width = 38
+	ti.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
+	ti.PromptStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent)
 
 	return &BufferSwitcher{
 		Active:   false,
@@ -182,5 +184,5 @@ func (s *BufferSwitcher) Render() string {
 		Background(ui.CurrentTheme.BgTopMenu).
 		Padding(1, 2)
 
-	return boxStyle.Render(content)
+	return NormalizeDialogBackground(boxStyle.Render(content), ui.CurrentTheme.BgTopMenu)
 }

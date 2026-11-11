@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"tui-workflow/internal/ui"
 )
 
@@ -55,6 +56,7 @@ const (
 	ClickItemHistory
 	ClickStageAction
 	ClickUnstageAction
+	ClickButtonRow
 )
 
 type GitClickTarget struct {
@@ -164,6 +166,13 @@ func (gv *GitView) DoCommit() (string, error) {
 	gv.CommitInput.SetValue("")
 	gv.Refresh()
 	return hash, nil
+}
+
+func (gv *GitView) Push() error {
+	if gv.Repo == nil {
+		return fmt.Errorf("repositori git tidak ditemukan")
+	}
+	return gv.Repo.Push()
 }
 
 func (gv *GitView) Update(msg tea.Msg) (tea.Cmd, *GitFileStatus) {
@@ -280,29 +289,40 @@ func (gv *GitView) Update(msg tea.Msg) (tea.Cmd, *GitFileStatus) {
 	return nil, fileToOpen
 }
 
-func (gv *GitView) HandleMouseClick(relX, relY int) (*GitFileStatus, bool) {
+func (gv *GitView) HandleMouseClick(relX, relY int) (*GitFileStatus, string, bool) {
 	target, ok := gv.ItemClickMap[relY]
 	if !ok {
-		return nil, false
+		return nil, "", false
 	}
 
 	switch target.Type {
 	case ClickCommitInput:
 		gv.FocusArea = GitFocusCommitInput
 		gv.CommitInput.Focus()
-		return nil, true
+		return nil, "", true
+
+	case ClickButtonRow:
+		gv.CommitInput.Blur()
+		// Button line: " [Commit]  [Push]"
+		// Commit: cols 1..8, Push: cols 9..16
+		if relX >= 1 && relX <= 8 {
+			return nil, "commit", true
+		} else if relX >= 9 {
+			return nil, "push", true
+		}
+		return nil, "", true
 
 	case ClickSectionStaged:
 		gv.StagedFolded = !gv.StagedFolded
-		return nil, true
+		return nil, "", true
 
 	case ClickSectionChanges:
 		gv.ChangesFolded = !gv.ChangesFolded
-		return nil, true
+		return nil, "", true
 
 	case ClickSectionHistory:
 		gv.HistoryFolded = !gv.HistoryFolded
-		return nil, true
+		return nil, "", true
 
 	case ClickItemStaged:
 		gv.FocusArea = GitFocusStaged
@@ -312,10 +332,10 @@ func (gv *GitView) HandleMouseClick(relX, relY int) (*GitFileStatus, bool) {
 		if relX >= 2 && relX <= 6 {
 			_ = gv.Repo.UnstageFile(target.Path)
 			gv.Refresh()
-			return nil, true
+			return nil, "", true
 		}
 		if target.Index >= 0 && target.Index < len(gv.Staged) {
-			return &gv.Staged[target.Index], true
+			return &gv.Staged[target.Index], "", true
 		}
 
 	case ClickItemChanges:
@@ -326,24 +346,24 @@ func (gv *GitView) HandleMouseClick(relX, relY int) (*GitFileStatus, bool) {
 		if relX >= 2 && relX <= 6 {
 			_ = gv.Repo.StageFile(target.Path)
 			gv.Refresh()
-			return nil, true
+			return nil, "", true
 		}
 		if target.Index >= 0 && target.Index < len(gv.Changes) {
-			return &gv.Changes[target.Index], true
+			return &gv.Changes[target.Index], "", true
 		}
 
 	case ClickStageAction:
 		_ = gv.Repo.StageFile(target.Path)
 		gv.Refresh()
-		return nil, true
+		return nil, "", true
 
 	case ClickUnstageAction:
 		_ = gv.Repo.UnstageFile(target.Path)
 		gv.Refresh()
-		return nil, true
+		return nil, "", true
 	}
 
-	return nil, false
+	return nil, "", false
 }
 
 func (gv *GitView) Render(width, height int, isFocused bool) string {
@@ -386,6 +406,24 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 	}
 	currentY += len(commitLines)
 
+	// Buttons: [ Commit ]  [ Push ]
+	btnCommitStyle := lipgloss.NewStyle().
+		Bold(true).
+		Background(ui.CurrentTheme.Accent).
+		Foreground(ui.CurrentTheme.FgHighlight).
+		Padding(0, 1)
+	btnPushStyle := lipgloss.NewStyle().
+		Background(ui.CurrentTheme.BorderColor).
+		Foreground(ui.CurrentTheme.FgHighlight).
+		Padding(0, 1)
+
+	btnCommit := btnCommitStyle.Render("Commit")
+	btnPush := btnPushStyle.Render("Push")
+	btnLine := fmt.Sprintf(" %s  %s", btnCommit, btnPush)
+	lines = append(lines, btnLine)
+	gv.ItemClickMap[currentY] = GitClickTarget{Type: ClickButtonRow}
+	currentY++
+
 	// Separator
 	lines = append(lines, "")
 	currentY++
@@ -411,7 +449,13 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 				isSelected := isFocused && gv.FocusArea == GitFocusStaged && gv.StagedIdx == i
 				badge := formatBadge(item.Status)
 				btn := "[-]"
-				lineText := fmt.Sprintf(" %s %s %s", badge, btn, item.Name)
+				prefix := fmt.Sprintf(" %s %s ", badge, btn)
+				availWidth := (width - 1) - ansi.StringWidth(prefix)
+				if availWidth < 0 {
+					availWidth = 0
+				}
+				nameTruncated := ansi.Truncate(item.Name, availWidth, "…")
+				lineText := prefix + nameTruncated
 
 				rowStyle := lipgloss.NewStyle()
 				if isSelected {
@@ -452,7 +496,13 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 				isSelected := isFocused && gv.FocusArea == GitFocusChanges && gv.ChangesIdx == i
 				badge := formatBadge(item.Status)
 				btn := "[+]"
-				lineText := fmt.Sprintf(" %s %s %s", badge, btn, item.Name)
+				prefix := fmt.Sprintf(" %s %s ", badge, btn)
+				availWidth := (width - 1) - ansi.StringWidth(prefix)
+				if availWidth < 0 {
+					availWidth = 0
+				}
+				nameTruncated := ansi.Truncate(item.Name, availWidth, "…")
+				lineText := prefix + nameTruncated
 
 				rowStyle := lipgloss.NewStyle()
 				if isSelected {
@@ -492,8 +542,13 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 			for i, commit := range gv.History {
 				isSelected := isFocused && gv.FocusArea == GitFocusHistory && gv.HistoryIdx == i
 				hashBadge := lipgloss.NewStyle().Foreground(ui.CurrentTheme.Yellow).Render(commit.Hash)
-				timeBadge := lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgSecondary).Render(commit.RelativeTime())
-				lineText := fmt.Sprintf(" %s %s %s", hashBadge, commit.Message, timeBadge)
+				prefix := fmt.Sprintf(" %s ", hashBadge)
+				availWidth := (width - 1) - ansi.StringWidth(prefix)
+				if availWidth < 0 {
+					availWidth = 0
+				}
+				msgTruncated := ansi.Truncate(commit.Message, availWidth, "…")
+				lineText := prefix + msgTruncated
 
 				rowStyle := lipgloss.NewStyle()
 				if isSelected {

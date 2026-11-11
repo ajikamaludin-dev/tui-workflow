@@ -36,6 +36,25 @@ func TestInputDialog(t *testing.T) {
 	}
 }
 
+func TestNormalizeDialogBackground(t *testing.T) {
+	d := NewInputDialog()
+	d.Open(InputNewFile, "Buat File Baru", "/tmp", "")
+	rendered := d.Render()
+
+	lines := strings.Split(rendered, "\n")
+	if len(lines) < 3 {
+		t.Fatalf("Expected at least 3 lines, got %d", len(lines))
+	}
+
+	// For all interior lines, verify that there are no raw unstyled spaces after resets
+	for i := 1; i < len(lines)-1; i++ {
+		line := lines[i]
+		if strings.Contains(line, "\x1b[0m ") {
+			t.Errorf("Line %d contains unstyled space immediately after ANSI reset: %q", i, line)
+		}
+	}
+}
+
 func TestConfirmDialog(t *testing.T) {
 	d := NewConfirmDialog()
 	if d.Active {

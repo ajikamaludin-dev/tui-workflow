@@ -1,6 +1,7 @@
 package git
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -41,6 +42,38 @@ type Repo struct {
 	r        *gogit.Repository
 	worktree *gogit.Worktree
 	RootPath string
+}
+
+func (r *Repo) GetBranchName() (string, error) {
+	if r == nil || r.r == nil {
+		return "", fmt.Errorf("repositori tidak valid")
+	}
+	head, err := r.r.Head()
+	if err != nil {
+		return "", err
+	}
+	if head.Name().IsBranch() {
+		return head.Name().Short(), nil
+	}
+	h := head.Hash().String()
+	if len(h) > 7 {
+		return h[:7], nil
+	}
+	return h, nil
+}
+
+func (r *Repo) Push() error {
+	if r == nil || r.r == nil {
+		return fmt.Errorf("repositori tidak valid")
+	}
+	err := r.r.Push(&gogit.PushOptions{})
+	if err != nil {
+		if errors.Is(err, gogit.NoErrAlreadyUpToDate) {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 func OpenRepo(path string) (*Repo, error) {

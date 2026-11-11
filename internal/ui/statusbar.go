@@ -11,6 +11,7 @@ import (
 
 type StatusBar struct {
 	AutoSave   bool
+	Branch     string
 	FilePath   string
 	Line       int
 	Col        int
@@ -63,6 +64,11 @@ func (s *StatusBar) Render() string {
 	}
 	autoSaveBadge := CurrentTheme.StatusBarBadgeStyle.Render(autoSaveText)
 
+	branchBadge := ""
+	if s.Branch != "" {
+		branchBadge = CurrentTheme.StatusBarItemStyle.Render("git: " + s.Branch)
+	}
+
 	if s.ToastMsg != "" {
 		toastStyle := lipgloss.NewStyle().
 			Padding(0, 1).
@@ -76,7 +82,7 @@ func (s *StatusBar) Render() string {
 	} else {
 		fileInfo := CurrentTheme.StatusBarItemStyle.Render(s.FilePath)
 		posInfo := CurrentTheme.StatusBarItemStyle.Render(fmt.Sprintf("Ln %d, Col %d", s.Line, s.Col))
-		leftPart = autoSaveBadge + fileInfo + posInfo
+		leftPart = autoSaveBadge + branchBadge + fileInfo + posInfo
 	}
 
 	// Dynamic rightPart depending on available width

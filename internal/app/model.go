@@ -15,6 +15,7 @@ import (
 	"tui-workflow/internal/editor"
 	"tui-workflow/internal/explorer"
 	"tui-workflow/internal/git"
+	"tui-workflow/internal/search"
 	"tui-workflow/internal/ui"
 	"tui-workflow/internal/ui/dialog"
 )
@@ -42,8 +43,10 @@ type Model struct {
 	QuickOpen      *dialog.QuickOpen
 	CommandPalette *dialog.CommandPalette
 	GlobalSearch   *dialog.GlobalSearch
-	FindBar           *dialog.FindBar
-	ContextMenu       *ui.ContextMenu
+	FindBar        *dialog.FindBar
+	BranchSwitcher *dialog.BranchSwitcher
+	SearchView     *search.SearchView
+	ContextMenu    *ui.ContextMenu
 	AutoSave          bool
 	SoftWrap          bool
 	ShowHelp          bool
@@ -122,6 +125,8 @@ func NewModelWithPath(targetPath string) (Model, error) {
 		CommandPalette: dialog.NewCommandPalette(),
 		GlobalSearch:   dialog.NewGlobalSearch(),
 		FindBar:        dialog.NewFindBar(),
+		BranchSwitcher: dialog.NewBranchSwitcher(),
+		SearchView:     search.NewSearchView(rootDir),
 		ContextMenu:    ui.NewContextMenu(),
 		AutoSave:       cfg.AutoSave,
 		SoftWrap:       cfg.SoftWrap,
@@ -324,6 +329,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					cur, tot := tab.Buffer.MatchInfo()
 					m.FindBar.SetMatches(cur, tot)
 					m.syncStatusBarWithActiveTab()
+				case "replace_one":
+					if tab.Buffer.ReplaceCurrent(m.FindBar.ReplaceInput.Value()) {
+						cur, tot := tab.Buffer.MatchInfo()
+						m.FindBar.SetMatches(cur, tot)
+						m.syncStatusBarWithActiveTab()
+						m.StatusBar.ShowToast("1 kecocokan diganti", false, 1*time.Second)
+					}
+				case "replace_all":
+					count := tab.Buffer.ReplaceAll(m.FindBar.Input.Value(), m.FindBar.ReplaceInput.Value())
+					cur, tot := tab.Buffer.MatchInfo()
+					m.FindBar.SetMatches(cur, tot)
+					m.syncStatusBarWithActiveTab()
+					m.StatusBar.ShowToast(fmt.Sprintf("%d kecocokan diganti", count), false, 2*time.Second)
 				}
 			}
 			return m, cmd
@@ -366,6 +384,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if closed && filePath != "" {
 				m.openFileAt(filePath, line, col)
 				m.Focus = FocusEditor
+			}
+			return m, cmd
+		}
+
+		// 0.8. Branch Switcher Handling if active
+		if m.BranchSwitcher != nil && m.BranchSwitcher.Active {
+			selectedBranch, closed, cmd := m.BranchSwitcher.Update(msg)
+			if closed {
+				if selectedBranch != "" && m.GitRepo != nil {
+					if err := m.GitRepo.CheckoutBranch(selectedBranch); err != nil {
+						m.StatusBar.ShowToast("Gagal ganti branch: "+err.Error(), true, 3*time.Second)
+					} else {
+						m.StatusBar.Branch = selectedBranch
+						if m.GitView != nil {
+							m.GitView.Refresh()
+						}
+						m.StatusBar.ShowToast("Beralih ke branch: "+selectedBranch, false, 2*time.Second)
+					}
+				}
 			}
 			return m, cmd
 		}
@@ -503,6 +540,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
+		case "alt+3":
+			m.SidebarView = SidebarSearch
+			if m.SearchView != nil {
+				m.SearchView.DoSearch()
+			}
+			return m, nil
+		case "alt+b":
+			m.openBranchSwitcher()
+			return m, nil
+
 		case "ctrl+enter":
 			if m.GitView != nil && m.GitRepo != nil {
 				if m.GitView.IsLoading {
@@ -545,6 +592,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.openFindBar()
 			return m, nil
 
+		case "ctrl+h":
+			m.openReplaceBar()
+			return m, nil
+
+		case "ctrl+g":
+			m.openGotoLine()
+			return m, nil
+
 		case "ctrl+m", "alt+m":
 			if m.TabManager.ToggleActiveMarkdown() {
 				tab := m.TabManager.ActiveTab()
@@ -574,6 +629,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// 7. Context-Specific: Sidebar (Files or Git)
 		if m.Focus == FocusSidebar && m.SidebarVisible {
 			if m.SidebarView == SidebarGit && m.GitView != nil {
+				if msg.String() == "d" || msg.String() == "x" {
+					if m.GitView.FocusArea == git.GitFocusChanges {
+						sel := m.GitView.SelectedChangesFile()
+						if sel != nil {
+							m.ConfirmDialog.Open(
+								dialog.ConfirmDiscardGit,
+								"Buang Perubahan",
+								fmt.Sprintf("Buang semua perubahan lokal pada '%s'? Tindakan ini tidak dapat dibatalkan.", sel.Name),
+								sel.Path,
+							)
+							return m, nil
+						}
+					}
+				}
 				cmd, fileToOpen := m.GitView.Update(msg)
 				if fileToOpen != nil {
 					if fileToOpen.Status == "?" || fileToOpen.Status == "U" {
@@ -583,6 +652,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					} else {
 						m.openDiff(fileToOpen.Path)
 					}
+				}
+				return m, cmd
+			}
+
+			if m.SidebarView == SidebarSearch && m.SearchView != nil {
+				filePath, line, col, cmd := m.SearchView.Update(msg)
+				if filePath != "" {
+					m.openFileAt(filePath, line, col)
+					m.Focus = FocusEditor
 				}
 				return m, cmd
 			}
@@ -621,6 +699,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Explorer.Refresh()
 				m.StatusBar.ShowToast("Pohon file diperbarui", false, 2*time.Second)
 				return m, nil
+			case "/":
+				m.InputDialog.Open(dialog.InputFilterExplorer, "Filter File Explorer", "Masukkan nama atau ekstensi file:", m.Explorer.FilterQuery)
+				return m, nil
+			case "esc":
+				if m.Explorer.FilterQuery != "" {
+					m.Explorer.SetFilter("")
+					m.StatusBar.ShowToast("Filter file dibersihkan", false, 2*time.Second)
+					return m, nil
+				}
 
 			case "a":
 				parentDir := m.getSelectedParentDir()
@@ -804,6 +891,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
+				case "ctrl+z":
+					if buf.Undo() {
+						m.syncStatusBarWithActiveTab()
+						m.StatusBar.ShowToast("Undo", false, 1*time.Second)
+					} else {
+						m.StatusBar.ShowToast("Sudah di perubahan paling awal", false, 1*time.Second)
+					}
+					return m, nil
+
+				case "ctrl+y", "ctrl+shift+z":
+					if buf.Redo() {
+						m.syncStatusBarWithActiveTab()
+						m.StatusBar.ShowToast("Redo", false, 1*time.Second)
+					} else {
+						m.StatusBar.ShowToast("Sudah di perubahan paling akhir", false, 1*time.Second)
+					}
+					return m, nil
+
 				case "enter":
 					buf.InsertNewline()
 					m.syncStatusBarWithActiveTab()
@@ -820,8 +925,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 
 				case "tab":
-					buf.InsertString("    ") // 4 spaces indent
+					if buf.HasSelection {
+						buf.IndentSelection()
+					} else {
+						buf.InsertString("    ")
+					}
 					m.syncStatusBarWithActiveTab()
+					return m, nil
+
+				case "shift+tab":
+					if buf.HasSelection {
+						buf.OutdentSelection()
+					} else {
+						buf.OutdentCurrentLine()
+					}
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+
+				case "ctrl+/", "ctrl+_":
+					buf.ToggleLineComment(tab.CommentPrefix())
+					m.syncStatusBarWithActiveTab()
+					m.StatusBar.ShowToast("Komentar dialihkan", false, 1*time.Second)
 					return m, nil
 
 				case "up":
@@ -1082,6 +1206,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else if m.SidebarView == SidebarGit && m.GitView != nil {
 					m.GitView.ScrollUp(3)
 					return m, nil
+				} else if m.SidebarView == SidebarSearch && m.SearchView != nil {
+					if m.SearchView.Selected > 0 {
+						m.SearchView.Selected--
+					}
+					return m, nil
 				}
 			} else if msg.Button == tea.MouseButtonWheelDown {
 				if m.SidebarView == SidebarFiles && m.Explorer != nil {
@@ -1089,6 +1218,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				} else if m.SidebarView == SidebarGit && m.GitView != nil {
 					m.GitView.ScrollDown(3, sidebarH)
+					return m, nil
+				} else if m.SidebarView == SidebarSearch && m.SearchView != nil {
+					if m.SearchView.Selected < len(m.SearchView.Matches)-1 {
+						m.SearchView.Selected++
+					}
 					return m, nil
 				}
 			}
@@ -1246,22 +1380,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-			// Row 1: Sidebar tab headers click
-			if msg.Y == 1 && m.SidebarVisible && msg.X < m.SidebarWidth {
-				if msg.X >= 0 && msg.X < 11 {
-					m.SidebarView = SidebarFiles
-					m.Focus = FocusSidebar
-					return m, nil
-				} else if msg.X >= 11 && msg.X < 20 {
-					m.SidebarView = SidebarGit
-					m.Focus = FocusSidebar
-					if m.GitView != nil {
-						m.GitView.Refresh()
-					}
-					return m, nil
-				}
-			}
-
 			// Row 2: Sidebar refresh button row click
 			if msg.Y == 2 && m.SidebarVisible && msg.X < m.SidebarWidth && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
 				m.Focus = FocusSidebar
@@ -1271,12 +1389,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else if m.SidebarView == SidebarGit && m.GitView != nil {
 					m.GitView.Refresh()
 					m.StatusBar.ShowToast("Git status diperbarui", false, 2*time.Second)
+				} else if m.SidebarView == SidebarSearch && m.SearchView != nil {
+					m.SearchView.DoSearch()
+					m.StatusBar.ShowToast("Pencarian diperbarui", false, 2*time.Second)
 				}
 				return m, nil
 			}
 
-			// Sidebar tree rows click (Row 3 to Height-2)
-			if m.SidebarVisible && msg.X < m.SidebarWidth && msg.Y >= 3 && msg.Y < m.Height-1 && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			// Row Height-2: Sidebar bottom tabs click (📁 Files | 🌿 Git | 🔍 Search)
+			if msg.Y == m.Height-2 && m.SidebarVisible && msg.X < m.SidebarWidth && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+				m.Focus = FocusSidebar
+				if msg.X >= 0 && msg.X < 9 {
+					m.SidebarView = SidebarFiles
+				} else if msg.X >= 9 && msg.X < 17 {
+					m.SidebarView = SidebarGit
+					if m.GitView != nil {
+						m.GitView.Refresh()
+					}
+				} else {
+					m.SidebarView = SidebarSearch
+					if m.SearchView != nil {
+						m.SearchView.DoSearch()
+					}
+				}
+				return m, nil
+			}
+
+			// Sidebar body rows click (Row 3 to Height-3)
+			if m.SidebarVisible && msg.X < m.SidebarWidth && msg.Y >= 3 && msg.Y < m.Height-2 && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
 				if m.Focus != FocusSidebar && m.AutoSave {
 					_, _ = editor.TriggerAutoSave(m.TabManager)
 				}
@@ -1318,6 +1458,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.StatusBar.ShowToast("Pushing ke remote repository...", false, 5*time.Second)
 						return m, tea.Batch(gitPushCmd(m.GitRepo), gitLoadingTickCmd())
 					}
+					if action == "discard" && targetFile != nil {
+						m.ConfirmDialog.Open(
+							dialog.ConfirmDiscardGit,
+							"Buang Perubahan",
+							fmt.Sprintf("Buang semua perubahan lokal pada '%s'? Tindakan ini tidak dapat dibatalkan.", targetFile.Name),
+							targetFile.Path,
+						)
+						return m, nil
+					}
 					if targetFile != nil {
 						if targetFile.Status == "?" || targetFile.Status == "U" {
 							fullPath := filepath.Join(m.RootDir, targetFile.Path)
@@ -1327,10 +1476,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.openDiff(targetFile.Path)
 						}
 					}
+				} else if m.SidebarView == SidebarSearch && m.SearchView != nil {
+					relLine := msg.Y - 3
+					filePath, line, col, _ := m.SearchView.HandleMouseClick(msg.X, relLine)
+					if filePath != "" {
+						m.openFileAt(filePath, line, col)
+						m.Focus = FocusEditor
+					}
 				}
 				return m, nil
 			}
-
 			// Click inside editor buffer area (Row 2 to Height-2, X >= editorStartX)
 			if msg.Y >= 2 && msg.Y < m.Height-1 && msg.X >= editorStartX {
 				m.Focus = FocusEditor
@@ -1547,7 +1702,13 @@ func (m *Model) openCommandPalette() {
 		{ID: "search.quick_open", Title: "Quick Open File (Workspace)", Category: "Search", Shortcut: "Ctrl+P"},
 		{ID: "search.palette", Title: "Command Palette", Category: "Search", Shortcut: "Ctrl+Shift+P / F1"},
 		{ID: "search.find", Title: "Find in Current File", Category: "Search", Shortcut: "Ctrl+F"},
+		{ID: "search.replace", Title: "Find & Replace in Current File", Category: "Search", Shortcut: "Ctrl+H"},
 		{ID: "search.global", Title: "Global Search in Workspace", Category: "Search", Shortcut: "Ctrl+Shift+F"},
+		{ID: "edit.goto_line", Title: "Go to Line / Column", Category: "Search", Shortcut: "Ctrl+G"},
+		{ID: "edit.undo", Title: "Undo Text Change", Category: "Edit", Shortcut: "Ctrl+Z"},
+		{ID: "edit.redo", Title: "Redo Text Change", Category: "Edit", Shortcut: "Ctrl+Y"},
+		{ID: "edit.toggle_comment", Title: "Toggle Comment (Line / Selection)", Category: "Edit", Shortcut: "Ctrl+/"},
+		{ID: "explorer.filter", Title: "Filter File Explorer", Category: "Explorer", Shortcut: "/"},
 
 		// View
 		{ID: "setting.sidebar", Title: "Toggle Sidebar", Category: "View", Shortcut: "Ctrl+B"},
@@ -1557,6 +1718,7 @@ func (m *Model) openCommandPalette() {
 		{ID: "view.focus", Title: "Switch Focus (Sidebar/Editor)", Category: "View", Shortcut: "Ctrl+E / F6"},
 		{ID: "view.files", Title: "Switch to Files Explorer", Category: "View", Shortcut: "Alt+1"},
 		{ID: "view.git", Title: "Switch to Git Sidebar", Category: "View", Shortcut: "Alt+2"},
+		{ID: "view.search", Title: "Switch to Search & Replace Sidebar", Category: "View", Shortcut: "Alt+3"},
 		{ID: "view.markdown", Title: "Toggle Markdown Live Preview", Category: "View", Shortcut: "Ctrl+M"},
 
 		// Settings & Tools
@@ -1568,6 +1730,7 @@ func (m *Model) openCommandPalette() {
 		// Git
 		{ID: "git.stage_all", Title: "Git: Stage All Changes", Category: "Git", Shortcut: ""},
 		{ID: "git.unstage_all", Title: "Git: Unstage All Changes", Category: "Git", Shortcut: ""},
+		{ID: "git.branch_switcher", Title: "Git: Switch Branch", Category: "Git", Shortcut: "Alt+B"},
 		{ID: "git.refresh", Title: "Git: Refresh Worktree Status", Category: "Git", Shortcut: ""},
 		{ID: "files.refresh", Title: "Files: Refresh File Explorer", Category: "Files", Shortcut: ""},
 	}
@@ -1594,6 +1757,31 @@ func (m *Model) openFindBar() {
 		cur, tot := tab.Buffer.MatchInfo()
 		m.FindBar.SetMatches(cur, tot)
 	}
+}
+
+func (m *Model) openReplaceBar() {
+	tab := m.TabManager.ActiveTab()
+	if tab == nil || tab.Buffer == nil || (tab.Type == editor.TabMarkdown && tab.MarkdownPreview) || tab.IsDiff {
+		m.StatusBar.ShowToast("Cari & Ganti hanya didukung di buffer editor aktif", true, 2*time.Second)
+		return
+	}
+	selectedText := tab.Buffer.GetSelectedText()
+	m.FindBar.OpenReplace(selectedText)
+	if selectedText != "" {
+		tab.Buffer.SetSearchQuery(selectedText)
+		cur, tot := tab.Buffer.MatchInfo()
+		m.FindBar.SetMatches(cur, tot)
+	}
+}
+
+func (m *Model) openGotoLine() {
+	tab := m.TabManager.ActiveTab()
+	if tab == nil || tab.Buffer == nil || (tab.Type == editor.TabMarkdown && tab.MarkdownPreview) || tab.IsDiff {
+		m.StatusBar.ShowToast("Go to Line hanya didukung di buffer editor aktif", true, 2*time.Second)
+		return
+	}
+	curLine := tab.Buffer.CursorRow + 1
+	m.InputDialog.Open(dialog.InputGotoLine, "Lompat ke Baris [baris:kolom]", "", strconv.Itoa(curLine))
 }
 
 func (m *Model) openFileAt(path string, line, col int) {
@@ -1628,6 +1816,19 @@ func (m *Model) openBufferSwitcher() {
 	}
 
 	m.Switcher.Open(items, m.TabManager.ActiveIndex)
+}
+
+func (m *Model) openBranchSwitcher() {
+	if m.GitRepo == nil {
+		m.StatusBar.ShowToast("Bukan repositori git aktif", true, 2*time.Second)
+		return
+	}
+	branches, current, err := m.GitRepo.GetBranches()
+	if err != nil || len(branches) == 0 {
+		m.StatusBar.ShowToast("Tidak dapat membaca branch git", true, 2*time.Second)
+		return
+	}
+	m.BranchSwitcher.Open(branches, current)
 }
 
 func (m *Model) syncStatusBarWithActiveTab() {
@@ -1793,6 +1994,37 @@ func (m *Model) handleInputConfirmed() {
 		}
 		m.syncStatusBarWithActiveTab()
 		m.StatusBar.ShowToast("Folder dibuka: "+cleanPath, false, 2*time.Second)
+
+	case dialog.InputGotoLine:
+		parts := strings.Split(val, ":")
+		line, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+		col := 1
+		if len(parts) > 1 {
+			if c, err := strconv.Atoi(strings.TrimSpace(parts[1])); err == nil && c > 0 {
+				col = c
+			}
+		}
+		if err == nil && line > 0 {
+			tab := m.TabManager.ActiveTab()
+			if tab != nil && tab.Buffer != nil {
+				tab.Buffer.CursorRow = line - 1
+				tab.Buffer.CursorCol = col - 1
+				tab.Buffer.ClearSelection()
+				tab.Buffer.ClampCursor()
+				m.syncStatusBarWithActiveTab()
+				m.StatusBar.ShowToast(fmt.Sprintf("Baris %d, Kolom %d", line, col), false, 2*time.Second)
+			}
+		} else {
+			m.StatusBar.ShowToast("Format baris tidak valid (gunakan: baris[:kolom])", true, 2*time.Second)
+		}
+
+	case dialog.InputFilterExplorer:
+		m.Explorer.SetFilter(val)
+		if val != "" {
+			m.StatusBar.ShowToast(fmt.Sprintf("Filter aktif: '%s' (%d item)", val, len(m.Explorer.FlatNodes)), false, 2*time.Second)
+		} else {
+			m.StatusBar.ShowToast("Filter file dibersihkan", false, 2*time.Second)
+		}
 	}
 }
 
@@ -1832,6 +2064,24 @@ func (m *Model) handleConfirmConfirmed() {
 			}
 		}
 		m.syncStatusBarWithActiveTab()
+	case dialog.ConfirmDiscardGit:
+		if m.GitRepo != nil {
+			err := m.GitRepo.DiscardFile(m.ConfirmDialog.TargetPath)
+			if err != nil {
+				m.StatusBar.ShowToast("Gagal membuang perubahan: "+err.Error(), true, 3*time.Second)
+			} else {
+				if m.GitView != nil {
+					m.GitView.Refresh()
+				}
+				for _, tab := range m.TabManager.Tabs {
+					if tab != nil && (tab.Path == m.ConfirmDialog.TargetPath || filepath.Base(tab.Path) == filepath.Base(m.ConfirmDialog.TargetPath)) {
+						_ = tab.ReloadFromDisk()
+					}
+				}
+				m.syncStatusBarWithActiveTab()
+				m.StatusBar.ShowToast("Perubahan dibuang: "+filepath.Base(m.ConfirmDialog.TargetPath), false, 2*time.Second)
+			}
+		}
 	}
 }
 
@@ -1997,6 +2247,45 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 	case "search.find":
 		m.openFindBar()
 
+	case "search.replace":
+		m.openReplaceBar()
+
+	case "edit.goto_line":
+		m.openGotoLine()
+
+	case "edit.undo":
+		tab := m.TabManager.ActiveTab()
+		if tab != nil && tab.Buffer != nil {
+			if tab.Buffer.Undo() {
+				tab.Buffer.ClampCursor()
+				m.syncStatusBarWithActiveTab()
+				m.StatusBar.ShowToast("Undo", false, 1*time.Second)
+			}
+		}
+
+	case "edit.redo":
+		tab := m.TabManager.ActiveTab()
+		if tab != nil && tab.Buffer != nil {
+			if tab.Buffer.Redo() {
+				tab.Buffer.ClampCursor()
+				m.syncStatusBarWithActiveTab()
+				m.StatusBar.ShowToast("Redo", false, 1*time.Second)
+			}
+		}
+
+	case "edit.toggle_comment":
+		tab := m.TabManager.ActiveTab()
+		if tab != nil && tab.Buffer != nil {
+			tab.Buffer.ToggleLineComment(tab.CommentPrefix())
+			m.syncStatusBarWithActiveTab()
+		}
+
+	case "git.branch_switcher":
+		m.openBranchSwitcher()
+
+	case "explorer.filter":
+		m.InputDialog.Open(dialog.InputFilterExplorer, "Filter File Explorer", "Masukkan nama atau ekstensi file:", m.Explorer.FilterQuery)
+
 	case "search.global":
 		m.openGlobalSearch()
 
@@ -2012,6 +2301,13 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 		m.SidebarVisible = true
 		if m.GitView != nil {
 			m.GitView.Refresh()
+		}
+
+	case "view.search":
+		m.SidebarView = SidebarSearch
+		m.SidebarVisible = true
+		if m.SearchView != nil {
+			m.SearchView.DoSearch()
 		}
 
 	case "view.markdown":

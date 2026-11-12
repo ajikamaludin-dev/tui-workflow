@@ -473,16 +473,21 @@ func (gv *GitView) HandleMouseClick(relX, relY int) (*GitFileStatus, string, boo
 		gv.FocusArea = GitFocusChanges
 		gv.ChangesIdx = target.Index
 		gv.CommitInput.Blur()
-		// Clicking [+] button (columns 2..6) stages the file
-		if relX >= 2 && relX <= 6 {
+		// Clicking [+] button (columns 2..5) stages the file
+		if relX >= 2 && relX <= 5 {
 			_ = gv.Repo.StageFile(target.Path)
 			gv.Refresh()
 			return nil, "", true
 		}
+		// Clicking [x] button (columns 6..10) requests discard
+		if relX >= 6 && relX <= 10 {
+			if target.Index >= 0 && target.Index < len(gv.Changes) {
+				return &gv.Changes[target.Index], "discard", true
+			}
+		}
 		if target.Index >= 0 && target.Index < len(gv.Changes) {
 			return &gv.Changes[target.Index], "", true
 		}
-
 	case ClickStageAction:
 		_ = gv.Repo.StageFile(target.Path)
 		gv.Refresh()
@@ -669,7 +674,7 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 			for i, item := range gv.Changes {
 				isSelected := isFocused && gv.FocusArea == GitFocusChanges && gv.ChangesIdx == i
 				badge := formatBadge(item.Status)
-				btn := "[+]"
+				btn := "[+] [x]"
 				prefix := fmt.Sprintf(" %s %s ", badge, btn)
 				availWidth := (width - 1) - ansi.StringWidth(prefix)
 				if availWidth < 0 {

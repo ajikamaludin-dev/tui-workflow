@@ -104,8 +104,8 @@ func TestMenuBarMouseClick(t *testing.T) {
 	}
 
 	// 5. Re-open and click on Search menu item 0 "Command Palette" at Y = 2
-	mb.Toggle(1)
-	searchCat := mb.Categories[1]
+	mb.Toggle(2)
+	searchCat := mb.Categories[2]
 	action, handled = mb.HandleMouse(tea.MouseMsg{
 		X:      searchCat.StartX + 2,
 		Y:      2,
@@ -116,11 +116,11 @@ func TestMenuBarMouseClick(t *testing.T) {
 		t.Errorf("Expected action 'search.palette', got %q (handled=%v)", action, handled)
 	}
 
-	// 6. Click on Search menu item 3 "Find in Files (Global)" at Y = 5
-	mb.Toggle(1)
+	// 6. Click on Search menu item 4 "Find in Files (Global)" at Y = 6
+	mb.Toggle(2)
 	action, handled = mb.HandleMouse(tea.MouseMsg{
 		X:      searchCat.StartX + 2,
-		Y:      5,
+		Y:      6,
 		Action: tea.MouseActionPress,
 		Button: tea.MouseButtonLeft,
 	})

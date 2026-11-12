@@ -128,3 +128,76 @@ func (b *Buffer) MatchAt(row, col int) (isMatch bool, isActive bool) {
 	}
 	return false, false
 }
+
+// ReplaceCurrent replaces the currently active search match with replacement string.
+func (b *Buffer) ReplaceCurrent(replacement string) bool {
+	if len(b.SearchMatches) == 0 || b.ActiveMatchIdx < 0 || b.ActiveMatchIdx >= len(b.SearchMatches) {
+		return false
+	}
+	cur := b.SearchMatches[b.ActiveMatchIdx]
+	if cur.Row < 0 || cur.Row >= len(b.Lines) {
+		return false
+	}
+	line := b.Lines[cur.Row]
+	if cur.Col < 0 || cur.Col+cur.Length > len(line) {
+		return false
+	}
+
+	b.endTypingGroup()
+	b.pushUndo()
+
+	repRunes := []rune(replacement)
+	newLine := make([]rune, 0, len(line)-cur.Length+len(repRunes))
+	newLine = append(newLine, line[:cur.Col]...)
+	newLine = append(newLine, repRunes...)
+	newLine = append(newLine, line[cur.Col+cur.Length:]...)
+	b.Lines[cur.Row] = newLine
+
+	b.CursorRow = cur.Row
+	b.CursorCol = cur.Col + len(repRunes)
+	b.IsDirty = true
+	b.cachedDirty = true
+	b.clampCursor()
+
+	// Recompute search matches and keep cursor at next match
+	q := b.SearchQuery
+	b.SetSearchQuery(q)
+	return true
+}
+
+// ReplaceAll replaces all search matches in the buffer with replacement string.
+func (b *Buffer) ReplaceAll(query, replacement string) int {
+	b.SetSearchQuery(query)
+	total := len(b.SearchMatches)
+	if total == 0 {
+		return 0
+	}
+
+	b.endTypingGroup()
+	b.pushUndo()
+
+	repRunes := []rune(replacement)
+	// Process bottom-up, right-to-left so column offsets remain valid
+	for i := len(b.SearchMatches) - 1; i >= 0; i-- {
+		m := b.SearchMatches[i]
+		if m.Row < 0 || m.Row >= len(b.Lines) {
+			continue
+		}
+		line := b.Lines[m.Row]
+		if m.Col < 0 || m.Col+m.Length > len(line) {
+			continue
+		}
+		newLine := make([]rune, 0, len(line)-m.Length+len(repRunes))
+		newLine = append(newLine, line[:m.Col]...)
+		newLine = append(newLine, repRunes...)
+		newLine = append(newLine, line[m.Col+m.Length:]...)
+		b.Lines[m.Row] = newLine
+	}
+
+	b.IsDirty = true
+	b.cachedDirty = true
+	b.clampCursor()
+
+	b.SetSearchQuery(query)
+	return total
+}

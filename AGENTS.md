@@ -138,6 +138,14 @@ Mulai sekarang, semua AI agent yang bekerja di repo ini berperan sebagai **Go & 
   - `internal/syntax/`: Chroma syntax highlighting tokenizer.
   - `internal/ui/`: Theme palette, menu bar, status bar, modal dialogs.
 
+### 11. Shortcut Synchronization & Help Modal Update Mandate
+- **Aturan Wajib:** Setiap kali membuat, mengubah, atau menghapus pintasan keyboard (*shortcut*) baru, WAJIB segera memperbarui:
+  1. **Popup Dialog Bantuan Shortcut (`?` / `renderHelpModal` di `internal/app/view.go`)**: Wajib dicantumkan kategori, kombinasi tombol, dan fungsi aksinya dengan layout visual yang rapi.
+  2. **Top Menu Bar Dropdown (`internal/ui/menu.go`)**: Wajib menyertakan label shortcut pada item menu terkait.
+  3. **Command Palette (`internal/app/model.go`)**: Wajib mendaftarkan item `CommandPaletteItem` lengkap dengan `ID`, `Title`, `Category`, dan `Shortcut`.
+  4. **Dokumentasi Produk**: Perbarui tabel cheatsheet di `README.md` dan fungsionalitas di `PRD.md`.
+- **Larangan Keras:** Dilarang keras membiarkan shortcut baru beroperasi secara "tersembunyi" tanpa terdaftar pada pop-up dialog bantuan shortcut (`?`).
+
 ---
 
 ## 5. Aturan Git — Dilarang Tanpa Persetujuan (Global Rule)

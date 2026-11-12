@@ -46,13 +46,27 @@ func NewMenuBar() *MenuBar {
 				},
 			},
 			{
+				Title:    "Edit",
+				Shortcut: "Alt+E",
+				Items: []MenuItem{
+					{Label: "Undo", Shortcut: "Ctrl+Z", ActionID: "edit.undo"},
+					{Label: "Redo", Shortcut: "Ctrl+Y", ActionID: "edit.redo"},
+					{Label: "Find...", Shortcut: "Ctrl+F", ActionID: "search.find"},
+					{Label: "Find & Replace...", Shortcut: "Ctrl+H", ActionID: "search.replace"},
+					{Label: "Go to Line...", Shortcut: "Ctrl+G", ActionID: "edit.goto_line"},
+					{Label: "Toggle Comment", Shortcut: "Ctrl+/", ActionID: "edit.toggle_comment"},
+				},
+			},
+			{
 				Title:    "Search",
 				Shortcut: "Alt+R",
 				Items: []MenuItem{
 					{Label: "Command Palette...", Shortcut: "F1", ActionID: "search.palette"},
 					{Label: "Quick Open File...", Shortcut: "Ctrl+P", ActionID: "search.quick_open"},
 					{Label: "Find in Current File...", Shortcut: "Ctrl+F", ActionID: "search.find"},
+					{Label: "Find & Replace...", Shortcut: "Ctrl+H", ActionID: "search.replace"},
 					{Label: "Find in Files (Global)...", Shortcut: "F4", ActionID: "search.global"},
+					{Label: "Go to Line...", Shortcut: "Ctrl+G", ActionID: "edit.goto_line"},
 				},
 			},
 			{
@@ -63,6 +77,7 @@ func NewMenuBar() *MenuBar {
 					{Label: "Toggle Soft Wrap", Shortcut: "Alt+Z", ActionID: "setting.softwrap"},
 					{Label: "Toggle Auto-Save", Shortcut: "Alt+S", ActionID: "setting.autosave"},
 					{Label: "Toggle Hidden Files", Shortcut: ".", ActionID: "setting.hidden"},
+					{Label: "Switch Git Branch...", Shortcut: "Alt+B", ActionID: "git.branch_switcher"},
 					{Label: "Keyboard Shortcuts", Shortcut: "?", ActionID: "setting.shortcuts"},
 				},
 			},
@@ -121,14 +136,17 @@ func (m *MenuBar) HandleKey(msg tea.KeyMsg) (action string, handled bool) {
 		case "alt+f", "alt+F":
 			m.Toggle(0)
 			return "", true
-		case "alt+r", "alt+R":
+		case "alt+e", "alt+E":
 			m.Toggle(1)
 			return "", true
-		case "alt+t", "alt+T":
+		case "alt+r", "alt+R":
 			m.Toggle(2)
 			return "", true
-		case "alt+a", "alt+A":
+		case "alt+t", "alt+T":
 			m.Toggle(3)
+			return "", true
+		case "alt+a", "alt+A":
+			m.Toggle(4)
 			return "", true
 		}
 		return "", false

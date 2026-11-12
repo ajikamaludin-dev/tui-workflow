@@ -2,6 +2,7 @@ package explorer
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -122,5 +123,44 @@ func TestTreeLongNameTruncationAndMarquee(t *testing.T) {
 	renderedReset := tree.Render(28, 5, true)
 	if renderedReset != rendered1 {
 		t.Errorf("Expected marquee text to reset to initial frame after ResetMarquee()")
+	}
+}
+
+func TestTreeFiltering(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "tree_filter_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	_ = os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte("package main"), 0644)
+	_ = os.WriteFile(filepath.Join(tmpDir, "README.md"), []byte("# Hello"), 0644)
+	_ = os.Mkdir(filepath.Join(tmpDir, "pkg"), 0755)
+	_ = os.WriteFile(filepath.Join(tmpDir, "pkg", "util.go"), []byte("package pkg"), 0644)
+
+	tree := NewTree(tmpDir)
+	if len(tree.FlatNodes) < 3 {
+		t.Fatalf("Expected at least 3 nodes, got %d", len(tree.FlatNodes))
+	}
+
+	// Filter by ".go"
+	tree.SetFilter(".go")
+	for _, n := range tree.FlatNodes {
+		if !n.IsDir && !strings.HasSuffix(n.Name, ".go") {
+			t.Errorf("Unexpected non-go file in filtered tree: %s", n.Name)
+		}
+	}
+
+	// Clear filter
+	tree.SetFilter("")
+	hasReadme := false
+	for _, n := range tree.FlatNodes {
+		if n.Name == "README.md" {
+			hasReadme = true
+			break
+		}
+	}
+	if !hasReadme {
+		t.Errorf("Expected README.md to be restored after clearing filter")
 	}
 }

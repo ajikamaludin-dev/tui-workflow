@@ -68,6 +68,9 @@ func (m Model) View() string {
 	} else if m.Switcher.Active {
 		modal := m.Switcher.Render()
 		baseView = overlayTopCenter(baseView, modal, m.Width, m.Height)
+	} else if m.BranchSwitcher != nil && m.BranchSwitcher.Active {
+		modal := m.BranchSwitcher.Render()
+		baseView = overlayTopCenter(baseView, modal, m.Width, m.Height)
 	} else if m.FilePicker != nil && m.FilePicker.Active {
 		modal := m.FilePicker.Render()
 		baseView = overlayCenter(baseView, modal, m.Width, m.Height)
@@ -115,23 +118,24 @@ func (m Model) View() string {
 }
 
 func (m Model) renderSidebar(width, height int) string {
-	var tabFiles, tabGit string
-	if m.SidebarView == SidebarFiles {
-		tabFiles = ui.CurrentTheme.SidebarTabActive.Render(" 1:Files ")
-		tabGit = ui.CurrentTheme.SidebarTabInactive.Render(" 2:Git ")
-	} else {
-		tabFiles = ui.CurrentTheme.SidebarTabInactive.Render(" 1:Files ")
-		tabGit = ui.CurrentTheme.SidebarTabActive.Render(" 2:Git ")
+	// 1. Top Title Header (Row 1 in terminal)
+	var title string
+	switch m.SidebarView {
+	case SidebarFiles:
+		title = " 📁 EXPLORER"
+	case SidebarGit:
+		title = " 🌿 SOURCE CONTROL"
+	case SidebarSearch:
+		title = " 🔍 CARI & GANTI"
 	}
-	header := tabFiles + tabGit
-	headerLen := lipgloss.Width(header)
-	if headerLen < width-1 {
-		header += strings.Repeat(" ", width-1-headerLen)
+	titleLen := lipgloss.Width(title)
+	if titleLen < width-1 {
+		title += strings.Repeat(" ", width-1-titleLen)
 	}
-	header = ui.CurrentTheme.SidebarHeaderStyle.Width(width - 1).MaxHeight(1).Render(header)
-	header = ansi.Truncate(header, width-1, "")
+	headerRow := ui.CurrentTheme.SidebarHeaderStyle.Width(width - 1).MaxHeight(1).Render(title)
+	headerRow = ansi.Truncate(headerRow, width-1, "")
 
-	// Dedicated refresh button row at the top inside the active tab
+	// 2. Refresh button row (Row 2 in terminal)
 	refreshBtn := lipgloss.NewStyle().
 		Foreground(ui.CurrentTheme.Accent).
 		Bold(true).
@@ -142,20 +146,84 @@ func (m Model) renderSidebar(width, height int) string {
 		Render(refreshBtn)
 	refreshRow = ansi.Truncate(refreshRow, width-1, "")
 
-	bodyHeight := height - 2
+	// 3. Bottom Tabs Footer (Row Height-2 in terminal)
+	tabActive := ui.CurrentTheme.SidebarTabActive.Padding(0, 0)
+	tabInactive := ui.CurrentTheme.SidebarTabInactive.Padding(0, 0)
+
+	var tabFiles, tabGit, tabSearch string
+	if m.SidebarView == SidebarFiles {
+		tabFiles = tabActive.Render(" 📁 Files")
+	} else {
+		tabFiles = tabInactive.Render(" 📁 Files")
+	}
+	if m.SidebarView == SidebarGit {
+		tabGit = tabActive.Render(" 🌿 Git")
+	} else {
+		tabGit = tabInactive.Render(" 🌿 Git")
+	}
+	if m.SidebarView == SidebarSearch {
+		tabSearch = tabActive.Render(" 🔍 Search ")
+	} else {
+		tabSearch = tabInactive.Render(" 🔍 Search ")
+	}
+
+	footerTabs := tabFiles + tabGit + tabSearch
+	footerLen := lipgloss.Width(footerTabs)
+	if footerLen < width-1 {
+		footerTabs += strings.Repeat(" ", width-1-footerLen)
+	}
+	footerTabs = ui.CurrentTheme.SidebarHeaderStyle.Width(width - 1).MaxHeight(1).Render(footerTabs)
+	footerTabs = ansi.Truncate(footerTabs, width-1, "")
+
+	bodyHeight := height - 3
 	if bodyHeight < 1 {
 		bodyHeight = 1
 	}
+
 	var body string
 	if m.SidebarView == SidebarFiles {
-		body = m.Explorer.Render(width-1, bodyHeight, m.Focus == FocusSidebar)
-	} else if m.GitView != nil {
-		body = m.GitView.Render(width-1, bodyHeight, m.Focus == FocusSidebar)
-	} else {
-		body = "  Bukan repositori Git"
+		if m.Explorer.FilterQuery != "" {
+			filterBanner := lipgloss.NewStyle().
+				Foreground(ui.CurrentTheme.Accent).
+				Background(ui.CurrentTheme.BgTopMenu).
+				Width(width - 1).
+				MaxHeight(1).
+				Render(ansi.Truncate(" 🔍 "+m.Explorer.FilterQuery+" (Esc:Batal)", width-1, ""))
+			bodyH := bodyHeight - 1
+			if bodyH < 1 {
+				bodyH = 1
+			}
+			treeView := m.Explorer.Render(width-1, bodyH, m.Focus == FocusSidebar)
+			body = filterBanner + "\n" + treeView
+		} else {
+			body = m.Explorer.Render(width-1, bodyHeight, m.Focus == FocusSidebar)
+		}
+	} else if m.SidebarView == SidebarGit {
+		if m.GitView != nil {
+			body = m.GitView.Render(width-1, bodyHeight, m.Focus == FocusSidebar)
+		} else {
+			body = "  Bukan repositori Git"
+		}
+	} else if m.SidebarView == SidebarSearch {
+		if m.SearchView != nil {
+			body = m.SearchView.Render(width-1, bodyHeight, m.Focus == FocusSidebar)
+		} else {
+			body = "  Search view belum siap"
+		}
 	}
 
-	colContent := header + "\n" + refreshRow + "\n" + body
+	// Pad or truncate body to exactly bodyHeight lines so footerTabs is always pinned to the bottom row
+	bodyLines := strings.Split(body, "\n")
+	if len(bodyLines) > bodyHeight {
+		bodyLines = bodyLines[:bodyHeight]
+	} else {
+		for len(bodyLines) < bodyHeight {
+			bodyLines = append(bodyLines, strings.Repeat(" ", width-1))
+		}
+	}
+	body = strings.Join(bodyLines, "\n")
+
+	colContent := headerRow + "\n" + refreshRow + "\n" + body + "\n" + footerTabs
 
 	borderStyle := ui.CurrentTheme.SidebarStyle.
 		Width(width).
@@ -213,39 +281,45 @@ func (m Model) renderEditor(width, height int) string {
 }
 
 func renderHelpModal() string {
-	content := "┌─ BANTUAN & SHORTCUT tui-workflow ────────────────┐\n" +
-		"│                                                  │\n" +
-		"│ Global & Navigasi:                               │\n" +
-		"│ • Ctrl+Q         : Keluar dari aplikasi          │\n" +
-		"│ • Ctrl+E / F6    : Ganti Fokus Sidebar/Editor    │\n" +
-		"│ • Ctrl+B         : Toggle Sidebar                │\n" +
-		"│ • Alt+[ / Alt+]  : Persempit / Perlebar Sidebar  │\n" +
-		"│ • Alt+1 / Alt+2  : Switch Sidebar (Files / Git)  │\n" +
-		"│ • Alt+F, Alt+R   : Menu File / Search            │\n" +
-		"│ • Alt+T, Alt+A   : Menu Setting / About          │\n" +
-		"│ • Alt+S / Alt+Z  : Toggle Auto-Save / Soft-Wrap  │\n" +
-		"│ • ? / Esc        : Buka Bantuan / Tutup Dialog   │\n" +
-		"│                                                  │\n" +
-		"│ Pencarian & Aksi:                                │\n" +
-		"│ • F1             : Command Palette (Semua Aksi)  │\n" +
-		"│ • Ctrl+P         : Quick Open File Workspace     │\n" +
-		"│ • F4             : Global Search di Workspace    │\n" +
-		"│ • Ctrl+F         : Cari Teks di Buffer Aktif     │\n" +
-		"│ • Ctrl+O / Ctrl+K: Buka File / Buka Folder       │\n" +
-		"│                                                  │\n" +
-		"│ Editor & Markdown Preview:                       │\n" +
-		"│ • Ketik langsung : Input teks langsung ke buffer │\n" +
-		"│ • Ctrl+S / Ctrl+W: Simpan / Tutup Tab            │\n" +
-		"│ • Ctrl+M / Alt+M : Toggle Markdown Live Preview  │\n" +
-		"│ • Ctrl+A / Ctrl+C: Pilih Semua / Salin Teks      │\n" +
-		"│ • Ctrl+V         : Tempel Teks dari Clipboard    │\n" +
-		"│ • Tab            : Indentasi 4 Spasi             │\n" +
-		"│ • Drag Mouse     : Seleksi Teks / Resize Sidebar │\n" +
-		"│ • Klik Kanan     : Buka Context Menu Interaktif  │\n" +
-		"│                                                  │\n" +
-		"│ [Tekan Esc atau ? untuk menutup modal ini]       │\n" +
-		"└──────────────────────────────────────────────────┘"
-
+	content := `┌─ BANTUAN & SHORTCUT tui-workflow ────────────────┐
+│                                                  │
+│ Global & Navigasi:                               │
+│   • Ctrl+Q          : Keluar dari aplikasi       │
+│   • Ctrl+E / F6     : Ganti Fokus Sidebar/Editor │
+│   • Ctrl+B          : Toggle Sidebar             │
+│   • Alt+[ / Alt+]   : Persempit / Perlebar Side  │
+│   • Alt+1 / 2 / 3   : Switch Files / Git / Search│
+│   • Alt+F / Alt+E   : Menu File / Edit           │
+│   • Alt+R / Alt+T   : Menu Search / Setting      │
+│   • Alt+A           : Menu About                 │
+│   • Alt+S / Alt+Z   : Auto-Save / Soft-Wrap      │
+│   • ? / Esc         : Buka Bantuan / Tutup Dialog│
+│                                                  │
+│ Pencarian & Navigasi:                            │
+│   • F1              : Command Palette            │
+│   • Ctrl+P          : Quick Open Workspace       │
+│   • Ctrl+F          : Cari Teks di Buffer        │
+│   • Ctrl+H          : Cari & Ganti di Buffer     │
+│   • Ctrl+G          : Lompat ke Baris (Go Line)  │
+│   • F4              : Global Search Workspace    │
+│   • Ctrl+O / Ctrl+K : Buka File / Folder         │
+│                                                  │
+│ Editor & Buffer:                                 │
+│   • Ctrl+Z / Ctrl+Y : Undo / Redo Perubahan Teks │
+│   • Tab / Shift+Tab : Indent / Outdent 4 Spasi   │
+│   • Ctrl+/          : Toggle Komentar Baris      │
+│   • Ctrl+S / Ctrl+W : Simpan / Tutup Tab         │
+│   • Ctrl+M / Alt+M  : Toggle Preview Markdown    │
+│   • Ctrl+A / C / V  : Pilih / Salin / Tempel Teks│
+│                                                  │
+│ Git Source Control:                              │
+│   • Alt+B           : Ganti Branch (Checkout)    │
+│   • d / [x]         : Buang Perubahan (Discard)  │
+│   • + / -           : Stage / Unstage File       │
+│   • Ctrl+Enter      : Lakukan Commit             │
+│                                                  │
+│ [Tekan Esc atau ? untuk menutup modal ini]       │
+└──────────────────────────────────────────────────┘`
 	return ui.CurrentTheme.WarningBoxStyle.
 		BorderForeground(ui.CurrentTheme.Accent).
 		Render(content)

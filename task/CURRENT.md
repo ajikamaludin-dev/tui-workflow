@@ -19,7 +19,7 @@ priority: # high | medium | low
 {Analisis dampak ke 4 zona layout, lebar terminal, ANSI handling, atau status bar. Jika tidak ada, tulis "No layout impact."}
 | Affected Zone | Risk | Mitigation |
 | ------------- | ---- | ---------- |
-|               |      |            |
+| | | |
 
 ## UI / Keymap Flow
 {Alur interaksi pengguna, keybinding baru/diubah, respons mouse, dan perubahan tampilan teks/ASCII.}

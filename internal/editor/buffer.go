@@ -19,6 +19,12 @@ type VisualLine struct {
 	EndCol          int
 }
 
+type BufferSnapshot struct {
+	Lines     [][]rune
+	CursorRow int
+	CursorCol int
+}
+
 type Buffer struct {
 	Lines       [][]rune
 	CursorRow   int
@@ -40,6 +46,13 @@ type Buffer struct {
 	SearchQuery    string
 	SearchMatches  []MatchPos
 	ActiveMatchIdx int
+
+	// Undo / Redo state
+	undoStack    []BufferSnapshot
+	redoStack    []BufferSnapshot
+	maxUndoStack int
+	typingGroup  bool
+	inUndoRedo   bool
 }
 
 func NewBuffer(content string) *Buffer {
@@ -49,10 +62,11 @@ func NewBuffer(content string) *Buffer {
 		CursorCol:   0,
 		ScrollRow:   0,
 		ScrollCol:   0,
-		SoftWrap:    true,
-		IsDirty:     false,
-		Highlighter: syntax.NewHighlighter(),
-		cachedDirty: true,
+		SoftWrap:       true,
+		IsDirty:        false,
+		Highlighter:    syntax.NewHighlighter(),
+		cachedDirty:    true,
+		maxUndoStack:   100,
 	}
 
 	normalized := strings.ReplaceAll(content, "\r\n", "\n")
@@ -96,6 +110,9 @@ func (b *Buffer) SetText(content string) {
 	b.clampCursor()
 	b.cachedDirty = true
 	b.cachedHigh = nil
+	b.undoStack = nil
+	b.redoStack = nil
+	b.typingGroup = false
 }
 
 func (b *Buffer) LineCount() int {
@@ -109,39 +126,140 @@ func (b *Buffer) CurrentLineLen() int {
 	return 0
 }
 
-func (b *Buffer) InsertRune(r rune) {
-	if b.HasSelection {
-		b.DeleteSelection()
+func cloneRuneLines(lines [][]rune) [][]rune {
+	res := make([][]rune, len(lines))
+	for i, l := range lines {
+		cp := make([]rune, len(l))
+		copy(cp, l)
+		res[i] = cp
 	}
+	return res
+}
+
+func (b *Buffer) endTypingGroup() {
+	b.typingGroup = false
+}
+
+func (b *Buffer) pushUndo() {
+	if b.inUndoRedo {
+		return
+	}
+	if b.maxUndoStack <= 0 {
+		b.maxUndoStack = 100
+	}
+	snap := BufferSnapshot{
+		Lines:     cloneRuneLines(b.Lines),
+		CursorRow: b.CursorRow,
+		CursorCol: b.CursorCol,
+	}
+	b.undoStack = append(b.undoStack, snap)
+	if len(b.undoStack) > b.maxUndoStack {
+		b.undoStack = b.undoStack[1:]
+	}
+	b.redoStack = nil
+}
+
+func (b *Buffer) Undo() bool {
+	b.endTypingGroup()
+	if len(b.undoStack) == 0 {
+		return false
+	}
+	currSnap := BufferSnapshot{
+		Lines:     cloneRuneLines(b.Lines),
+		CursorRow: b.CursorRow,
+		CursorCol: b.CursorCol,
+	}
+	b.redoStack = append(b.redoStack, currSnap)
+	if len(b.redoStack) > b.maxUndoStack {
+		b.redoStack = b.redoStack[1:]
+	}
+
+	lastIdx := len(b.undoStack) - 1
+	snap := b.undoStack[lastIdx]
+	b.undoStack = b.undoStack[:lastIdx]
+
+	b.inUndoRedo = true
+	b.Lines = cloneRuneLines(snap.Lines)
+	b.CursorRow = snap.CursorRow
+	b.CursorCol = snap.CursorCol
+	b.clampCursor()
+	b.ClearSelection()
+	b.IsDirty = true
+	b.cachedDirty = true
+	b.inUndoRedo = false
+	return true
+}
+
+func (b *Buffer) Redo() bool {
+	b.endTypingGroup()
+	if len(b.redoStack) == 0 {
+		return false
+	}
+	currSnap := BufferSnapshot{
+		Lines:     cloneRuneLines(b.Lines),
+		CursorRow: b.CursorRow,
+		CursorCol: b.CursorCol,
+	}
+	b.undoStack = append(b.undoStack, currSnap)
+	if len(b.undoStack) > b.maxUndoStack {
+		b.undoStack = b.undoStack[1:]
+	}
+
+	lastIdx := len(b.redoStack) - 1
+	snap := b.redoStack[lastIdx]
+	b.redoStack = b.redoStack[:lastIdx]
+
+	b.inUndoRedo = true
+	b.Lines = cloneRuneLines(snap.Lines)
+	b.CursorRow = snap.CursorRow
+	b.CursorCol = snap.CursorCol
+	b.clampCursor()
+	b.ClearSelection()
+	b.IsDirty = true
+	b.cachedDirty = true
+	b.inUndoRedo = false
+	return true
+}
+
+func (b *Buffer) CanUndo() bool {
+	return len(b.undoStack) > 0
+}
+
+func (b *Buffer) CanRedo() bool {
+	return len(b.redoStack) > 0
+}
+
+func (b *Buffer) insertRuneInternal(r rune) {
 	b.clampCursor()
 	line := b.Lines[b.CursorRow]
-
-	// Insert into rune slice
 	newLine := make([]rune, 0, len(line)+1)
 	newLine = append(newLine, line[:b.CursorCol]...)
 	newLine = append(newLine, r)
 	newLine = append(newLine, line[b.CursorCol:]...)
-
 	b.Lines[b.CursorRow] = newLine
 	b.CursorCol++
 	b.IsDirty = true
 	b.cachedDirty = true
 }
 
-func (b *Buffer) InsertString(s string) {
-	for _, r := range s {
-		if r == '\n' {
-			b.InsertNewline()
-		} else {
-			b.InsertRune(r)
-		}
+func (b *Buffer) InsertRune(r rune) {
+	if b.HasSelection {
+		b.endTypingGroup()
+		b.pushUndo()
+		b.deleteSelectionInternal()
+	} else if !b.typingGroup {
+		b.pushUndo()
+		b.typingGroup = true
+	}
+	b.insertRuneInternal(r)
+	if unicode.IsSpace(r) {
+		b.endTypingGroup()
 	}
 }
 
-func (b *Buffer) InsertNewline() {
+func (b *Buffer) insertNewlineInternal() {
 	b.clampCursor()
 	line := b.Lines[b.CursorRow]
-
 	left := line[:b.CursorCol]
 	right := line[b.CursorCol:]
 
@@ -162,9 +280,35 @@ func (b *Buffer) InsertNewline() {
 	b.cachedDirty = true
 }
 
-func (b *Buffer) Backspace() {
+func (b *Buffer) InsertString(s string) {
+	b.endTypingGroup()
+	b.pushUndo()
 	if b.HasSelection {
-		b.DeleteSelection()
+		b.deleteSelectionInternal()
+	}
+	for _, r := range s {
+		if r == '\n' {
+			b.insertNewlineInternal()
+		} else {
+			b.insertRuneInternal(r)
+		}
+	}
+}
+
+func (b *Buffer) InsertNewline() {
+	b.endTypingGroup()
+	b.pushUndo()
+	if b.HasSelection {
+		b.deleteSelectionInternal()
+	}
+	b.insertNewlineInternal()
+}
+
+func (b *Buffer) Backspace() {
+	b.endTypingGroup()
+	b.pushUndo()
+	if b.HasSelection {
+		b.deleteSelectionInternal()
 		return
 	}
 	b.clampCursor()
@@ -201,13 +345,15 @@ func (b *Buffer) Backspace() {
 }
 
 func (b *Buffer) Delete() {
+	b.endTypingGroup()
+	b.pushUndo()
 	if b.HasSelection {
-		b.DeleteSelection()
+		b.deleteSelectionInternal()
 		return
 	}
 	b.clampCursor()
-	line := b.Lines[b.CursorRow]
 
+	line := b.Lines[b.CursorRow]
 	if b.CursorCol < len(line) {
 		newLine := make([]rune, 0, len(line)-1)
 		newLine = append(newLine, line[:b.CursorCol]...)
@@ -219,12 +365,11 @@ func (b *Buffer) Delete() {
 		return
 	}
 
-	// At end of line, merge next line
+	// At end of line, merge with next line
 	if b.CursorRow < len(b.Lines)-1 {
 		nextLine := b.Lines[b.CursorRow+1]
 		merged := append(line, nextLine...)
 		b.Lines[b.CursorRow] = merged
-
 		b.Lines = append(b.Lines[:b.CursorRow+1], b.Lines[b.CursorRow+2:]...)
 		b.IsDirty = true
 		b.cachedDirty = true
@@ -232,6 +377,7 @@ func (b *Buffer) Delete() {
 }
 
 func (b *Buffer) MoveLeft() {
+	b.endTypingGroup()
 	if b.CursorCol > 0 {
 		b.CursorCol--
 	} else if b.CursorRow > 0 {
@@ -241,6 +387,7 @@ func (b *Buffer) MoveLeft() {
 }
 
 func (b *Buffer) MoveRight() {
+	b.endTypingGroup()
 	if b.CursorRow < len(b.Lines) {
 		if b.CursorCol < len(b.Lines[b.CursorRow]) {
 			b.CursorCol++
@@ -256,6 +403,7 @@ func isWordChar(r rune) bool {
 }
 
 func (b *Buffer) MoveWordLeft() {
+	b.endTypingGroup()
 	if b.CursorRow < 0 || b.CursorRow >= len(b.Lines) {
 		return
 	}
@@ -295,6 +443,7 @@ func (b *Buffer) MoveWordLeft() {
 }
 
 func (b *Buffer) MoveWordRight() {
+	b.endTypingGroup()
 	if b.CursorRow < 0 || b.CursorRow >= len(b.Lines) {
 		return
 	}
@@ -339,6 +488,7 @@ func (b *Buffer) MoveWordRight() {
 }
 
 func (b *Buffer) MoveUp() {
+	b.endTypingGroup()
 	if b.CursorRow > 0 {
 		b.CursorRow--
 		b.clampCol()
@@ -346,6 +496,7 @@ func (b *Buffer) MoveUp() {
 }
 
 func (b *Buffer) MoveDown() {
+	b.endTypingGroup()
 	if b.CursorRow < len(b.Lines)-1 {
 		b.CursorRow++
 		b.clampCol()
@@ -353,16 +504,19 @@ func (b *Buffer) MoveDown() {
 }
 
 func (b *Buffer) MoveHome() {
+	b.endTypingGroup()
 	b.CursorCol = 0
 }
 
 func (b *Buffer) MoveEnd() {
+	b.endTypingGroup()
 	if b.CursorRow >= 0 && b.CursorRow < len(b.Lines) {
 		b.CursorCol = len(b.Lines[b.CursorRow])
 	}
 }
 
 func (b *Buffer) MovePageUp(n int) {
+	b.endTypingGroup()
 	b.CursorRow -= n
 	if b.CursorRow < 0 {
 		b.CursorRow = 0
@@ -371,6 +525,7 @@ func (b *Buffer) MovePageUp(n int) {
 }
 
 func (b *Buffer) MovePageDown(n int) {
+	b.endTypingGroup()
 	b.CursorRow += n
 	if b.CursorRow >= len(b.Lines) {
 		b.CursorRow = len(b.Lines) - 1
@@ -401,6 +556,7 @@ func (b *Buffer) clampCol() {
 }
 
 func (b *Buffer) SetCursor(row, col int) {
+	b.endTypingGroup()
 	b.CursorRow = row
 	b.CursorCol = col
 	b.clampCursor()
@@ -526,6 +682,12 @@ func (b *Buffer) GetSelectedText() string {
 
 // DeleteSelection removes selected text and places cursor at start of selection.
 func (b *Buffer) DeleteSelection() bool {
+	b.endTypingGroup()
+	b.pushUndo()
+	return b.deleteSelectionInternal()
+}
+
+func (b *Buffer) deleteSelectionInternal() bool {
 	if !b.HasSelection {
 		return false
 	}
@@ -856,4 +1018,177 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 	}
 
 	return strings.Join(renderedRows, "\n")
+}
+
+// ClampCursor ensures CursorRow and CursorCol are within valid buffer bounds.
+func (b *Buffer) ClampCursor() {
+	b.clampCursor()
+}
+
+// IndentCurrentLine adds 4 spaces to the beginning of the current line.
+func (b *Buffer) IndentCurrentLine() {
+	b.endTypingGroup()
+	b.pushUndo()
+	if b.CursorRow < 0 || b.CursorRow >= len(b.Lines) {
+		return
+	}
+	line := b.Lines[b.CursorRow]
+	newLine := make([]rune, 0, len(line)+4)
+	newLine = append(newLine, []rune("    ")...)
+	newLine = append(newLine, line...)
+	b.Lines[b.CursorRow] = newLine
+	b.CursorCol += 4
+	b.IsDirty = true
+	b.cachedDirty = true
+	b.clampCursor()
+}
+
+// IndentSelection adds 4 spaces to each line touched by current selection, or indents current line if no selection.
+func (b *Buffer) IndentSelection() {
+	if !b.HasSelection {
+		b.IndentCurrentLine()
+		return
+	}
+	b.endTypingGroup()
+	b.pushUndo()
+	sRow, _, eRow, eCol := b.NormalizedSelection()
+	if eRow > sRow && eCol == 0 {
+		eRow--
+	}
+	for r := sRow; r <= eRow && r < len(b.Lines); r++ {
+		line := b.Lines[r]
+		newLine := make([]rune, 0, len(line)+4)
+		newLine = append(newLine, []rune("    ")...)
+		newLine = append(newLine, line...)
+		b.Lines[r] = newLine
+	}
+	b.SelectAnchorCol += 4
+	b.CursorCol += 4
+	b.IsDirty = true
+	b.cachedDirty = true
+	b.clampCursor()
+}
+
+// OutdentSelection removes up to 4 leading spaces from each line touched by current selection.
+func (b *Buffer) OutdentSelection() {
+	if !b.HasSelection {
+		b.OutdentCurrentLine()
+		return
+	}
+	b.endTypingGroup()
+	b.pushUndo()
+	sRow, _, eRow, eCol := b.NormalizedSelection()
+	if eRow > sRow && eCol == 0 {
+		eRow--
+	}
+	for r := sRow; r <= eRow && r < len(b.Lines); r++ {
+		line := b.Lines[r]
+		spaces := 0
+		for spaces < 4 && spaces < len(line) && line[spaces] == ' ' {
+			spaces++
+		}
+		if spaces > 0 {
+			b.Lines[r] = line[spaces:]
+		}
+	}
+	b.SelectAnchorCol -= 4
+	if b.SelectAnchorCol < 0 {
+		b.SelectAnchorCol = 0
+	}
+	b.CursorCol -= 4
+	if b.CursorCol < 0 {
+		b.CursorCol = 0
+	}
+	b.IsDirty = true
+	b.cachedDirty = true
+	b.clampCursor()
+}
+
+// OutdentCurrentLine removes up to 4 leading spaces from current line.
+func (b *Buffer) OutdentCurrentLine() {
+	b.endTypingGroup()
+	b.pushUndo()
+	b.clampCursor()
+	line := b.Lines[b.CursorRow]
+	spaces := 0
+	for spaces < 4 && spaces < len(line) && line[spaces] == ' ' {
+		spaces++
+	}
+	if spaces > 0 {
+		b.Lines[b.CursorRow] = line[spaces:]
+		b.CursorCol -= spaces
+		if b.CursorCol < 0 {
+			b.CursorCol = 0
+		}
+		b.IsDirty = true
+		b.cachedDirty = true
+		b.clampCursor()
+	}
+}
+
+// ToggleLineComment toggles line comment on current line or selection.
+func (b *Buffer) ToggleLineComment(prefix string) {
+	if prefix == "" {
+		prefix = "// "
+	}
+	b.endTypingGroup()
+	b.pushUndo()
+
+	sRow := b.CursorRow
+	eRow := b.CursorRow
+	if b.HasSelection {
+		var eCol int
+		sRow, _, eRow, eCol = b.NormalizedSelection()
+		if eRow > sRow && eCol == 0 {
+			eRow--
+		}
+	}
+
+	trimmedPref := strings.TrimRight(prefix, " ")
+
+	// Check if all non-empty lines are already commented
+	allCommented := true
+	hasNonEmpty := false
+	for r := sRow; r <= eRow && r < len(b.Lines); r++ {
+		line := b.Lines[r]
+		trimmed := strings.TrimLeft(string(line), " \t")
+		if trimmed == "" {
+			continue
+		}
+		hasNonEmpty = true
+		if !strings.HasPrefix(trimmed, trimmedPref) {
+			allCommented = false
+			break
+		}
+	}
+	if !hasNonEmpty {
+		allCommented = false
+	}
+
+	for r := sRow; r <= eRow && r < len(b.Lines); r++ {
+		line := b.Lines[r]
+		str := string(line)
+		leadSpaces := len(str) - len(strings.TrimLeft(str, " \t"))
+		indent := str[:leadSpaces]
+		rest := str[leadSpaces:]
+
+		if allCommented {
+			// Uncomment: remove prefix
+			targetPref := prefix
+			if !strings.HasPrefix(rest, targetPref) {
+				targetPref = trimmedPref
+			}
+			if strings.HasPrefix(rest, targetPref) {
+				uncommented := rest[len(targetPref):]
+				b.Lines[r] = []rune(indent + uncommented)
+			}
+		} else {
+			// Comment: add prefix after indent
+			b.Lines[r] = []rune(indent + prefix + rest)
+		}
+	}
+
+	b.IsDirty = true
+	b.cachedDirty = true
+	b.clampCursor()
 }

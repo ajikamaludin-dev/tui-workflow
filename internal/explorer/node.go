@@ -37,3 +37,19 @@ func (n *Node) SortChildren() {
 		return strings.ToLower(n.Children[i].Name) < strings.ToLower(n.Children[j].Name)
 	})
 }
+
+// MatchesFilter checks if node or any of its children match filter substring.
+func (n *Node) MatchesFilter(q string) bool {
+	q = strings.ToLower(q)
+	if strings.Contains(strings.ToLower(n.Name), q) {
+		return true
+	}
+	if n.IsDir {
+		for _, child := range n.Children {
+			if child.MatchesFilter(q) {
+				return true
+			}
+		}
+	}
+	return false
+}

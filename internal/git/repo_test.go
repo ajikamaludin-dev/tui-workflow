@@ -211,3 +211,70 @@ func TestRepoOperations(t *testing.T) {
 		// Click should be ignored during loading
 	}
 }
+
+func TestRepoDiscardAndBranches(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "tui-workflow-git-discard-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	r, err := gogit.PlainInit(tempDir, false)
+	if err != nil {
+		t.Fatalf("Failed to init git: %v", err)
+	}
+	w, err := r.Worktree()
+	if err != nil {
+		t.Fatalf("Failed to get worktree: %v", err)
+	}
+
+	trackedFile := filepath.Join(tempDir, "tracked.txt")
+	_ = os.WriteFile(trackedFile, []byte("head content"), 0644)
+	_, _ = w.Add("tracked.txt")
+	_, err = w.Commit("Initial commit", &gogit.CommitOptions{
+		Author: &object.Signature{
+			Name:  "Test",
+			Email: "test@example.com",
+			When:  time.Now(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Failed initial commit: %v", err)
+	}
+
+	repo, err := OpenRepo(tempDir)
+	if err != nil {
+		t.Fatalf("OpenRepo failed: %v", err)
+	}
+
+	// 1. Test Discard modified tracked file
+	_ = os.WriteFile(trackedFile, []byte("dirty content"), 0644)
+	err = repo.DiscardFile("tracked.txt")
+	if err != nil {
+		t.Fatalf("DiscardFile tracked.txt failed: %v", err)
+	}
+	content, _ := os.ReadFile(trackedFile)
+	if string(content) != "head content" {
+		t.Errorf("Expected content to be restored to 'head content', got %q", string(content))
+	}
+
+	// 2. Test Discard untracked file (removes file)
+	untrackedFile := filepath.Join(tempDir, "untracked.txt")
+	_ = os.WriteFile(untrackedFile, []byte("untracked content"), 0644)
+	err = repo.DiscardFile("untracked.txt")
+	if err != nil {
+		t.Fatalf("DiscardFile untracked.txt failed: %v", err)
+	}
+	if _, err := os.Stat(untrackedFile); !os.IsNotExist(err) {
+		t.Errorf("Expected untracked.txt to be removed by DiscardFile")
+	}
+
+	// 3. Test GetBranches and CheckoutBranch
+	branches, current, err := repo.GetBranches()
+	if err != nil {
+		t.Fatalf("GetBranches failed: %v", err)
+	}
+	if len(branches) == 0 || current == "" {
+		t.Errorf("Expected branches and current branch to be populated, got branches=%v current=%q", branches, current)
+	}
+}

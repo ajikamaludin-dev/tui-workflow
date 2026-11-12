@@ -18,6 +18,7 @@ type Tree struct {
 	ScrollOffset  int
 	ShowHidden    bool
 	MarqueeOffset int
+	FilterQuery   string
 }
 
 func NewTree(rootPath string) *Tree {
@@ -94,14 +95,26 @@ func (t *Tree) flattenRecursive(node *Node) {
 		if node.IsHidden && !t.ShowHidden {
 			return
 		}
+		if t.FilterQuery != "" && !node.MatchesFilter(t.FilterQuery) {
+			return
+		}
 		t.FlatNodes = append(t.FlatNodes, node)
 	}
 
-	if node.IsExpanded {
+	if node.IsExpanded || (t.FilterQuery != "" && node.MatchesFilter(t.FilterQuery)) {
+		if t.FilterQuery != "" && len(node.Children) == 0 && node.IsDir {
+			_ = t.LoadChildren(node)
+		}
 		for _, child := range node.Children {
 			t.flattenRecursive(child)
 		}
 	}
+}
+
+// SetFilter applies a search query filter to the file explorer.
+func (t *Tree) SetFilter(query string) {
+	t.FilterQuery = strings.TrimSpace(query)
+	t.Flatten()
 }
 
 func (t *Tree) SelectedNode() *Node {

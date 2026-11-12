@@ -14,6 +14,7 @@ const (
 	ConfirmDelete ConfirmDialogType = iota
 	ConfirmUnsavedChanges
 	ConfirmExternalChange
+	ConfirmDiscardGit
 )
 
 type ConfirmDialog struct {

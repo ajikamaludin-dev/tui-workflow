@@ -13,6 +13,7 @@ type SidebarView int
 const (
 	SidebarFiles SidebarView = iota
 	SidebarGit
+	SidebarSearch
 )
 
 type KeyAction int
@@ -25,5 +26,6 @@ const (
 	ActionToggleAutoSave
 	ActionSidebarFiles
 	ActionSidebarGit
+	ActionSidebarSearch
 	ActionHelp
 )

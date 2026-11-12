@@ -100,3 +100,19 @@ func (t *Tab) Title() string {
 	}
 	return title
 }
+
+// CommentPrefix returns the appropriate single-line comment prefix for file type.
+func (t *Tab) CommentPrefix() string {
+	ext := strings.ToLower(filepath.Ext(t.Path))
+	switch ext {
+	case ".py", ".sh", ".bash", ".zsh", ".yaml", ".yml", ".toml", ".rb", ".dockerfile", ".conf", ".ini", ".env":
+		return "# "
+	case ".sql", ".lua", ".hs":
+		return "-- "
+	default:
+		if strings.EqualFold(filepath.Base(t.Path), "Dockerfile") {
+			return "# "
+		}
+		return "// "
+	}
+}

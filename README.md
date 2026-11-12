@@ -69,14 +69,20 @@
 |---|---|
 | `Ctrl + Q` | Keluar dari aplikasi (dengan konfirmasi jika ada buffer kotor) |
 | `Ctrl + B` | Sembunyikan / Tampilkan Sidebar (Toggle Sidebar) |
-| `Ctrl + E` | Pindah fokus antara Sidebar dan Editor |
+| `Ctrl + E` / `F6` | Pindah fokus antara Sidebar dan Editor |
 | `Alt + 1` | Beralih Sidebar ke Tampilan File Explorer |
 | `Alt + 2` | Beralih Sidebar ke Tampilan Git Source Control |
+| `Alt + 3` | Beralih Sidebar ke Tampilan Cari & Ganti (Search & Replace) |
+| `Alt + [` / `Alt + ]` | Persempit / Perlebar lebar Sidebar |
 | `Alt + F` | Buka Menu Top Bar **File** |
+| `Alt + E` | Buka Menu Top Bar **Edit** |
+| `Alt + R` | Buka Menu Top Bar **Search** |
 | `Alt + T` | Buka Menu Top Bar **Setting** |
 | `Alt + A` | Buka Menu Top Bar **About** |
-| `Ctrl + P` | Buka Quick Buffer Switcher |
+| `F1` / `Ctrl + Shift + P` | Buka Command Palette (semua perintah dan aksi) |
+| `Ctrl + P` | Quick Open File di Workspace |
 | `Alt + S` | Toggle Auto-Save on Focus Change (ON / OFF) |
+| `Alt + Z` | Toggle Soft-Wrap pada Editor |
 | `?` | Tampilkan Modal Panduan Pintasan Keyboard |
 | `Esc` | Tutup menu dropdown, modal dialog, atau kembali ke editor |
 
@@ -86,8 +92,15 @@
 | `Ctrl + S` | Simpan buffer aktif ke disk |
 | `Ctrl + W` | Tutup tab aktif |
 | `Ctrl + N` | Pindah ke tab berikutnya secara berurutan |
+| `Ctrl + Z` | Batalkan perubahan teks terakhir (Undo) |
+| `Ctrl + Y` / `Ctrl + Shift + Z` | Ulangi perubahan teks yang dibatalkan (Redo) |
+| `Ctrl + F` | Buka pencarian teks di buffer aktif (Find Bar) |
+| `Ctrl + H` | Buka pencarian dan penggantian teks di buffer aktif (Find & Replace) |
+| `Ctrl + G` | Lompat ke baris dan kolom tertentu (Go to Line / Column) |
+| `Tab` / `Shift + Tab` | Indentasi / Outdentasi 4 spasi (mendukung seleksi multi-baris) |
+| `Ctrl + /` (`Ctrl + _`) | Toggle komentar baris atau blok seleksi otomatis sesuai bahasa |
 | `Ctrl + M` / `Alt + M` | Toggle mode Live Markdown Preview (Glamour) vs Raw Editor |
-| `Tab` | Masukkan indentasi 4 spasi |
+| `Ctrl + A` / `Ctrl + C` / `Ctrl + V` | Pilih Semua / Salin / Tempel Teks Clipboard |
 | `Panah` / `Home` / `End` | Navigasi kursor per karakter dan baris |
 | `Page Up` / `Page Down` | Navigasi kursor per halaman |
 
@@ -102,13 +115,16 @@
 | `A` | Buat folder baru pada direktori yang disorot |
 | `F2` | Ubah nama file / folder terpilih (Rename) |
 | `d` | Hapus file / folder terpilih (dengan konfirmasi dialog) |
+| `/` | Filter daftar file secara instan (real-time tree filter) |
 | `.` | Toggle tampilkan / sembunyikan hidden files (dotfiles) |
 
 ### Git Source Control
 | Pintasan | Aksi |
 |---|---|
 | `Up` / `Down` | Navigasi daftar file atau riwayat commit |
-| `Enter` / `Space` | Stage / Unstage file yang sedang dipilih |
+| `Enter` / `Space` | Stage / Unstage file yang sedang dipilih (`+` / `-`) |
+| `d` / klik `[x]` | Buang semua perubahan lokal pada file terpilih (Discard Changes) |
+| `Alt + B` | Buka pemilih branch Git lokal (Branch Switcher modal) |
 | `Tab` | Pindah fokus ke kotak input pesan commit |
 | `Ctrl + Enter` | Lakukan Commit dengan pesan yang diketik |
 

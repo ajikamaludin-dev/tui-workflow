@@ -59,14 +59,30 @@ Layout terminal dibagi menjadi 4 zona: Baris 0 (Top Menu), Kolom 1 (Sidebar: Fil
 ### 4.1. Top Menu Bar (Row 0)
 1. **Item Menu & Shortcut:**
    - `[ File ]` (`Alt+f`):
-     - `New File` ➔ Membuka modal dialog buat file baru.
+     - `New File` (`a`) ➔ Membuka modal dialog buat file baru.
      - `Save File` (`Ctrl+s`) ➔ Simpan buffer aktif ke disk.
      - `Close Tab` (`Ctrl+w`) ➔ Tutup tab aktif (dengan konfirmasi jika dirty).
      - `Exit` (`Ctrl+q`) ➔ Tutup aplikasi (dengan konfirmasi jika ada unsaved tabs).
+   - `[ Edit ]` (`Alt+e`):
+     - `Undo` (`Ctrl+z`) ➔ Batalkan perubahan teks terakhir.
+     - `Redo` (`Ctrl+y`) ➔ Ulangi perubahan teks yang dibatalkan.
+     - `Find...` (`Ctrl+f`) ➔ Buka Find Bar pada buffer aktif.
+     - `Find & Replace...` (`Ctrl+h`) ➔ Buka Find & Replace bar pada buffer aktif.
+     - `Go to Line...` (`Ctrl+g`) ➔ Lompat ke baris & kolom tertentu.
+     - `Toggle Comment` (`Ctrl+/`) ➔ Toggle komentar baris/seleksi sesuai sintaks file.
+   - `[ Search ]` (`Alt+r`):
+     - `Command Palette...` (`F1`) ➔ Buka Command Palette (semua perintah).
+     - `Quick Open File...` (`Ctrl+p`) ➔ Buka Quick Open workspace switcher.
+     - `Find in Current File...` (`Ctrl+f`) ➔ Buka Find bar buffer aktif.
+     - `Find & Replace...` (`Ctrl+h`) ➔ Buka Find & Replace bar buffer aktif.
+     - `Find in Files (Global)...` (`F4`) ➔ Buka pencarian global di workspace.
+     - `Go to Line...` (`Ctrl+g`) ➔ Lompat ke baris buffer aktif.
    - `[ Setting ]` (`Alt+t`):
+     - `Toggle Sidebar` (`Ctrl+b`) ➔ Sembunyikan / tampilkan sidebar.
+     - `Toggle Soft Wrap` (`Alt+z`) ➔ Nyalakan / matikan soft-wrap editor.
      - `Toggle Auto-Save` (`Alt+s`) ➔ Bergantian ON / OFF.
      - `Toggle Hidden Files` (`.`) ➔ Sembunyikan / tampilkan dotfiles di explorer.
-     - `Theme Selection` ➔ Pilihan Dark / Light theme.
+     - `Switch Git Branch...` (`Alt+b`) ➔ Membuka modal dialog pilih branch Git.
      - `Keyboard Shortcuts` (`?`) ➔ Membuka modal cheatsheet shortcut.
    - `[ About ]` (`Alt+a`):
      - Membuka modal dialog info aplikasi (Nama, Versi 1.1.0, Tech Stack Go + Bubble Tea + Lipgloss, Lisensi).
@@ -75,9 +91,9 @@ Layout terminal dibagi menjadi 4 zona: Baris 0 (Top Menu), Kolom 1 (Sidebar: Fil
    - Navigasi keyboard `Up` / `Down` dan `Enter` untuk memilih item.
    - Tombol `Esc` atau klik di luar dropdown untuk menutup (dismiss).
 
-### 4.2. Sidebar Column 1: Multi-View (Files & Git)
-Sidebar memiliki tab bar di bagian atas untuk beralih tampilan: `[ 1:Files ]` dan `[ 2:Git ]`.
-- Beralih tampilan via keyboard: `Alt+1` (Files) / `Alt+2` (Git), atau klik mouse pada tab header.
+### 4.2. Sidebar Column 1: Multi-View (Files, Git & Search)
+Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: `[ 📁 Files ]`, `[ 🌿 Git ]`, dan `[ 🔍 Search ]`.
+- Beralih tampilan via keyboard: `Alt+1` (Files) / `Alt+2` (Git) / `Alt+3` (Search & Replace), atau klik mouse pada tab footer di baris bawah.
 
 #### A. View 1: File Explorer (Tree View & CRUD)
 1. **Hierarchical Tree & Navigasi:**
@@ -103,6 +119,8 @@ Sidebar memiliki tab bar di bagian atas untuk beralih tampilan: `[ 1:Files ]` da
 2. **Aksi & Shortcut Git:**
    - `+` atau klik ikon `+`: Stage file (`git add`).
    - `-` atau klik ikon `-`: Unstage file (`git reset`).
+   - `d` atau klik ikon `[x]`: Buang semua perubahan lokal file terpilih (`git checkout -- <file>` / discard untracked) dengan konfirmasi.
+   - `Alt+b` atau klik header branch: Buka modal dialog pemilihan dan perpindahan branch Git lokal.
    - `Enter` atau klik file pada daftar Git: Buka **Git Side-by-Side Split Diff Tab** di Kolom 2.
    - `Ctrl+Enter`: Jalankan commit jika pesan tidak kosong dan ada staged changes.
 

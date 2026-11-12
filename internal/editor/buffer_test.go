@@ -255,3 +255,100 @@ func TestBufferDisabledSoftWrapRenderingAndScroll(t *testing.T) {
 		t.Errorf("Expected cursor rendered in viewport")
 	}
 }
+
+func TestBufferUndoRedo(t *testing.T) {
+	buf := NewBuffer("hello")
+	buf.CursorCol = 5 // move cursor to end of "hello"
+	if buf.CanUndo() {
+		t.Errorf("Newly created buffer should not have undo")
+	}
+	if buf.CanRedo() {
+		t.Errorf("Newly created buffer should not have redo")
+	}
+
+	// 1. Insert text
+	buf.InsertRune(' ')
+	buf.InsertRune('w')
+	buf.InsertRune('o')
+	buf.InsertRune('r')
+	buf.InsertRune('l')
+	buf.InsertRune('d')
+
+	if buf.Text() != "hello world" {
+		t.Errorf("Expected 'hello world', got %q", buf.Text())
+	}
+	if !buf.CanUndo() {
+		t.Errorf("Expected CanUndo to be true after editing")
+	}
+
+	// 2. Undo step 1 (undo word "world")
+	if !buf.Undo() {
+		t.Fatalf("Undo failed")
+	}
+	if buf.Text() != "hello " {
+		t.Errorf("Expected 'hello ' after first undo, got %q", buf.Text())
+	}
+	// Undo step 2 (undo space)
+	if !buf.Undo() {
+		t.Fatalf("Undo 2 failed")
+	}
+	if buf.Text() != "hello" {
+		t.Errorf("Expected 'hello' after second undo, got %q", buf.Text())
+	}
+	if !buf.CanRedo() {
+		t.Errorf("Expected CanRedo to be true after undo")
+	}
+
+	// 3. Redo both
+	if !buf.Redo() {
+		t.Fatalf("Redo 1 failed")
+	}
+	if buf.Text() != "hello " {
+		t.Errorf("Expected 'hello ' after redo 1, got %q", buf.Text())
+	}
+	if !buf.Redo() {
+		t.Fatalf("Redo 2 failed")
+	}
+	if buf.Text() != "hello world" {
+		t.Errorf("Expected 'hello world' after redo 2, got %q", buf.Text())
+	}
+
+	// 4. Test stack capping (max 100)
+	for i := 0; i < 120; i++ {
+		buf.InsertRune('!')
+	}
+	if len(buf.undoStack) > 100 {
+		t.Errorf("Expected undo stack capped at 100, got %d", len(buf.undoStack))
+	}
+}
+
+func TestBufferIndentOutdent(t *testing.T) {
+	// Single line indent
+	buf := NewBuffer("func main() {\nprintln(\"hi\")\n}")
+	buf.SetCursor(1, 0)
+	buf.IndentSelection()
+	if string(buf.Lines[1]) != "    println(\"hi\")" {
+		t.Errorf("Expected 4 spaces indent, got %q", string(buf.Lines[1]))
+	}
+
+	// Single line outdent
+	buf.OutdentSelection()
+	if string(buf.Lines[1]) != "println(\"hi\")" {
+		t.Errorf("Expected outdent to remove 4 spaces, got %q", string(buf.Lines[1]))
+	}
+
+	// Multiline selection indent
+	buf.StartSelection(0, 0)
+	buf.UpdateSelection(2, 1)
+
+	buf.IndentSelection()
+	if string(buf.Lines[0]) != "    func main() {" || string(buf.Lines[1]) != "    println(\"hi\")" || string(buf.Lines[2]) != "    }" {
+		t.Errorf("Multiline indent failed: %v", buf.Lines)
+	}
+
+	// Multiline selection outdent
+	buf.OutdentSelection()
+	if string(buf.Lines[0]) != "func main() {" || string(buf.Lines[1]) != "println(\"hi\")" || string(buf.Lines[2]) != "}" {
+		t.Errorf("Multiline outdent failed: %v", buf.Lines)
+	}
+}

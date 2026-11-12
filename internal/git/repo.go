@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -357,4 +358,75 @@ func (r *Repo) GetFileContentAtHEAD(relPath string) (string, error) {
 	}
 
 	return file.Contents()
+}
+
+// DiscardFile discards unstaged changes for a specific file in the worktree.
+func (r *Repo) DiscardFile(relPath string) error {
+	if r == nil || r.worktree == nil {
+		return fmt.Errorf("worktree tidak valid")
+	}
+	status, err := r.worktree.Status()
+	if err != nil {
+		return err
+	}
+	fileStatus, exists := status[relPath]
+	if !exists {
+		return nil
+	}
+	absPath := filepath.Join(r.RootPath, relPath)
+	if fileStatus.Worktree == gogit.Untracked {
+		return os.RemoveAll(absPath)
+	}
+
+	// For modified/deleted file: restore content from HEAD
+	content, err := r.GetFileContentAtHEAD(relPath)
+	if err != nil {
+		return err
+	}
+	if content == "" {
+		// File didn't exist in HEAD
+		return os.RemoveAll(absPath)
+	}
+	dir := filepath.Dir(absPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(absPath, []byte(content), 0644)
+}
+
+// GetBranches returns all local branch names and the current branch name.
+func (r *Repo) GetBranches() (branches []string, current string, err error) {
+	if r == nil || r.r == nil {
+		return nil, "", fmt.Errorf("repositori tidak valid")
+	}
+	head, err := r.r.Head()
+	if err == nil && head.Name().IsBranch() {
+		current = head.Name().Short()
+	}
+
+	iter, err := r.r.Branches()
+	if err != nil {
+		return nil, current, err
+	}
+	defer iter.Close()
+
+	_ = iter.ForEach(func(ref *plumbing.Reference) error {
+		if ref.Name().IsBranch() {
+			branches = append(branches, ref.Name().Short())
+		}
+		return nil
+	})
+	return branches, current, nil
+}
+
+// CheckoutBranch switches the worktree to the specified local branch.
+func (r *Repo) CheckoutBranch(branchName string) error {
+	if r == nil || r.worktree == nil {
+		return fmt.Errorf("worktree tidak valid")
+	}
+	branchRef := plumbing.NewBranchReferenceName(branchName)
+	return r.worktree.Checkout(&gogit.CheckoutOptions{
+		Branch: branchRef,
+		Force:  false,
+	})
 }

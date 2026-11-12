@@ -192,3 +192,31 @@ func TestEditorQuestionMarkTyping(t *testing.T) {
 		t.Errorf("Expected ShowHelp=true when pressing '?' outside editor")
 	}
 }
+
+func TestSidebarFooterTabsPinnedToBottom(t *testing.T) {
+	m := NewModel()
+	m.RootDir = "."
+	m.Width = 100
+	m.Height = 30
+	m.SidebarWidth = 28
+	m.SidebarVisible = true
+
+	// Test across all 3 sidebar views
+	views := []SidebarView{SidebarFiles, SidebarGit, SidebarSearch}
+	for _, v := range views {
+		m.SidebarView = v
+		sidebarOutput := m.renderSidebar(m.SidebarWidth, m.Height-2)
+		lines := strings.Split(sidebarOutput, "\n")
+
+		expectedHeight := m.Height - 2
+		if len(lines) != expectedHeight {
+			t.Errorf("Sidebar view %v: expected %d lines, got %d lines", v, expectedHeight, len(lines))
+		}
+
+		// The last line of the sidebar MUST contain the footer tabs
+		lastLine := lines[len(lines)-1]
+		if !strings.Contains(lastLine, "Files") || !strings.Contains(lastLine, "Git") || !strings.Contains(lastLine, "Search") {
+			t.Errorf("Sidebar view %v: expected footer tabs on last line, got %q", v, lastLine)
+		}
+	}
+}

@@ -17,6 +17,8 @@ const (
 	InputRename
 	InputOpenFile
 	InputOpenFolder
+	InputGotoLine
+	InputFilterExplorer
 )
 
 type InputDialog struct {

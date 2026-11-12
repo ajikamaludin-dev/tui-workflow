@@ -31,6 +31,11 @@ type Buffer struct {
 	HasSelection    bool
 	SelectAnchorRow int
 	SelectAnchorCol int
+
+	// Search state
+	SearchQuery    string
+	SearchMatches  []MatchPos
+	ActiveMatchIdx int
 }
 
 func NewBuffer(content string) *Buffer {
@@ -625,11 +630,16 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 			physCol := vl.StartCol + cIdx
 			isCursor := vIdx == visualCursorRow && cIdx == visualCursorCol && focused
 			isSelected := b.IsSelected(physRow, physCol)
+			isMatch, isActiveMatch := b.MatchAt(physRow, physCol)
 
 			if isCursor && !b.HasSelection {
 				textPart.WriteString(cursorIBeamStyle.Render(string(r)))
 			} else if isSelected {
 				textPart.WriteString(selectionStyle.Render(string(r)))
+			} else if isActiveMatch {
+				textPart.WriteString(ui.CurrentTheme.SearchActiveMatch.Render(string(r)))
+			} else if isMatch {
+				textPart.WriteString(ui.CurrentTheme.SearchMatchStyle.Render(string(r)))
 			} else {
 				textPart.WriteRune(r)
 			}

@@ -176,6 +176,24 @@ func (tm *TabManager) CloseTab(idx int) {
 	}
 }
 
+// CloseOtherTabs closes all tabs except the specified index.
+func (tm *TabManager) CloseOtherTabs(keepIdx int) {
+	if keepIdx < 0 || keepIdx >= len(tm.Tabs) {
+		return
+	}
+	target := tm.Tabs[keepIdx]
+	tm.Tabs = []*Tab{target}
+	tm.ActiveIndex = 0
+	tm.TabScrollOffset = 0
+}
+
+// CloseAllTabs closes all tabs.
+func (tm *TabManager) CloseAllTabs() {
+	tm.Tabs = make([]*Tab, 0)
+	tm.ActiveIndex = 0
+	tm.TabScrollOffset = 0
+}
+
 func (tm *TabManager) ScrollTabsLeft() {
 	if tm.TabScrollOffset > 0 {
 		tm.TabScrollOffset--

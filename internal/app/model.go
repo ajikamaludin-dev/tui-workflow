@@ -39,6 +39,10 @@ type Model struct {
 	InputDialog    *dialog.InputDialog
 	ConfirmDialog  *dialog.ConfirmDialog
 	Switcher       *dialog.BufferSwitcher
+	QuickOpen      *dialog.QuickOpen
+	CommandPalette *dialog.CommandPalette
+	GlobalSearch   *dialog.GlobalSearch
+	FindBar        *dialog.FindBar
 	ContextMenu    *ui.ContextMenu
 	AutoSave       bool
 	ShowHelp       bool
@@ -103,6 +107,10 @@ func NewModelWithPath(targetPath string) (Model, error) {
 		InputDialog:    dialog.NewInputDialog(),
 		ConfirmDialog:  dialog.NewConfirmDialog(),
 		Switcher:       dialog.NewBufferSwitcher(),
+		QuickOpen:      dialog.NewQuickOpen(),
+		CommandPalette: dialog.NewCommandPalette(),
+		GlobalSearch:   dialog.NewGlobalSearch(),
+		FindBar:        dialog.NewFindBar(),
 		ContextMenu:    ui.NewContextMenu(),
 		AutoSave:       cfg.AutoSave,
 		ShowHelp:       false,
@@ -229,6 +237,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Ready = true
 		m.MenuBar.SetWidth(m.Width)
 		m.StatusBar.SetWidth(m.Width)
+		if m.QuickOpen != nil {
+			m.QuickOpen.SetWidth(m.modalWidth())
+		}
+		if m.CommandPalette != nil {
+			m.CommandPalette.SetWidth(m.modalWidth())
+		}
+		if m.GlobalSearch != nil {
+			m.GlobalSearch.SetWidth(m.modalWidth())
+		}
 		return m, nil
 
 	case tea.KeyMsg:
@@ -254,6 +271,77 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			return m, nil
+		}
+
+		// 0. Find Bar Handling if active
+		if m.FindBar != nil && m.FindBar.Active {
+			tab := m.TabManager.ActiveTab()
+			action, closed, cmd := m.FindBar.Update(msg)
+			if closed {
+				if tab != nil && tab.Buffer != nil {
+					tab.Buffer.ClearSearch()
+				}
+			} else if tab != nil && tab.Buffer != nil {
+				switch action {
+				case "change":
+					tab.Buffer.SetSearchQuery(m.FindBar.Input.Value())
+					cur, tot := tab.Buffer.MatchInfo()
+					m.FindBar.SetMatches(cur, tot)
+					m.syncStatusBarWithActiveTab()
+				case "next":
+					tab.Buffer.FindNext()
+					cur, tot := tab.Buffer.MatchInfo()
+					m.FindBar.SetMatches(cur, tot)
+					m.syncStatusBarWithActiveTab()
+				case "prev":
+					tab.Buffer.FindPrev()
+					cur, tot := tab.Buffer.MatchInfo()
+					m.FindBar.SetMatches(cur, tot)
+					m.syncStatusBarWithActiveTab()
+				}
+			}
+			return m, cmd
+		}
+
+		// 0.5. Quick Open Handling if active
+		if m.QuickOpen != nil && m.QuickOpen.Active {
+			targetTabIdx, targetPath, closed, cmd := m.QuickOpen.Update(msg)
+			if closed {
+				if targetTabIdx >= 0 && targetTabIdx < m.TabManager.Count() {
+					if m.AutoSave {
+						_, _ = editor.TriggerAutoSave(m.TabManager)
+					}
+					m.TabManager.ActiveIndex = targetTabIdx
+					m.syncStatusBarWithActiveTab()
+				} else if targetPath != "" {
+					if m.AutoSave {
+						_, _ = editor.TriggerAutoSave(m.TabManager)
+					}
+					m.openFile(targetPath)
+					m.Focus = FocusEditor
+				}
+			}
+			return m, cmd
+		}
+
+		// 0.6. Command Palette Handling if active
+		if m.CommandPalette != nil && m.CommandPalette.Active {
+			actionID, closed, cmd := m.CommandPalette.Update(msg)
+			if closed && actionID != "" {
+				menuCmd := m.handleMenuAction(actionID)
+				return m, tea.Batch(cmd, menuCmd)
+			}
+			return m, cmd
+		}
+
+		// 0.7. Global Search Handling if active
+		if m.GlobalSearch != nil && m.GlobalSearch.Active {
+			filePath, line, col, closed, cmd := m.GlobalSearch.Update(msg)
+			if closed && filePath != "" {
+				m.openFileAt(filePath, line, col)
+				m.Focus = FocusEditor
+			}
+			return m, cmd
 		}
 
 		// 1. Buffer Switcher Modal Handling
@@ -401,7 +489,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "ctrl+p":
-			m.openBufferSwitcher()
+			m.openQuickOpen()
+			return m, nil
+
+		case "ctrl+shift+p", "ctrl+P", "f1":
+			m.openCommandPalette()
+			return m, nil
+
+		case "ctrl+shift+f", "ctrl+F", "f4":
+			m.openGlobalSearch()
+			return m, nil
+
+		case "ctrl+f":
+			m.openFindBar()
 			return m, nil
 
 		case "ctrl+m", "alt+m":
@@ -1126,6 +1226,112 @@ func (m *Model) attemptCloseTab(tabIdx int) {
 	m.syncStatusBarWithActiveTab()
 }
 
+func (m *Model) modalWidth() int {
+	w := int(float64(m.Width) * 0.8)
+	if w < 50 {
+		w = 50
+	}
+	if w > m.Width-4 && m.Width > 4 {
+		w = m.Width - 4
+	}
+	return w
+}
+
+func (m *Model) openQuickOpen() {
+	if m.QuickOpen != nil {
+		m.QuickOpen.SetWidth(m.modalWidth())
+	}
+	var items []dialog.SwitcherItem
+	for i, t := range m.TabManager.Tabs {
+		items = append(items, dialog.SwitcherItem{
+			Index:   i,
+			Title:   t.Name,
+			Path:    t.Path,
+			IsDirty: t.IsDirty(),
+		})
+	}
+	m.QuickOpen.Open(items, m.TabManager.ActiveIndex, m.RootDir)
+}
+
+func (m *Model) openCommandPalette() {
+	if m.CommandPalette != nil {
+		m.CommandPalette.SetWidth(m.modalWidth())
+	}
+	commands := []dialog.CommandPaletteItem{
+		// File
+		{ID: "file.new", Title: "New File", Category: "File", Shortcut: "a"},
+		{ID: "file.open", Title: "Open File", Category: "File", Shortcut: "Ctrl+O"},
+		{ID: "file.open_folder", Title: "Open Folder", Category: "File", Shortcut: "Ctrl+K"},
+		{ID: "file.save", Title: "Save File", Category: "File", Shortcut: "Ctrl+S"},
+		{ID: "file.close", Title: "Close Tab", Category: "File", Shortcut: "Ctrl+W"},
+		{ID: "tab.close_others", Title: "Close Other Tabs", Category: "File", Shortcut: ""},
+		{ID: "tab.close_all", Title: "Close All Tabs", Category: "File", Shortcut: ""},
+		{ID: "app.exit", Title: "Exit Application", Category: "File", Shortcut: "Ctrl+Q"},
+
+		// Search & Navigation
+		{ID: "search.quick_open", Title: "Quick Open File (Workspace)", Category: "Search", Shortcut: "Ctrl+P"},
+		{ID: "search.palette", Title: "Command Palette", Category: "Search", Shortcut: "Ctrl+Shift+P / F1"},
+		{ID: "search.find", Title: "Find in Current File", Category: "Search", Shortcut: "Ctrl+F"},
+		{ID: "search.global", Title: "Global Search in Workspace", Category: "Search", Shortcut: "Ctrl+Shift+F"},
+
+		// View
+		{ID: "setting.sidebar", Title: "Toggle Sidebar", Category: "View", Shortcut: "Ctrl+B"},
+		{ID: "view.focus", Title: "Switch Focus (Sidebar/Editor)", Category: "View", Shortcut: "Ctrl+E / F6"},
+		{ID: "view.files", Title: "Switch to Files Explorer", Category: "View", Shortcut: "Alt+1"},
+		{ID: "view.git", Title: "Switch to Git Sidebar", Category: "View", Shortcut: "Alt+2"},
+		{ID: "view.markdown", Title: "Toggle Markdown Live Preview", Category: "View", Shortcut: "Ctrl+M"},
+
+		// Settings & Tools
+		{ID: "setting.autosave", Title: "Toggle Auto-Save", Category: "Setting", Shortcut: "Alt+S"},
+		{ID: "setting.hidden", Title: "Toggle Hidden Files", Category: "Setting", Shortcut: "."},
+		{ID: "setting.shortcuts", Title: "Keyboard Shortcuts Help", Category: "Help", Shortcut: "?"},
+		{ID: "about.open", Title: "About tui-workflow", Category: "Help", Shortcut: "Alt+A"},
+
+		// Git
+		{ID: "git.stage_all", Title: "Git: Stage All Changes", Category: "Git", Shortcut: ""},
+		{ID: "git.unstage_all", Title: "Git: Unstage All Changes", Category: "Git", Shortcut: ""},
+		{ID: "git.refresh", Title: "Git: Refresh Worktree Status", Category: "Git", Shortcut: ""},
+	}
+	m.CommandPalette.Open(commands)
+}
+
+func (m *Model) openGlobalSearch() {
+	if m.GlobalSearch != nil {
+		m.GlobalSearch.SetWidth(m.modalWidth())
+	}
+	m.GlobalSearch.Open(m.RootDir)
+}
+
+func (m *Model) openFindBar() {
+	tab := m.TabManager.ActiveTab()
+	if tab == nil || tab.Buffer == nil || (tab.Type == editor.TabMarkdown && tab.MarkdownPreview) || tab.IsDiff {
+		m.StatusBar.ShowToast("Pencarian teks hanya didukung di buffer editor aktif", true, 2*time.Second)
+		return
+	}
+	selectedText := tab.Buffer.GetSelectedText()
+	m.FindBar.Open(selectedText)
+	if selectedText != "" {
+		tab.Buffer.SetSearchQuery(selectedText)
+		cur, tot := tab.Buffer.MatchInfo()
+		m.FindBar.SetMatches(cur, tot)
+	}
+}
+
+func (m *Model) openFileAt(path string, line, col int) {
+	m.openFile(path)
+	tab := m.TabManager.ActiveTab()
+	if tab != nil && tab.Buffer != nil {
+		if line > 0 {
+			tab.Buffer.CursorRow = line - 1
+		}
+		if col > 0 {
+			tab.Buffer.CursorCol = col - 1
+		}
+		tab.Buffer.ClearSelection()
+		m.syncStatusBarWithActiveTab()
+	}
+}
+
 func (m *Model) openBufferSwitcher() {
 	if m.TabManager.Count() == 0 {
 		m.StatusBar.ShowToast("Tidak ada tab terbuka", false, 2*time.Second)
@@ -1464,6 +1670,71 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 
 	case "about.open":
 		m.ShowAbout = true
+
+	case "search.quick_open":
+		m.openQuickOpen()
+
+	case "search.palette":
+		m.openCommandPalette()
+
+	case "search.find":
+		m.openFindBar()
+
+	case "search.global":
+		m.openGlobalSearch()
+
+	case "view.focus":
+		m.toggleFocus()
+
+	case "view.files":
+		m.SidebarView = SidebarFiles
+		m.SidebarVisible = true
+
+	case "view.git":
+		m.SidebarView = SidebarGit
+		m.SidebarVisible = true
+		if m.GitView != nil {
+			m.GitView.Refresh()
+		}
+
+	case "view.markdown":
+		m.TabManager.ToggleActiveMarkdown()
+		m.syncStatusBarWithActiveTab()
+
+	case "tab.close_others":
+		m.TabManager.CloseOtherTabs(m.TabManager.ActiveIndex)
+		m.syncStatusBarWithActiveTab()
+
+	case "tab.close_all":
+		m.TabManager.CloseAllTabs()
+		m.syncStatusBarWithActiveTab()
+
+	case "git.stage_all":
+		if m.GitRepo != nil {
+			_ = m.GitRepo.StageAll()
+			if m.GitView != nil {
+				m.GitView.Refresh()
+			}
+			m.StatusBar.ShowToast("Semua perubahan dimasukkan ke staging area", false, 2*time.Second)
+		}
+
+	case "git.unstage_all":
+		if m.GitRepo != nil {
+			_ = m.GitRepo.UnstageAll()
+			if m.GitView != nil {
+				m.GitView.Refresh()
+			}
+			m.StatusBar.ShowToast("Semua perubahan dikeluarkan dari staging area", false, 2*time.Second)
+		}
+
+	case "git.refresh":
+		if m.GitView != nil {
+			m.GitView.Refresh()
+		}
+		if m.Explorer != nil {
+			m.Explorer.Refresh()
+		}
+		m.StatusBar.ShowToast("Status explorer & git diperbarui", false, 2*time.Second)
 	}
 	return nil
 }

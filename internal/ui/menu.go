@@ -46,6 +46,16 @@ func NewMenuBar() *MenuBar {
 				},
 			},
 			{
+				Title:    "Search",
+				Shortcut: "Alt+R",
+				Items: []MenuItem{
+					{Label: "Command Palette...", Shortcut: "F1", ActionID: "search.palette"},
+					{Label: "Quick Open File...", Shortcut: "Ctrl+P", ActionID: "search.quick_open"},
+					{Label: "Find in Current File...", Shortcut: "Ctrl+F", ActionID: "search.find"},
+					{Label: "Find in Files (Global)...", Shortcut: "F4", ActionID: "search.global"},
+				},
+			},
+			{
 				Title:    "Setting",
 				Shortcut: "Alt+T",
 				Items: []MenuItem{
@@ -110,11 +120,14 @@ func (m *MenuBar) HandleKey(msg tea.KeyMsg) (action string, handled bool) {
 		case "alt+f", "alt+F":
 			m.Toggle(0)
 			return "", true
-		case "alt+t", "alt+T":
+		case "alt+r", "alt+R":
 			m.Toggle(1)
 			return "", true
-		case "alt+a", "alt+A":
+		case "alt+t", "alt+T":
 			m.Toggle(2)
+			return "", true
+		case "alt+a", "alt+A":
+			m.Toggle(3)
 			return "", true
 		}
 		return "", false

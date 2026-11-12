@@ -55,25 +55,49 @@ func (m Model) View() string {
 		baseView = overlayAt(baseView, dropBox, dropX, dropY, m.Width, m.Height)
 	}
 
-	// Overlay 2: Modals (Switcher, FilePicker, Input Dialog, Confirm Dialog, Help, or About)
-	if m.Switcher.Active {
+	// Overlay 2: Modals (QuickOpen, CommandPalette, GlobalSearch, Switcher, FilePicker, Input Dialog, Confirm Dialog, Help, or About)
+	if m.QuickOpen != nil && m.QuickOpen.Active {
+		modal := m.QuickOpen.Render()
+		baseView = overlayTopCenter(baseView, modal, m.Width, m.Height)
+	} else if m.CommandPalette != nil && m.CommandPalette.Active {
+		modal := m.CommandPalette.Render()
+		baseView = overlayTopCenter(baseView, modal, m.Width, m.Height)
+	} else if m.GlobalSearch != nil && m.GlobalSearch.Active {
+		modal := m.GlobalSearch.Render()
+		baseView = overlayTopCenter(baseView, modal, m.Width, m.Height)
+	} else if m.Switcher.Active {
 		modal := m.Switcher.Render()
-		baseView = placeCenter(baseView, modal, m.Width, m.Height)
+		baseView = overlayTopCenter(baseView, modal, m.Width, m.Height)
 	} else if m.FilePicker != nil && m.FilePicker.Active {
 		modal := m.FilePicker.Render()
-		baseView = placeCenter(baseView, modal, m.Width, m.Height)
+		baseView = overlayCenter(baseView, modal, m.Width, m.Height)
 	} else if m.InputDialog.Active {
 		modal := m.InputDialog.Render()
-		baseView = placeCenter(baseView, modal, m.Width, m.Height)
+		baseView = overlayCenter(baseView, modal, m.Width, m.Height)
 	} else if m.ConfirmDialog.Active {
 		modal := m.ConfirmDialog.Render()
-		baseView = placeCenter(baseView, modal, m.Width, m.Height)
+		baseView = overlayCenter(baseView, modal, m.Width, m.Height)
 	} else if m.ShowHelp {
 		modal := renderHelpModal()
-		baseView = placeCenter(baseView, modal, m.Width, m.Height)
+		baseView = overlayCenter(baseView, modal, m.Width, m.Height)
 	} else if m.ShowAbout {
 		modal := renderAboutModal()
-		baseView = placeCenter(baseView, modal, m.Width, m.Height)
+		baseView = overlayCenter(baseView, modal, m.Width, m.Height)
+	}
+
+	// Overlay 2.5: Find Bar (Floating in Editor Pane top-right)
+	if m.FindBar != nil && m.FindBar.Active {
+		barStr := m.FindBar.Render()
+		findWidth := lipgloss.Width(barStr)
+		findX := m.Width - findWidth - 2
+		editorStartX := 0
+		if m.SidebarVisible {
+			editorStartX = m.SidebarWidth
+		}
+		if findX < editorStartX+1 {
+			findX = editorStartX + 1
+		}
+		baseView = overlayAt(baseView, barStr, findX, 1, m.Width, m.Height)
 	}
 
 	// Overlay 3: Context Menu
@@ -176,27 +200,33 @@ func (m Model) renderEditor(width, height int) string {
 func renderHelpModal() string {
 	content := "┌─ BANTUAN & SHORTCUT tui-workflow ────────────────┐\n" +
 		"│                                                  │\n" +
-		"│  Global:                                         │\n" +
-		"│  • Ctrl+Q           : Keluar dari aplikasi       │\n" +
-		"│  • Ctrl+E / F6      : Ganti Fokus Sidebar/Editor │\n" +
-		"│  • Ctrl+B           : Toggle Sidebar             │\n" +
-		"│  • Alt+F, Alt+T     : Buka Top Menu Bar          │\n" +
-		"│  • Alt+1, Alt+2     : Switch Sidebar (Files/Git) │\n" +
-		"│  • Alt+S            : Toggle Auto-Save           │\n" +
-		"│  • Ctrl+P           : Quick Buffer Tab Switcher  │\n" +
-		"│  • ?                : Buka/Tutup Bantuan Ini     │\n" +
-		"│  • Esc              : Tutup Dialog / Menu        │\n" +
+		"│ Global:                                          │\n" +
+		"│   • Ctrl+Q        : Keluar dari aplikasi         │\n" +
+		"│   • Ctrl+E / F6   : Ganti Fokus Sidebar/Editor   │\n" +
+		"│   • Ctrl+B        : Toggle Sidebar               │\n" +
+		"│   • Alt+F, Alt+R  : Buka Menu File / Search      │\n" +
+		"│   • Alt+T, Alt+A  : Buka Menu Setting / About    │\n" +
+		"│   • Alt+1, Alt+2  : Switch Sidebar (Files/Git)   │\n" +
+		"│   • Alt+S         : Toggle Auto-Save             │\n" +
+		"│   • ?             : Buka/Tutup Bantuan Ini       │\n" +
+		"│   • Esc           : Tutup Dialog / Menu          │\n" +
 		"│                                                  │\n" +
-		"│  Editor (Modeless):                              │\n" +
-		"│  • Ketik langsung   : Teks disisipkan ke buffer  │\n" +
-		"│  • Panah / PgUp/Dn  : Navigasi Kursor            │\n" +
-		"│  • Ctrl+S           : Simpan Buffer Aktif        │\n" +
-		"│  • Ctrl+W           : Tutup Tab Aktif            │\n" +
-		"│  • Ctrl+N           : Pindah ke Tab Berikutnya   │\n" +
-		"│  • Ctrl+M           : Toggle Markdown Preview    │\n" +
-		"│  • Tab              : Indentasi 4 Spasi          │\n" +
+		"│ Pencarian & Aksi:                                │\n" +
+		"│   • F1            : Command Palette (Semua Aksi) │\n" +
+		"│   • Ctrl+P        : Quick Open File Workspace    │\n" +
+		"│   • F4            : Global Search di Workspace   │\n" +
+		"│   • Ctrl+F        : Cari Teks di Buffer Aktif    │\n" +
 		"│                                                  │\n" +
-		"│  [Tekan Esc atau ? untuk menutup modal ini]      │\n" +
+		"│ Editor (Modeless):                               │\n" +
+		"│   • Ketik langsung: Teks disisipkan ke buffer    │\n" +
+		"│   • Panah/PgUp/Dn : Navigasi Kursor              │\n" +
+		"│   • Ctrl+S        : Simpan Buffer Aktif          │\n" +
+		"│   • Ctrl+W        : Tutup Tab Aktif              │\n" +
+		"│   • Ctrl+N        : Pindah ke Tab Berikutnya     │\n" +
+		"│   • Ctrl+M        : Toggle Markdown Preview      │\n" +
+		"│   • Tab           : Indentasi 4 Spasi            │\n" +
+		"│                                                  │\n" +
+		"│ [Tekan Esc atau ? untuk menutup modal ini]       │\n" +
 		"└──────────────────────────────────────────────────┘"
 
 	return ui.CurrentTheme.WarningBoxStyle.
@@ -259,6 +289,34 @@ func overlayAt(base, overlay string, atX, atY, totalW, totalH int) string {
 	return strings.Join(baseLines, "\n")
 }
 
+func overlayCenter(base, modal string, totalW, totalH int) string {
+	mWidth := lipgloss.Width(modal)
+	mHeight := lipgloss.Height(modal)
+	atX := (totalW - mWidth) / 2
+	atY := (totalH - mHeight) / 2
+	if atX < 0 {
+		atX = 0
+	}
+	if atY < 1 {
+		atY = 1
+	}
+	return overlayAt(base, modal, atX, atY, totalW, totalH)
+}
+
+func overlayTopCenter(base, modal string, totalW, totalH int) string {
+	mWidth := lipgloss.Width(modal)
+	mHeight := lipgloss.Height(modal)
+	atX := (totalW - mWidth) / 2
+	atY := (totalH - mHeight) / 3
+	if atX < 0 {
+		atX = 0
+	}
+	if atY < 1 {
+		atY = 1
+	}
+	return overlayAt(base, modal, atX, atY, totalW, totalH)
+}
+
 func placeCenter(base, modal string, totalW, totalH int) string {
-	return lipgloss.Place(totalW, totalH, lipgloss.Center, lipgloss.Center, modal)
+	return overlayCenter(base, modal, totalW, totalH)
 }

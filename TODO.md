@@ -1,8 +1,8 @@
 | No | Done? | Description |
 | :-: | :---: | --- |
-| 1 | [ ] | global search file contain seperti di vscode |
-| 2 | [ ] | quick open file from currect workspace with fuzzy search (crtl+p) tidak hanya search tab yang terbuka saja |
-| 3 | [ ] | shift+ctrl+p menampilkan semua action menu yang dapat di panggil terdapat kolom search untuk mencari action dengan fuzzy |
+| 1 | [x] | global search file contain seperti di vscode |
+| 2 | [x] | quick open file from currect workspace with fuzzy search (crtl+p) tidak hanya search tab yang terbuka saja |
+| 3 | [x] | shift+ctrl+p menampilkan semua action menu yang dapat di panggil terdapat kolom search untuk mencari action dengan fuzzy |
 | 4 | [ ] | tambahkan action untuk disable soft wrap di editor |
 | 5 | [ ] | editor dengan software pointer mouse kadang berhenti di tempat yang tidak tepat ketika di klik |
 | 6 | [ ] | klik kanan di tab untuk `close all tab` `close other tab` dan `close right/left tab` |
@@ -21,5 +21,5 @@
 | 19 | [ ] | formater file seperti prettier |
 | 20 | [ ] | auto listen file jika changes file dari luar editor |
 | 21 | [ ] | ijin kan block copy dan paste action di previewe markdown |
-| 22 | [ ] | search text in open editor with ctrl+f | 
+| 22 | [x] | search text in open editor with ctrl+f | 
 | 23 | [ ] | integrasi ai llm model dengan format openai api , user bisa setting provider url, api dan models serta default model , kemudian implementasi pertama digunakan untuk generate commit message dari changes yang dilakukan di project yang open |

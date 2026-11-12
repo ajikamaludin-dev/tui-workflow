@@ -39,8 +39,11 @@ type Theme struct {
 	StatusBarItemStyle  lipgloss.Style
 	StatusBarBadgeStyle lipgloss.Style
 
-	WarningBoxStyle lipgloss.Style
-	LineNumberStyle lipgloss.Style
+	WarningBoxStyle     lipgloss.Style
+	LineNumberStyle     lipgloss.Style
+
+	SearchMatchStyle    lipgloss.Style
+	SearchActiveMatch   lipgloss.Style
 }
 
 var CurrentTheme = NewDarkTheme()
@@ -148,6 +151,15 @@ func NewDarkTheme() Theme {
 
 	t.LineNumberStyle = lipgloss.NewStyle().
 		Foreground(t.FgSecondary)
+
+	t.SearchMatchStyle = lipgloss.NewStyle().
+		Background(lipgloss.Color("#515C6B")).
+		Foreground(lipgloss.Color("#FFFFFF"))
+
+	t.SearchActiveMatch = lipgloss.NewStyle().
+		Background(lipgloss.Color("#E5A50A")).
+		Foreground(lipgloss.Color("#000000")).
+		Bold(true)
 
 	return t
 }

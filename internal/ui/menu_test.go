@@ -29,10 +29,16 @@ func TestMenuBarNavigation(t *testing.T) {
 		t.Errorf("Expected active menu 0, got %d", mb.ActiveMenu)
 	}
 
-	// Right key moves to Setting
+	// Right key moves to Search (index 1)
 	_, _ = mb.HandleKey(tea.KeyMsg{Type: tea.KeyRight})
 	if mb.ActiveMenu != 1 {
-		t.Errorf("Expected active menu 1, got %d", mb.ActiveMenu)
+		t.Errorf("Expected active menu 1 (Search), got %d", mb.ActiveMenu)
+	}
+
+	// Right key moves to Setting (index 2)
+	_, _ = mb.HandleKey(tea.KeyMsg{Type: tea.KeyRight})
+	if mb.ActiveMenu != 2 {
+		t.Errorf("Expected active menu 2 (Setting), got %d", mb.ActiveMenu)
 	}
 
 	// Esc closes menu
@@ -97,7 +103,32 @@ func TestMenuBarMouseClick(t *testing.T) {
 		t.Errorf("Expected action 'file.save', got %q (handled=%v)", action, handled)
 	}
 
-	// 5. Re-open File menu and click outside dropdown
+	// 5. Re-open and click on Search menu item 0 "Command Palette" at Y = 2
+	mb.Toggle(1)
+	searchCat := mb.Categories[1]
+	action, handled = mb.HandleMouse(tea.MouseMsg{
+		X:      searchCat.StartX + 2,
+		Y:      2,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+	})
+	if !handled || action != "search.palette" {
+		t.Errorf("Expected action 'search.palette', got %q (handled=%v)", action, handled)
+	}
+
+	// 6. Click on Search menu item 3 "Find in Files (Global)" at Y = 5
+	mb.Toggle(1)
+	action, handled = mb.HandleMouse(tea.MouseMsg{
+		X:      searchCat.StartX + 2,
+		Y:      5,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+	})
+	if !handled || action != "search.global" {
+		t.Errorf("Expected action 'search.global', got %q (handled=%v)", action, handled)
+	}
+
+	// 7. Re-open File menu and click outside dropdown
 	mb.Toggle(0)
 	action, handled = mb.HandleMouse(tea.MouseMsg{
 		X:      80,

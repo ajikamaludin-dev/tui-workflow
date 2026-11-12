@@ -38,6 +38,13 @@ type GitView struct {
 	HistoryFolded bool
 
 	ScrollOffset int
+	TotalLines   int
+	LastWidth    int
+	LastHeight   int
+
+	UnpushedCount int
+	IsLoading     bool
+	LoadingMsg    string
 
 	// Last click coordinate mapping for mouse handling
 	ItemClickMap map[int]GitClickTarget
@@ -57,6 +64,8 @@ const (
 	ClickStageAction
 	ClickUnstageAction
 	ClickButtonRow
+	ClickStageAllAction
+	ClickUnstageAllAction
 )
 
 type GitClickTarget struct {
@@ -67,6 +76,7 @@ type GitClickTarget struct {
 
 func NewGitView(repo *Repo) *GitView {
 	ti := textinput.New()
+	ti.Prompt = ""
 	ti.Placeholder = "Message (Ctrl+Enter to commit)"
 	ti.CharLimit = 200
 	ti.Width = 24
@@ -92,6 +102,9 @@ func (gv *GitView) Refresh() {
 
 	history, _ := gv.Repo.GetHistory(10)
 	gv.History = history
+
+	unpushed, _ := gv.Repo.GetUnpushedCount()
+	gv.UnpushedCount = unpushed
 
 	if gv.StagedIdx >= len(gv.Staged) {
 		gv.StagedIdx = len(gv.Staged) - 1
@@ -140,6 +153,18 @@ func (gv *GitView) StageSelected() error {
 	return nil
 }
 
+func (gv *GitView) StageAll() error {
+	if gv.Repo == nil {
+		return fmt.Errorf("repositori git tidak ditemukan")
+	}
+	err := gv.Repo.StageAll()
+	if err != nil {
+		return err
+	}
+	gv.Refresh()
+	return nil
+}
+
 func (gv *GitView) UnstageSelected() error {
 	if file := gv.SelectedStagedFile(); file != nil {
 		err := gv.Repo.UnstageFile(file.Path)
@@ -148,6 +173,18 @@ func (gv *GitView) UnstageSelected() error {
 		}
 		gv.Refresh()
 	}
+	return nil
+}
+
+func (gv *GitView) UnstageAll() error {
+	if gv.Repo == nil {
+		return fmt.Errorf("repositori git tidak ditemukan")
+	}
+	err := gv.Repo.UnstageAll()
+	if err != nil {
+		return err
+	}
+	gv.Refresh()
 	return nil
 }
 
@@ -172,7 +209,72 @@ func (gv *GitView) Push() error {
 	if gv.Repo == nil {
 		return fmt.Errorf("repositori git tidak ditemukan")
 	}
-	return gv.Repo.Push()
+	err := gv.Repo.Push()
+	if err != nil {
+		return err
+	}
+	gv.Refresh()
+	return nil
+}
+
+func (gv *GitView) ScrollUp(delta int) {
+	gv.ScrollOffset -= delta
+	if gv.ScrollOffset < 0 {
+		gv.ScrollOffset = 0
+	}
+}
+
+func (gv *GitView) ScrollDown(delta int, height int) {
+	maxScroll := gv.TotalLines - height
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	gv.ScrollOffset += delta
+	if gv.ScrollOffset > maxScroll {
+		gv.ScrollOffset = maxScroll
+	}
+}
+
+func (gv *GitView) ensureVisible() {
+	height := gv.LastHeight
+	if height <= 0 {
+		height = 20
+	}
+	targetLine := -1
+	switch gv.FocusArea {
+	case GitFocusCommitInput:
+		targetLine = 0
+	case GitFocusStaged:
+		for line, tgt := range gv.ItemClickMap {
+			if tgt.Type == ClickItemStaged && tgt.Index == gv.StagedIdx {
+				targetLine = line
+				break
+			}
+		}
+	case GitFocusChanges:
+		for line, tgt := range gv.ItemClickMap {
+			if tgt.Type == ClickItemChanges && tgt.Index == gv.ChangesIdx {
+				targetLine = line
+				break
+			}
+		}
+	case GitFocusHistory:
+		for line, tgt := range gv.ItemClickMap {
+			if tgt.Type == ClickItemHistory && tgt.Index == gv.HistoryIdx {
+				targetLine = line
+				break
+			}
+		}
+	}
+
+	if targetLine < 0 {
+		return
+	}
+	if targetLine < gv.ScrollOffset {
+		gv.ScrollOffset = targetLine
+	} else if targetLine >= gv.ScrollOffset+height {
+		gv.ScrollOffset = targetLine - height + 1
+	}
 }
 
 func (gv *GitView) Update(msg tea.Msg) (tea.Cmd, *GitFileStatus) {
@@ -286,11 +388,13 @@ func (gv *GitView) Update(msg tea.Msg) (tea.Cmd, *GitFileStatus) {
 		return cmd, fileToOpen
 	}
 
+	gv.ensureVisible()
 	return nil, fileToOpen
 }
 
 func (gv *GitView) HandleMouseClick(relX, relY int) (*GitFileStatus, string, bool) {
-	target, ok := gv.ItemClickMap[relY]
+	actualLine := gv.ScrollOffset + relY
+	target, ok := gv.ItemClickMap[actualLine]
 	if !ok {
 		return nil, "", false
 	}
@@ -303,20 +407,40 @@ func (gv *GitView) HandleMouseClick(relX, relY int) (*GitFileStatus, string, boo
 
 	case ClickButtonRow:
 		gv.CommitInput.Blur()
-		// Button line: " [Commit]  [Push]"
-		// Commit: cols 1..8, Push: cols 9..16
-		if relX >= 1 && relX <= 8 {
+		if gv.IsLoading {
+			return nil, "", true
+		}
+		hasChanges := len(gv.Staged) > 0 || len(gv.Changes) > 0
+		if hasChanges {
 			return nil, "commit", true
-		} else if relX >= 9 {
+		} else if gv.UnpushedCount > 0 {
 			return nil, "push", true
 		}
 		return nil, "", true
 
 	case ClickSectionStaged:
+		gv.CommitInput.Blur()
+		btnCol := (gv.LastWidth - 1) - 5
+		if btnCol < 10 {
+			btnCol = 10
+		}
+		if len(gv.Staged) > 0 && relX >= btnCol {
+			_ = gv.UnstageAll()
+			return nil, "", true
+		}
 		gv.StagedFolded = !gv.StagedFolded
 		return nil, "", true
 
 	case ClickSectionChanges:
+		gv.CommitInput.Blur()
+		btnCol := (gv.LastWidth - 1) - 5
+		if btnCol < 10 {
+			btnCol = 10
+		}
+		if len(gv.Changes) > 0 && relX >= btnCol {
+			_ = gv.StageAll()
+			return nil, "", true
+		}
 		gv.ChangesFolded = !gv.ChangesFolded
 		return nil, "", true
 
@@ -361,6 +485,14 @@ func (gv *GitView) HandleMouseClick(relX, relY int) (*GitFileStatus, string, boo
 		_ = gv.Repo.UnstageFile(target.Path)
 		gv.Refresh()
 		return nil, "", true
+
+	case ClickStageAllAction:
+		_ = gv.StageAll()
+		return nil, "", true
+
+	case ClickUnstageAllAction:
+		_ = gv.UnstageAll()
+		return nil, "", true
 	}
 
 	return nil, "", false
@@ -368,6 +500,8 @@ func (gv *GitView) HandleMouseClick(relX, relY int) (*GitFileStatus, string, boo
 
 func (gv *GitView) Render(width, height int, isFocused bool) string {
 	gv.ItemClickMap = make(map[int]GitClickTarget)
+	gv.LastWidth = width
+	gv.LastHeight = height
 
 	if gv.Repo == nil {
 		lines := []string{
@@ -406,23 +540,37 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 	}
 	currentY += len(commitLines)
 
-	// Buttons: [ Commit ]  [ Push ]
-	btnCommitStyle := lipgloss.NewStyle().
+	// Buttons: Dynamic fullwidth button (Commit vs Push vs Loading)
+	btnW := width - 2
+	if btnW < 10 {
+		btnW = 10
+	}
+	btnStyle := lipgloss.NewStyle().
 		Bold(true).
 		Background(ui.CurrentTheme.Accent).
 		Foreground(ui.CurrentTheme.FgHighlight).
-		Padding(0, 1)
-	btnPushStyle := lipgloss.NewStyle().
-		Background(ui.CurrentTheme.BorderColor).
-		Foreground(ui.CurrentTheme.FgHighlight).
-		Padding(0, 1)
+		Width(btnW).
+		Align(lipgloss.Center)
 
-	btnCommit := btnCommitStyle.Render("Commit")
-	btnPush := btnPushStyle.Render("Push")
-	btnLine := fmt.Sprintf(" %s  %s", btnCommit, btnPush)
-	lines = append(lines, btnLine)
-	gv.ItemClickMap[currentY] = GitClickTarget{Type: ClickButtonRow}
-	currentY++
+	hasChanges := len(gv.Staged) > 0 || len(gv.Changes) > 0
+	if gv.IsLoading {
+		txt := gv.LoadingMsg
+		if txt == "" {
+			txt = "Loading..."
+		}
+		lines = append(lines, " "+btnStyle.Render(txt))
+		gv.ItemClickMap[currentY] = GitClickTarget{Type: ClickButtonRow}
+		currentY++
+	} else if hasChanges {
+		lines = append(lines, " "+btnStyle.Render("Commit"))
+		gv.ItemClickMap[currentY] = GitClickTarget{Type: ClickButtonRow}
+		currentY++
+	} else if gv.UnpushedCount > 0 {
+		pushTxt := fmt.Sprintf("Push (%d)", gv.UnpushedCount)
+		lines = append(lines, " "+btnStyle.Render(pushTxt))
+		gv.ItemClickMap[currentY] = GitClickTarget{Type: ClickButtonRow}
+		currentY++
+	}
 
 	// Separator
 	lines = append(lines, "")
@@ -433,7 +581,16 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 	if gv.StagedFolded {
 		stagedFoldIcon = "▶"
 	}
-	stagedHeader := fmt.Sprintf(" %s Staged Changes (%d)", stagedFoldIcon, len(gv.Staged))
+	stagedTitle := fmt.Sprintf(" %s Staged Changes (%d)", stagedFoldIcon, len(gv.Staged))
+	stagedBtn := ""
+	if len(gv.Staged) > 0 {
+		stagedBtn = "[-] "
+	}
+	availSpace := (width - 1) - ansi.StringWidth(stagedTitle) - ansi.StringWidth(stagedBtn)
+	if availSpace < 0 {
+		availSpace = 0
+	}
+	stagedHeader := stagedTitle + strings.Repeat(" ", availSpace) + stagedBtn
 	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(ui.CurrentTheme.FgHighlight)
 	lines = append(lines, headerStyle.Render(stagedHeader))
 	gv.ItemClickMap[currentY] = GitClickTarget{Type: ClickSectionStaged}
@@ -481,7 +638,16 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 	if gv.ChangesFolded {
 		changesFoldIcon = "▶"
 	}
-	changesHeader := fmt.Sprintf(" %s Changes (%d)", changesFoldIcon, len(gv.Changes))
+	changesTitle := fmt.Sprintf(" %s Changes (%d)", changesFoldIcon, len(gv.Changes))
+	changesBtn := ""
+	if len(gv.Changes) > 0 {
+		changesBtn = "[+] "
+	}
+	availSpace = (width - 1) - ansi.StringWidth(changesTitle) - ansi.StringWidth(changesBtn)
+	if availSpace < 0 {
+		availSpace = 0
+	}
+	changesHeader := changesTitle + strings.Repeat(" ", availSpace) + changesBtn
 	lines = append(lines, headerStyle.Render(changesHeader))
 	gv.ItemClickMap[currentY] = GitClickTarget{Type: ClickSectionChanges}
 	currentY++
@@ -564,15 +730,35 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 		}
 	}
 
-	// Pad or truncate to height
-	for len(lines) < height {
-		lines = append(lines, "")
+	// Viewport scrolling
+	gv.TotalLines = len(lines)
+	maxScroll := gv.TotalLines - height
+	if maxScroll < 0 {
+		maxScroll = 0
 	}
-	if len(lines) > height {
-		lines = lines[:height]
+	if gv.ScrollOffset > maxScroll {
+		gv.ScrollOffset = maxScroll
+	}
+	if gv.ScrollOffset < 0 {
+		gv.ScrollOffset = 0
 	}
 
-	return strings.Join(lines, "\n")
+	var visibleLines []string
+	end := gv.ScrollOffset + height
+	if end > gv.TotalLines {
+		end = gv.TotalLines
+	}
+	if gv.ScrollOffset < gv.TotalLines {
+		visibleLines = lines[gv.ScrollOffset:end]
+	}
+
+	for len(visibleLines) < height {
+		visibleLines = append(visibleLines, "")
+	}
+	if len(visibleLines) > height {
+		visibleLines = visibleLines[:height]
+	}
+	return strings.Join(visibleLines, "\n")
 }
 
 func formatBadge(status string) string {

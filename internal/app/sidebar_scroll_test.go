@@ -1,0 +1,76 @@
+package app
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+func TestSidebarMouseWheelScroll(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "tui-wheel-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Create many files so explorer and git tree have plenty of lines
+	for i := 0; i < 30; i++ {
+		p := filepath.Join(tempDir, filepath.Clean(string(rune('a'+(i%26)))+string(rune('0'+(i/26)))+".txt"))
+		_ = os.WriteFile(p, []byte("test"), 0644)
+	}
+
+	m, err := NewModelWithPath(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+	m.Width = 100
+	m.Height = 24
+	m.SidebarVisible = true
+	m.SidebarWidth = 28
+	m.SidebarView = SidebarFiles
+
+	// 1. Test Wheel Down on Files view
+	m.Update(tea.MouseMsg{
+		X:      10,
+		Y:      5,
+		Button: tea.MouseButtonWheelDown,
+		Action: tea.MouseActionPress,
+	})
+
+	if m.Explorer.ScrollOffset <= 0 {
+		t.Errorf("Expected Explorer.ScrollOffset > 0 after WheelDown, got %d", m.Explorer.ScrollOffset)
+	}
+
+	// Test Wheel Up on Files view
+	m.Update(tea.MouseMsg{
+		X:      10,
+		Y:      5,
+		Button: tea.MouseButtonWheelUp,
+		Action: tea.MouseActionPress,
+	})
+
+	// 2. Test Wheel on Git view
+	m.SidebarView = SidebarGit
+	if m.GitView != nil {
+		m.GitView.TotalLines = 50
+		m.Update(tea.MouseMsg{
+			X:      10,
+			Y:      5,
+			Button: tea.MouseButtonWheelDown,
+			Action: tea.MouseActionPress,
+		})
+
+		if m.GitView.ScrollOffset <= 0 {
+			t.Errorf("Expected GitView.ScrollOffset > 0 after WheelDown, got %d", m.GitView.ScrollOffset)
+		}
+
+		m.Update(tea.MouseMsg{
+			X:      10,
+			Y:      5,
+			Button: tea.MouseButtonWheelUp,
+			Action: tea.MouseActionPress,
+		})
+	}
+}

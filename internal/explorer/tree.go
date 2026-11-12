@@ -239,6 +239,30 @@ func (t *Tree) SelectedNameExceeds(width int) bool {
 	return ansi.StringWidth(node.Name) > availForName
 }
 
+func (t *Tree) ScrollUp(delta int) {
+	t.ScrollOffset -= delta
+	if t.ScrollOffset < 0 {
+		t.ScrollOffset = 0
+	}
+	if t.SelectedIndex < t.ScrollOffset {
+		t.SelectedIndex = t.ScrollOffset
+	}
+}
+
+func (t *Tree) ScrollDown(delta int, height int) {
+	maxScroll := len(t.FlatNodes) - height
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	t.ScrollOffset += delta
+	if t.ScrollOffset > maxScroll {
+		t.ScrollOffset = maxScroll
+	}
+	if t.SelectedIndex < t.ScrollOffset {
+		t.SelectedIndex = t.ScrollOffset
+	}
+}
+
 func (t *Tree) Render(width, height int, focused bool) string {
 	if len(t.FlatNodes) == 0 {
 		return lipgloss.NewStyle().

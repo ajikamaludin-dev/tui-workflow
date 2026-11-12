@@ -9,6 +9,7 @@ import (
 	"time"
 
 	gogit "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
@@ -155,6 +156,19 @@ func (r *Repo) StageFile(relPath string) error {
 	return nil
 }
 
+func (r *Repo) StageAll() error {
+	if r == nil || r.worktree == nil {
+		return fmt.Errorf("worktree tidak valid")
+	}
+	err := r.worktree.AddWithOptions(&gogit.AddOptions{
+		All: true,
+	})
+	if err != nil {
+		return fmt.Errorf("gagal stage semua file: %w", err)
+	}
+	return nil
+}
+
 func (r *Repo) UnstageFile(relPath string) error {
 	// Equivalent to git reset HEAD <file>
 	head, err := r.r.Head()
@@ -178,6 +192,88 @@ func (r *Repo) UnstageFile(relPath string) error {
 		return fmt.Errorf("gagal unstage file '%s': %w", relPath, err)
 	}
 	return nil
+}
+
+func (r *Repo) UnstageAll() error {
+	if r == nil || r.worktree == nil {
+		return fmt.Errorf("worktree tidak valid")
+	}
+	head, err := r.r.Head()
+	if err != nil {
+		return nil
+	}
+	commit, err := r.r.CommitObject(head.Hash())
+	if err != nil {
+		return err
+	}
+	err = r.worktree.Reset(&gogit.ResetOptions{
+		Commit: commit.Hash,
+		Mode:   gogit.MixedReset,
+	})
+	if err != nil {
+		return fmt.Errorf("gagal unstage semua file: %w", err)
+	}
+	return nil
+}
+
+func (r *Repo) GetUnpushedCount() (int, error) {
+	if r == nil || r.r == nil {
+		return 0, fmt.Errorf("repositori tidak valid")
+	}
+	branch, err := r.GetBranchName()
+	if err != nil {
+		return 0, err
+	}
+	head, err := r.r.Head()
+	if err != nil {
+		return 0, nil
+	}
+	remotes, err := r.r.Remotes()
+	if err != nil || len(remotes) == 0 {
+		iter, err := r.r.Log(&gogit.LogOptions{From: head.Hash()})
+		if err != nil {
+			return 0, nil
+		}
+		defer iter.Close()
+		count := 0
+		_ = iter.ForEach(func(c *object.Commit) error {
+			count++
+			return nil
+		})
+		return count, nil
+	}
+	remoteRefName := plumbing.ReferenceName(fmt.Sprintf("refs/remotes/origin/%s", branch))
+	remoteRef, err := r.r.Reference(remoteRefName, true)
+	if err != nil {
+		iter, err := r.r.Log(&gogit.LogOptions{From: head.Hash()})
+		if err != nil {
+			return 0, nil
+		}
+		defer iter.Close()
+		count := 0
+		_ = iter.ForEach(func(c *object.Commit) error {
+			count++
+			return nil
+		})
+		return count, nil
+	}
+	if remoteRef.Hash() == head.Hash() {
+		return 0, nil
+	}
+	iter, err := r.r.Log(&gogit.LogOptions{From: head.Hash()})
+	if err != nil {
+		return 0, err
+	}
+	defer iter.Close()
+	count := 0
+	_ = iter.ForEach(func(c *object.Commit) error {
+		if c.Hash == remoteRef.Hash() {
+			return io.EOF
+		}
+		count++
+		return nil
+	})
+	return count, nil
 }
 
 func (r *Repo) Commit(message string) (string, error) {

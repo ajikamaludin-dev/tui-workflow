@@ -3,6 +3,7 @@ package git
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -128,7 +129,8 @@ func TestRepoOperations(t *testing.T) {
 	gv := NewGitView(repo)
 	_ = gv.Render(30, 20, true)
 
-	// Hit test on buttons row (Type=10 is ClickButtonRow)
+	// Hit test on buttons row (ClickButtonRow)
+	// file2.txt is unstaged, so button should be fullwidth Commit
 	var buttonY int = -1
 	for y, tgt := range gv.ItemClickMap {
 		if tgt.Type == ClickButtonRow {
@@ -142,11 +144,70 @@ func TestRepoOperations(t *testing.T) {
 
 	_, action, handled := gv.HandleMouseClick(4, buttonY)
 	if !handled || action != "commit" {
-		t.Errorf("Expected action 'commit', got %q (handled=%v)", action, handled)
+		t.Errorf("Expected action 'commit' with changes present, got %q (handled=%v)", action, handled)
 	}
 
-	_, action, handled = gv.HandleMouseClick(12, buttonY)
+	// Test StageAll
+	err = gv.StageAll()
+	if err != nil {
+		t.Fatalf("StageAll failed: %v", err)
+	}
+	if len(gv.Staged) == 0 {
+		t.Errorf("Expected files in staged after StageAll")
+	}
+
+	// Test UnstageAll
+	err = gv.UnstageAll()
+	if err != nil {
+		t.Fatalf("UnstageAll failed: %v", err)
+	}
+	if len(gv.Staged) != 0 {
+		t.Errorf("Expected 0 staged files after UnstageAll, got %d", len(gv.Staged))
+	}
+
+	// Stage all and commit to clean the working tree
+	_ = gv.StageAll()
+	gv.CommitInput.SetValue("commit file2")
+	_, err = gv.DoCommit()
+	if err != nil {
+		t.Fatalf("DoCommit failed: %v", err)
+	}
+
+	// Working tree is now clean, unpushed commits exist -> button should be Push
+	unpushed, err := repo.GetUnpushedCount()
+	if err != nil {
+		t.Fatalf("GetUnpushedCount failed: %v", err)
+	}
+	if unpushed <= 0 {
+		t.Errorf("Expected unpushed commits > 0, got %d", unpushed)
+	}
+
+	_ = gv.Render(30, 20, true)
+	buttonY = -1
+	for y, tgt := range gv.ItemClickMap {
+		if tgt.Type == ClickButtonRow {
+			buttonY = y
+			break
+		}
+	}
+	if buttonY == -1 {
+		t.Fatalf("ClickButtonRow not found in ItemClickMap when clean")
+	}
+
+	_, action, handled = gv.HandleMouseClick(4, buttonY)
 	if !handled || action != "push" {
-		t.Errorf("Expected action 'push', got %q (handled=%v)", action, handled)
+		t.Errorf("Expected action 'push' when working tree clean, got %q (handled=%v)", action, handled)
+	}
+
+	// Test IsLoading
+	gv.IsLoading = true
+	gv.LoadingMsg = "Pushing..."
+	rendered := gv.Render(30, 20, true)
+	if !strings.Contains(rendered, "Pushing...") {
+		t.Errorf("Expected rendered to contain 'Pushing...', got %s", rendered)
+	}
+	_, _, handled = gv.HandleMouseClick(4, buttonY)
+	if handled && gv.IsLoading {
+		// Click should be ignored during loading
 	}
 }

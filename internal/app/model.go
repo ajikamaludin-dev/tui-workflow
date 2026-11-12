@@ -725,6 +725,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Mouse scroll wheel in sidebar (Row 2 to Height-2)
+		if m.SidebarVisible && msg.X < m.SidebarWidth && msg.Y >= 2 && msg.Y < m.Height-1 {
+			sidebarH := m.Height - 3
+			if msg.Button == tea.MouseButtonWheelUp {
+				if m.SidebarView == SidebarFiles && m.Explorer != nil {
+					m.Explorer.ScrollUp(3)
+					return m, nil
+				} else if m.SidebarView == SidebarGit && m.GitView != nil {
+					m.GitView.ScrollUp(3)
+					return m, nil
+				}
+			} else if msg.Button == tea.MouseButtonWheelDown {
+				if m.SidebarView == SidebarFiles && m.Explorer != nil {
+					m.Explorer.ScrollDown(3, sidebarH)
+					return m, nil
+				} else if m.SidebarView == SidebarGit && m.GitView != nil {
+					m.GitView.ScrollDown(3, sidebarH)
+					return m, nil
+				}
+			}
+		}
+
 		// Mouse scroll wheel in editor
 		if m.Focus == FocusEditor && m.TabManager.ActiveTab() != nil {
 			tab := m.TabManager.ActiveTab()
@@ -890,7 +912,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			// Sidebar tree rows click (Row 2 to Height-2)
-			if m.SidebarVisible && msg.X < m.SidebarWidth && msg.Y >= 2 && msg.Y < m.Height-1 {
+			if m.SidebarVisible && msg.X < m.SidebarWidth && msg.Y >= 2 && msg.Y < m.Height-1 && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
 				if m.Focus != FocusSidebar && m.AutoSave {
 					_, _ = editor.TriggerAutoSave(m.TabManager)
 				}

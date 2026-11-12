@@ -1,0 +1,188 @@
+package git
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	gogit "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing/object"
+)
+
+func setupTestRepo(t *testing.T) (*Repo, string) {
+	tempDir, err := os.MkdirTemp("", "tui-gitview-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+
+	r, err := gogit.PlainInit(tempDir, false)
+	if err != nil {
+		t.Fatalf("Failed to init git: %v", err)
+	}
+
+	w, err := r.Worktree()
+	if err != nil {
+		t.Fatalf("Failed to get worktree: %v", err)
+	}
+
+	// Create initial commit
+	f := filepath.Join(tempDir, "base.txt")
+	_ = os.WriteFile(f, []byte("base"), 0644)
+	_, _ = w.Add("base.txt")
+	_, err = w.Commit("Initial commit", &gogit.CommitOptions{
+		Author: &object.Signature{
+			Name:  "Test",
+			Email: "test@example.com",
+			When:  time.Now(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Initial commit failed: %v", err)
+	}
+
+	repo, err := OpenRepo(tempDir)
+	if err != nil {
+		t.Fatalf("OpenRepo failed: %v", err)
+	}
+
+	return repo, tempDir
+}
+
+func TestGitViewPromptAndFullwidthButton(t *testing.T) {
+	repo, tempDir := setupTestRepo(t)
+	defer os.RemoveAll(tempDir)
+
+	gv := NewGitView(repo)
+
+	// 1. Verify commit prompt is empty (no '>')
+	if gv.CommitInput.Prompt != "" {
+		t.Errorf("Expected CommitInput.Prompt to be empty, got %q", gv.CommitInput.Prompt)
+	}
+
+	// 2. Clean repo with 1 unpushed commit -> should show Push button
+	rendered := gv.Render(30, 20, true)
+	if !strings.Contains(rendered, "Push") {
+		t.Errorf("Expected Push button rendered when working tree clean and unpushed commits exist")
+	}
+
+	// 3. Add an unstaged file -> button should switch to Commit
+	newFile := filepath.Join(tempDir, "mod.txt")
+	_ = os.WriteFile(newFile, []byte("mod"), 0644)
+	gv.Refresh()
+
+	rendered = gv.Render(30, 20, true)
+	if !strings.Contains(rendered, "Commit") {
+		t.Errorf("Expected Commit button rendered when working tree has changes")
+	}
+
+	// 4. Loading state
+	gv.IsLoading = true
+	gv.LoadingMsg = "Committing..."
+	rendered = gv.Render(30, 20, true)
+	if !strings.Contains(rendered, "Committing...") {
+		t.Errorf("Expected Committing... rendered when IsLoading is true")
+	}
+}
+
+func TestGitViewHeaderStageAndUnstageAll(t *testing.T) {
+	repo, tempDir := setupTestRepo(t)
+	defer os.RemoveAll(tempDir)
+
+	gv := NewGitView(repo)
+
+	// Create 2 unstaged files
+	_ = os.WriteFile(filepath.Join(tempDir, "f1.txt"), []byte("1"), 0644)
+	_ = os.WriteFile(filepath.Join(tempDir, "f2.txt"), []byte("2"), 0644)
+	gv.Refresh()
+
+	if len(gv.Changes) != 2 {
+		t.Fatalf("Expected 2 changes, got %d", len(gv.Changes))
+	}
+
+	_ = gv.Render(30, 20, true)
+
+	// Find Changes header row
+	var changesHeaderY int = -1
+	for y, tgt := range gv.ItemClickMap {
+		if tgt.Type == ClickSectionChanges {
+			changesHeaderY = y
+			break
+		}
+	}
+	if changesHeaderY == -1 {
+		t.Fatalf("ClickSectionChanges not found")
+	}
+
+	// Click [+] at right edge of Changes header
+	_, _, handled := gv.HandleMouseClick(28, changesHeaderY)
+	if !handled {
+		t.Fatalf("HandleMouseClick on [+] not handled")
+	}
+
+	if len(gv.Staged) != 2 {
+		t.Errorf("Expected 2 staged files after clicking [+], got %d", len(gv.Staged))
+	}
+
+	// Re-render and find Staged header row
+	_ = gv.Render(30, 20, true)
+	var stagedHeaderY int = -1
+	for y, tgt := range gv.ItemClickMap {
+		if tgt.Type == ClickSectionStaged {
+			stagedHeaderY = y
+			break
+		}
+	}
+	if stagedHeaderY == -1 {
+		t.Fatalf("ClickSectionStaged not found")
+	}
+
+	// Click [-] at right edge of Staged header
+	_, _, handled = gv.HandleMouseClick(28, stagedHeaderY)
+	if !handled {
+		t.Fatalf("HandleMouseClick on [-] not handled")
+	}
+
+	if len(gv.Staged) != 0 {
+		t.Errorf("Expected 0 staged files after clicking [-], got %d", len(gv.Staged))
+	}
+}
+
+func TestGitViewScrolling(t *testing.T) {
+	repo, tempDir := setupTestRepo(t)
+	defer os.RemoveAll(tempDir)
+
+	gv := NewGitView(repo)
+
+	// Create 15 files to make list long
+	for i := 0; i < 15; i++ {
+		p := filepath.Join(tempDir, filepath.Clean(string(rune('a'+i))+".txt"))
+		_ = os.WriteFile(p, []byte("x"), 0644)
+	}
+	gv.Refresh()
+
+	_ = gv.Render(30, 10, true)
+
+	if gv.TotalLines <= 10 {
+		t.Errorf("Expected TotalLines > 10, got %d", gv.TotalLines)
+	}
+
+	// ScrollDown
+	gv.ScrollDown(5, 10)
+	if gv.ScrollOffset != 5 {
+		t.Errorf("Expected ScrollOffset == 5, got %d", gv.ScrollOffset)
+	}
+
+	// ScrollUp
+	gv.ScrollUp(2)
+	if gv.ScrollOffset != 3 {
+		t.Errorf("Expected ScrollOffset == 3, got %d", gv.ScrollOffset)
+	}
+
+	// ScrollUp beyond 0
+	gv.ScrollUp(10)
+	if gv.ScrollOffset != 0 {
+		t.Errorf("Expected ScrollOffset clamped to 0, got %d", gv.ScrollOffset)
+	}
+}

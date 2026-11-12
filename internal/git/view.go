@@ -45,6 +45,7 @@ type GitView struct {
 	UnpushedCount int
 	IsLoading     bool
 	LoadingMsg    string
+	SpinnerFrame  int
 
 	// Last click coordinate mapping for mouse handling
 	ItemClickMap map[int]GitClickTarget
@@ -151,6 +152,12 @@ func (gv *GitView) StageSelected() error {
 		gv.Refresh()
 	}
 	return nil
+}
+
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+func (gv *GitView) AdvanceSpinner() {
+	gv.SpinnerFrame = (gv.SpinnerFrame + 1) % len(spinnerFrames)
 }
 
 func (gv *GitView) StageAll() error {
@@ -558,7 +565,8 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 		if txt == "" {
 			txt = "Loading..."
 		}
-		lines = append(lines, " "+btnStyle.Render(txt))
+		frame := spinnerFrames[gv.SpinnerFrame%len(spinnerFrames)]
+		lines = append(lines, " "+btnStyle.Render(fmt.Sprintf("%s %s", frame, txt)))
 		gv.ItemClickMap[currentY] = GitClickTarget{Type: ClickButtonRow}
 		currentY++
 	} else if hasChanges {

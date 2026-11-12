@@ -133,6 +133,14 @@ func marqueeTickCmd() tea.Cmd {
 	})
 }
 
+type gitLoadingTickMsg struct{}
+
+func gitLoadingTickCmd() tea.Cmd {
+	return tea.Tick(80*time.Millisecond, func(t time.Time) tea.Msg {
+		return gitLoadingTickMsg{}
+	})
+}
+
 type gitPushResultMsg struct {
 	err error
 }
@@ -168,6 +176,13 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case gitLoadingTickMsg:
+		if m.GitView != nil && m.GitView.IsLoading {
+			m.GitView.AdvanceSpinner()
+			return m, gitLoadingTickCmd()
+		}
+		return m, nil
+
 	case gitPushResultMsg:
 		if m.GitView != nil {
 			m.GitView.IsLoading = false
@@ -371,8 +386,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				commitMsg := m.GitView.CommitInput.Value()
 				m.GitView.IsLoading = true
 				m.GitView.LoadingMsg = "Committing..."
+				m.GitView.SpinnerFrame = 0
 				m.StatusBar.ShowToast("Melakukan commit...", false, 3*time.Second)
-				return m, gitCommitCmd(m.GitRepo, commitMsg)
+				return m, tea.Batch(gitCommitCmd(m.GitRepo, commitMsg), gitLoadingTickCmd())
 			}
 			return m, nil
 
@@ -999,8 +1015,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						commitMsg := m.GitView.CommitInput.Value()
 						m.GitView.IsLoading = true
 						m.GitView.LoadingMsg = "Committing..."
+						m.GitView.SpinnerFrame = 0
 						m.StatusBar.ShowToast("Melakukan commit...", false, 3*time.Second)
-						return m, gitCommitCmd(m.GitRepo, commitMsg)
+						return m, tea.Batch(gitCommitCmd(m.GitRepo, commitMsg), gitLoadingTickCmd())
 					} else if action == "push" {
 						if m.GitView.IsLoading {
 							return m, nil
@@ -1011,8 +1028,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 						m.GitView.IsLoading = true
 						m.GitView.LoadingMsg = "Pushing..."
+						m.GitView.SpinnerFrame = 0
 						m.StatusBar.ShowToast("Pushing ke remote repository...", false, 5*time.Second)
-						return m, gitPushCmd(m.GitRepo)
+						return m, tea.Batch(gitPushCmd(m.GitRepo), gitLoadingTickCmd())
 					}
 					if targetFile != nil {
 						if targetFile.Status == "?" || targetFile.Status == "U" {

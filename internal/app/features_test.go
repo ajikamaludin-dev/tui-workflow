@@ -343,8 +343,18 @@ func TestGitCommitAndPushButtonInteraction(t *testing.T) {
 
 	if cmd != nil {
 		resMsg := cmd()
-		newM, _ = m.Update(resMsg)
-		m = newM.(Model)
+		if batch, ok := resMsg.(tea.BatchMsg); ok {
+			for _, subCmd := range batch {
+				if subCmd != nil {
+					subMsg := subCmd()
+					newM, _ = m.Update(subMsg)
+					m = newM.(Model)
+				}
+			}
+		} else {
+			newM, _ = m.Update(resMsg)
+			m = newM.(Model)
+		}
 	}
 
 	if !strings.Contains(m.StatusBar.ToastMsg, "Commit sukses") {
@@ -383,8 +393,18 @@ func TestGitCommitAndPushButtonInteraction(t *testing.T) {
 
 	if cmd != nil {
 		resMsg := cmd()
-		newM, _ = m.Update(resMsg)
-		m = newM.(Model)
+		if batch, ok := resMsg.(tea.BatchMsg); ok {
+			for _, subCmd := range batch {
+				if subCmd != nil {
+					subMsg := subCmd()
+					newM, _ = m.Update(subMsg)
+					m = newM.(Model)
+				}
+			}
+		} else {
+			newM, _ = m.Update(resMsg)
+			m = newM.(Model)
+		}
 	}
 
 	if m.GitView.IsLoading {

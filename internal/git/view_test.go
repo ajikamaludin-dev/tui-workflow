@@ -186,3 +186,35 @@ func TestGitViewScrolling(t *testing.T) {
 		t.Errorf("Expected ScrollOffset clamped to 0, got %d", gv.ScrollOffset)
 	}
 }
+
+func TestGitViewSpinnerAnimation(t *testing.T) {
+	repo, tempDir := setupTestRepo(t)
+	defer os.RemoveAll(tempDir)
+
+	gv := NewGitView(repo)
+	gv.IsLoading = true
+	gv.LoadingMsg = "Pushing..."
+
+	// Frame 0 should have "⠋ Pushing..."
+	rendered := gv.Render(30, 20, true)
+	if !strings.Contains(rendered, "⠋ Pushing...") {
+		t.Errorf("Expected frame 0 '⠋ Pushing...', got %s", rendered)
+	}
+
+	// Advance to frame 1 -> "⠙ Pushing..."
+	gv.AdvanceSpinner()
+	rendered = gv.Render(30, 20, true)
+	if !strings.Contains(rendered, "⠙ Pushing...") {
+		t.Errorf("Expected frame 1 '⠙ Pushing...', got %s", rendered)
+	}
+
+	// Advance through all 10 frames to test wrap-around
+	for i := 0; i < len(spinnerFrames)*2; i++ {
+		gv.AdvanceSpinner()
+	}
+	// Should wrap around safely
+	rendered = gv.Render(30, 20, true)
+	if !strings.Contains(rendered, "Pushing...") {
+		t.Errorf("Expected rendered to contain Pushing... after full rotation, got %s", rendered)
+	}
+}

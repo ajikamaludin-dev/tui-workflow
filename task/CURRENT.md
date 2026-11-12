@@ -109,6 +109,24 @@ Menyelesaikan paket perbaikan Git Sidebar & Scrolling sesuai spesifikasi `TODO.m
 - [x] Update test `TestGitCommitAndPushButtonInteraction` di `internal/app/features_test.go`
 - [x] Verifikasi: `go vet ./...` ✓, `go test -v -race -count=1 ./...` ✓
 
+## Improvement 2 (2026-11-12 — Braille Spinner Animation on Push & Commit Buttons)
+
+### Analisis Fakta
+- User meminta penambahan animasi visual saat proses `Pushing...` atau `Committing...` berlangsung agar pengguna mendapatkan feedback visual dinamis dan tidak terkesan statis atau macet.
+
+### Rencana Perbaikan
+1. Tambahkan frame spinner Braille dots (`⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏`) dan method `AdvanceSpinner()` pada `GitView` di `internal/git/view.go`.
+2. Format teks tombol loading menjadi `%s %s` (misal `⠋ Pushing...` -> `⠙ Pushing...`).
+3. Tambahkan ticker periodic `gitLoadingTickCmd` (80ms interval) di `internal/app/model.go` yang aktif saat `IsLoading == true` dan otomatis berhenti saat proses selesai (zero idle CPU).
+4. Buat unit test `TestGitViewSpinnerAnimation` di `internal/git/view_test.go`.
+
+### Tasks
+- [x] Tambahkan `SpinnerFrame`, `spinnerFrames`, dan `AdvanceSpinner()` di `internal/git/view.go`
+- [x] Render frame spinner di tombol loading `internal/git/view.go`
+- [x] Tambahkan message `gitLoadingTickMsg` dan dispatch tick di `internal/app/model.go`
+- [x] Tambahkan unit test `TestGitViewSpinnerAnimation` di `internal/git/view_test.go`
+- [x] Verifikasi: `go vet ./...` ✓, `go test -v -race -count=1 ./...` ✓
+
 ## Decisions
 - **Tombol Bergantian**: Tombol Commit diprioritaskan selama ada perubahan di Staged atau Changes. Jika working tree bersih, tombol beralih ke Push bila terdapat commit yang belum dipublikasikan ke remote.
 - **Unstage All Implementation**: Menggunakan `worktree.Reset` dengan `MixedReset` untuk mengembalikan index ke commit HEAD secara aman tanpa menyentuh file fisik di disk.

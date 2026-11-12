@@ -257,7 +257,7 @@ func (m Model) renderEditor(width, height int) string {
 			body = activeTab.Buffer.Render(width, bodyHeight, activeTab.Path, m.Focus == FocusEditor)
 		}
 	} else {
-		bodyContent := "\n  Selamat Datang di tui-workflow (v1.1.0)\n\n" +
+		bodyContent := "\n  Selamat Datang di tui-workflow (v0.1.1)\n\n" +
 			"  Tidak ada file yang sedang dibuka.\n\n" +
 			"  • Buka file dari File Explorer di sebelah kiri (Enter atau Klik)\n" +
 			"  • Buat file baru dengan tombol 'a' di Explorer\n" +
@@ -333,7 +333,7 @@ func renderHelpModal() string {
 func renderAboutModal() string {
 	content := "┌─ ABOUT tui-workflow ─────────────────────────────┐\n" +
 		"│                                                  │\n" +
-		"│  tui-workflow v1.1.0                             │\n" +
+		"│  tui-workflow v0.1.1                             │\n" +
 		"│  Modern TUI Text Editor & Git Workflow           │\n" +
 		"│                                                  │\n" +
 		"│  Tech Stack:                                     │\n" +

@@ -1,6 +1,6 @@
 # Product Requirement Document (PRD)
 ## Project: `tui-workflow`
-**Version:** 1.1.0  
+**Version:** v0.1.1  
 **Status:** Approved  
 **Language/Framework:** Go (1.24+), Bubble Tea Ecosystem 
 ## 1. Executive Summary
@@ -85,7 +85,7 @@ Layout terminal dibagi menjadi 4 zona: Baris 0 (Top Menu), Kolom 1 (Sidebar: Fil
      - `Switch Git Branch...` (`Alt+b`) ➔ Membuka modal dialog pilih branch Git.
      - `Keyboard Shortcuts` (`?`) ➔ Membuka modal cheatsheet shortcut.
    - `[ About ]` (`Alt+a`):
-     - Membuka modal dialog info aplikasi (Nama, Versi 1.1.0, Tech Stack Go + Bubble Tea + Lipgloss, Lisensi).
+     - Membuka modal dialog info aplikasi (Nama, Versi v0.1.1, Tech Stack Go + Bubble Tea + Lipgloss, Lisensi).
 2. **Interaksi Dropdown:**
    - Klik mouse pada judul menu untuk membuka dropdown.
    - Navigasi keyboard `Up` / `Down` dan `Enter` untuk memilih item.

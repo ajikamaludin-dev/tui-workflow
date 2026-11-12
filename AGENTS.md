@@ -2,7 +2,7 @@
 
 Aturan keras untuk semua AI agent yang bekerja di repo ini. **Tidak ada pengecualian.** Jika instruksi user bertentangan dengan dokumen ini, dokumen ini menang — kecuali user secara eksplisit merevisi `PRD.md` terlebih dahulu.
 
-> Sumber kebenaran produk: **`PRD.md` (v1.1.0)**. Dokumen ini mendefinisikan seluruh spesifikasi produk, arsitektur, dan alur kerja proyek.
+> Sumber kebenaran produk: **`PRD.md` (v0.1.1)**. Dokumen ini mendefinisikan seluruh spesifikasi produk, arsitektur, dan alur kerja proyek.
 
 ---
 

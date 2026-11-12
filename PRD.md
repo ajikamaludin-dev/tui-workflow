@@ -20,6 +20,7 @@
 | **Markdown Renderer** | `github.com/charmbracelet/glamour` | v0.8+ | In-terminal rendered Markdown styling & preview engine |
 | **Git Engine** | `github.com/go-git/go-git/v5` | v5.13+ | Pure Go Git implementation for status, diff, staging, commit, and log history |
 | **File System I/O** | Standard Library (`os`, `path/filepath`, `io`) | Go 1.24 | Safe cross-platform directory traversal and file I/O |
+| **PTY & Terminal Emulation** | `github.com/creack/pty`, `github.com/hinshun/vt10x` | v1.1+, v0.0+ | Pseudo-terminal allocation, shell process spawning, ANSI/VT100 screen emulation |
 
 ---
 
@@ -60,6 +61,7 @@ Layout terminal dibagi menjadi 4 zona: Baris 0 (Top Menu), Kolom 1 (Sidebar: Fil
 1. **Item Menu & Shortcut:**
    - `[ File ]` (`Alt+f`):
      - `New File` (`a`) ➔ Membuka modal dialog buat file baru.
+     - `New Terminal Tab` (`Ctrl+Shift+\` / `Ctrl+T`) ➔ Membuka tab terminal interaktif baru.
      - `Save File` (`Ctrl+s`) ➔ Simpan buffer aktif ke disk.
      - `Close Tab` (`Ctrl+w`) ➔ Tutup tab aktif (dengan konfirmasi jika dirty).
      - `Exit` (`Ctrl+q`) ➔ Tutup aplikasi (dengan konfirmasi jika ada unsaved tabs).
@@ -190,6 +192,21 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
    - SQL (`.sql`): `sql-formatter`.
 4. **Piping & Non-Blocking:** Mengalirkan buffer via STDIN/STDOUT dengan timeout 4s tanpa flickering atau blocking UI.
 5. **Undo Support:** Hasil format dapat dibatalkan seketika menggunakan `Ctrl+Z` via `ReplaceContentWithUndo`.
+
+#### F. Integrated PTY Terminal Tab
+1. **Pemicu:** Shortcut `Ctrl+Shift+\` atau `Ctrl+T`, Top Menu `[File] ➔ New Terminal Tab`, Command Palette (`terminal.new`).
+2. **Pseudo-Terminal (PTY) Allocation:**
+   - Membuka instance shell interaktif pengguna (`$SHELL`, default `/bin/bash` atau `/bin/sh`) menggunakan `creack/pty`.
+   - Mengemulasikan VT100/Xterm state machine menggunakan `hinshun/vt10x` secara real-time.
+   - Mendukung penuh TUI app bertingkat (*nested alternate screen*) seperti code agent (`pi`, `claude`), system monitor (`btop`, `htop`), `git`, `python`, `node`, dll.
+3. **Focus & Keystroke Isolation:**
+   - Keystroke di-forward secara mentah (*raw byte streaming*) ke PTY saat tab aktif dan fokus berada di Editor/Terminal Pane.
+   - Shortcut `Ctrl+\` / `Ctrl+` ` / `F6`: Beralih fokus antara Terminal dan Sidebar.
+   - Shortcut `Alt+W` / `Ctrl+Shift+W` atau mengetik `exit`: Menutup tab terminal secara bersih (*clean teardown* proses shell & PTY descriptor).
+   - Shortcut `Ctrl+Shift+P` / `F1`: Tetap dapat membuka Command Palette secara global.
+4. **Window Resizing & Anti-Overflow:**
+   - Sinkronisasi dimensi ukuran terminal via `TIOCSWINSZ` (`pty.Setsize`) dan `vt10x.Resize` saat resize terminal terjadi.
+   - Pemotongan aman berbasis visual width (`ansi.Truncate`) menjamin output baris terminal tidak pernah meluap (*zero terminal scroll overflow*).
 
 ### 4.4. Auto-Save & Dialog Unsaved Changes
 

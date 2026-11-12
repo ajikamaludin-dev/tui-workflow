@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/x/ansi"
 	"tui-workflow/internal/git"
+	"tui-workflow/internal/terminal"
 	"tui-workflow/internal/ui"
 )
 
@@ -140,6 +141,15 @@ func (tm *TabManager) OpenDiff(path, original, modified string) *Tab {
 	return tab
 }
 
+// OpenTerminal adds and activates a new terminal tab.
+func (tm *TabManager) OpenTerminal(id, name string, term *terminal.TerminalView) *Tab {
+	tab := NewTerminalTab(id, name, term)
+	tm.Tabs = append(tm.Tabs, tab)
+	tm.ActiveIndex = len(tm.Tabs) - 1
+	tm.EnsureActiveTabVisible()
+	return tab
+}
+
 func (tm *TabManager) SaveActive() error {
 	tab := tm.ActiveTab()
 	if tab == nil || tab.Buffer == nil {
@@ -185,6 +195,10 @@ func (tm *TabManager) CloseTab(idx int) {
 	if idx < 0 || idx >= len(tm.Tabs) {
 		return
 	}
+	tabToClose := tm.Tabs[idx]
+	if tabToClose.Type == TabTerminal && tabToClose.TerminalView != nil {
+		_ = tabToClose.TerminalView.Close()
+	}
 
 	tm.Tabs = append(tm.Tabs[:idx], tm.Tabs[idx+1:]...)
 	if tm.ActiveIndex >= len(tm.Tabs) {
@@ -200,10 +214,15 @@ func (tm *TabManager) CloseTab(idx int) {
 	}
 }
 
-// CloseOtherTabs closes all tabs except the specified index.
+// CloseOtherTabs closes all tabs except specified index.
 func (tm *TabManager) CloseOtherTabs(keepIdx int) {
 	if keepIdx < 0 || keepIdx >= len(tm.Tabs) {
 		return
+	}
+	for i, tab := range tm.Tabs {
+		if i != keepIdx && tab.Type == TabTerminal && tab.TerminalView != nil {
+			_ = tab.TerminalView.Close()
+		}
 	}
 	target := tm.Tabs[keepIdx]
 	tm.Tabs = []*Tab{target}
@@ -211,10 +230,16 @@ func (tm *TabManager) CloseOtherTabs(keepIdx int) {
 	tm.TabScrollOffset = 0
 }
 
-// CloseTabsToRight closes all tabs to the right of target index.
+// CloseTabsToRight closes all tabs right target index.
 func (tm *TabManager) CloseTabsToRight(idx int) {
 	if idx < 0 || idx >= len(tm.Tabs) {
 		return
+	}
+	for i := idx + 1; i < len(tm.Tabs); i++ {
+		tab := tm.Tabs[i]
+		if tab.Type == TabTerminal && tab.TerminalView != nil {
+			_ = tab.TerminalView.Close()
+		}
 	}
 	tm.Tabs = tm.Tabs[:idx+1]
 	if tm.ActiveIndex > idx {
@@ -228,10 +253,16 @@ func (tm *TabManager) CloseTabsToRight(idx int) {
 	}
 }
 
-// CloseTabsToLeft closes all tabs to the left of target index.
+// CloseTabsToLeft closes all tabs left target index.
 func (tm *TabManager) CloseTabsToLeft(idx int) {
 	if idx <= 0 || idx >= len(tm.Tabs) {
 		return
+	}
+	for i := 0; i < idx; i++ {
+		tab := tm.Tabs[i]
+		if tab.Type == TabTerminal && tab.TerminalView != nil {
+			_ = tab.TerminalView.Close()
+		}
 	}
 	tm.Tabs = append([]*Tab(nil), tm.Tabs[idx:]...)
 	if tm.ActiveIndex < idx {
@@ -249,6 +280,11 @@ func (tm *TabManager) CloseTabsToLeft(idx int) {
 
 // CloseAllTabs closes all tabs.
 func (tm *TabManager) CloseAllTabs() {
+	for _, tab := range tm.Tabs {
+		if tab.Type == TabTerminal && tab.TerminalView != nil {
+			_ = tab.TerminalView.Close()
+		}
+	}
 	tm.Tabs = make([]*Tab, 0)
 	tm.ActiveIndex = 0
 	tm.TabScrollOffset = 0

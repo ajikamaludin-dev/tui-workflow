@@ -60,6 +60,12 @@
 - Klik tombol `[+]` dan `[-]` pada Git sidebar.
 - Mouse wheel scrolling pada editor buffer, markdown preview, dan split diff view.
 
+### 8. 💻 Integrated Pseudo-Terminal (PTY) Tab
+- **Full PTY Shell:** Membuka sesi shell interaktif langsung di tab editor menggunakan `creack/pty` dan emulasi VT100/Xterm via `hinshun/vt10x`.
+- **Dukungan Coding Agent & TUI:** Berjalan mulus menjalankan TUI nested dan coding agent seperti `pi`, `claude`, `btop`, `git`, `python`, `node`.
+- **Zero Scroll Overflow:** Clamping visual width dengan `ansi.Truncate` menjamin render terminal tidak pernah meluap dari batas terminal.
+- **Isolasi Keystroke & Safe Teardown:** Aliran input raw terisolasi di tab terminal aktif tanpa konflik dengan editor; teardown bersih mematikan proses shell tanpa zombie process.
+
 ---
 
 ## ⌨️ Daftar Pintasan Keyboard (Keybindings)
@@ -68,6 +74,8 @@
 | Pintasan | Aksi |
 |---|---|
 | `Ctrl + Q` | Keluar dari aplikasi (dengan konfirmasi jika ada buffer kotor) |
+| `Ctrl + Shift + \` / `Ctrl + T` | Buka tab terminal terintegrasi baru |
+| `Ctrl + \` | Pindah fokus antara Terminal dan Sidebar |
 | `Ctrl + B` | Sembunyikan / Tampilkan Sidebar (Toggle Sidebar) |
 | `Ctrl + E` / `F6` | Pindah fokus antara Sidebar dan Editor |
 | `Alt + 1` | Beralih Sidebar ke Tampilan File Explorer |
@@ -130,6 +138,16 @@
 | `Tab` | Pindah fokus ke kotak input pesan commit |
 | `Alt + G` / klik `[✨ AI]` | Hasilkan pesan commit otomatis menggunakan AI dari perubahan staged |
 | `Ctrl + Enter` | Lakukan Commit dengan pesan yang diketik |
+
+### Terminal Tab (PTY)
+| Pintasan | Aksi |
+|---|---|
+| `Ctrl + Shift + \` / `Ctrl + T` | Buka tab terminal terintegrasi baru |
+| `Ctrl + \` / `Ctrl + \`` / `F6` | Pindah fokus antara Terminal dan Sidebar |
+| `Alt + W` / `Ctrl + Shift + W` | Tutup tab terminal aktif |
+| `Ctrl + N` | Pindah ke tab berikutnya |
+| `Ctrl + Shift + P` / `F1` | Buka Command Palette |
+| `exit` | Tutup shell dan tutup tab terminal otomatis |
 
 ---
 

@@ -79,7 +79,7 @@ func TestMenuBarMouseClick(t *testing.T) {
 		t.Errorf("Menu should close after item click")
 	}
 
-	// 3. Re-open File menu and click on item 1 "Open File" at Y = 3
+	// 3. Re-open File menu and click on item 1 "New Terminal Tab" at Y = 3
 	mb.Toggle(0)
 	action, handled = mb.HandleMouse(tea.MouseMsg{
 		X:      fileCat.StartX + 2,
@@ -87,15 +87,27 @@ func TestMenuBarMouseClick(t *testing.T) {
 		Action: tea.MouseActionPress,
 		Button: tea.MouseButtonLeft,
 	})
+	if !handled || action != "terminal.new" {
+		t.Errorf("Expected action 'terminal.new', got %q (handled=%v)", action, handled)
+	}
+
+	// 3b. Re-open File menu and click on item 2 "Open File" at Y = 4
+	mb.Toggle(0)
+	action, handled = mb.HandleMouse(tea.MouseMsg{
+		X:      fileCat.StartX + 2,
+		Y:      4,
+		Action: tea.MouseActionPress,
+		Button: tea.MouseButtonLeft,
+	})
 	if !handled || action != "file.open" {
 		t.Errorf("Expected action 'file.open', got %q (handled=%v)", action, handled)
 	}
 
-	// 4. Re-open File menu and click on item 3 "Save File" at Y = 5
+	// 4. Re-open File menu and click on item 4 "Save File" at Y = 6
 	mb.Toggle(0)
 	action, handled = mb.HandleMouse(tea.MouseMsg{
 		X:      fileCat.StartX + 2,
-		Y:      5,
+		Y:      6,
 		Action: tea.MouseActionPress,
 		Button: tea.MouseButtonLeft,
 	})

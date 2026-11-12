@@ -15,3 +15,5 @@
 | 2026-11-12 | Integrasi AI LLM Model (OpenAI API Format) & AI Commit Message Generator | done | dev |
 | 2026-11-12 | Syntax Highlighting with Color in Editor | done | dev |
 | 2026-11-12 | Fix Text Wrap and Tab Overflow Overwriting Line Number Gutter | done | dev |
+| 2026-11-12 | Formatter Engine & Smart Fallback Chain | done | dev |
+| 2026-11-12 | Integrated PTY Terminal Tab | done | dev |

@@ -249,7 +249,9 @@ func (m Model) renderEditor(width, height int) string {
 
 	activeTab := m.TabManager.ActiveTab()
 	if activeTab != nil {
-		if activeTab.IsDiff && activeTab.DiffView != nil {
+		if activeTab.Type == editor.TabTerminal && activeTab.TerminalView != nil {
+			body = activeTab.TerminalView.Render(width, bodyHeight, m.Focus == FocusEditor)
+		} else if activeTab.IsDiff && activeTab.DiffView != nil {
 			body = activeTab.DiffView.Render(width, bodyHeight, m.Focus == FocusEditor)
 		} else if activeTab.Type == editor.TabMarkdown && activeTab.MarkdownPreview && activeTab.MarkdownViewer != nil {
 			body = activeTab.MarkdownViewer.Render(activeTab.Buffer.Text(), width, bodyHeight)
@@ -317,6 +319,10 @@ func renderHelpModal() string {
 │   • Ctrl+M / Alt+M  : Toggle Preview Markdown    │
 │   • Ctrl+A / C / V  : Pilih / Salin / Tempel Teks│
 │                                                  │
+│ Terminal & Shell (PTY):                          │
+│   • Ctrl+Shift+\    : Buka Tab Terminal Baru     │
+│   • Ctrl+\          : Ganti Fokus Terminal / TUI │
+│   • Ctrl+Shift+W    : Tutup Tab Terminal Aktif   │
 │ Git Source Control:                              │
 │   • Alt+B           : Ganti Branch (Checkout)    │
 │   • Alt+G           : AI Generate Commit Message │

@@ -19,6 +19,7 @@ import (
 	"tui-workflow/internal/formatter"
 	"tui-workflow/internal/git"
 	"tui-workflow/internal/search"
+	"tui-workflow/internal/terminal"
 	"tui-workflow/internal/ui"
 	"tui-workflow/internal/ui/dialog"
 )
@@ -254,6 +255,56 @@ func (m *Model) triggerFormatCurrentBuffer() (Model, tea.Cmd) {
 	return *m, formatBufferCmd(tabID, content, filePath, workspaceDir, overrides)
 }
 
+type TerminalOutputMsg struct {
+	TabID string
+}
+
+type TerminalExitMsg struct {
+	TabID string
+	Err   error
+}
+
+func waitForTerminalOutput(term *terminal.TerminalView) tea.Cmd {
+	if term == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		_, ok := <-term.OutputChan()
+		if !ok {
+			return TerminalExitMsg{TabID: term.ID}
+		}
+		return TerminalOutputMsg{TabID: term.ID}
+	}
+}
+
+func (m *Model) openNewTerminalTab() (Model, tea.Cmd) {
+	contentWidth := m.Width - m.SidebarWidth
+	if !m.SidebarVisible {
+		contentWidth = m.Width
+	}
+	bodyHeight := m.Height - 3 // Row 0: Menu, Row 1: Tab bar, Last row: Status bar
+	if contentWidth < 20 {
+		contentWidth = 80
+	}
+	if bodyHeight < 5 {
+		bodyHeight = 24
+	}
+
+	termID := fmt.Sprintf("term:%d", time.Now().UnixNano())
+	term, err := terminal.NewTerminalView(termID, contentWidth, bodyHeight, "", m.RootDir)
+	if err != nil {
+		m.StatusBar.ShowToast(fmt.Sprintf("Gagal membuka terminal: %v", err), true, 3*time.Second)
+		return *m, nil
+	}
+
+	m.TabManager.OpenTerminal(termID, term.Title, term)
+	m.Focus = FocusEditor
+	m.syncStatusBarWithActiveTab()
+	m.StatusBar.ShowToast("Terminal dibuka", false, 2*time.Second)
+
+	return *m, waitForTerminalOutput(term)
+}
+
 type aiCommitGeneratedMsg struct {
 	message string
 }
@@ -415,6 +466,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.GlobalSearch != nil {
 			m.GlobalSearch.SetWidth(m.modalWidth())
+		}
+		contentWidth := m.Width - m.SidebarWidth
+		if !m.SidebarVisible {
+			contentWidth = m.Width
+		}
+		bodyHeight := m.Height - 3
+		for _, tab := range m.TabManager.Tabs {
+			if tab.Type == editor.TabTerminal && tab.TerminalView != nil {
+				tab.TerminalView.Resize(contentWidth, bodyHeight)
+			}
+		}
+		return m, nil
+
+	case TerminalOutputMsg:
+		for _, tab := range m.TabManager.Tabs {
+			if tab.ID == msg.TabID && tab.Type == editor.TabTerminal && tab.TerminalView != nil {
+				return m, waitForTerminalOutput(tab.TerminalView)
+			}
+		}
+		return m, nil
+
+	case TerminalExitMsg:
+		for i, tab := range m.TabManager.Tabs {
+			if tab.ID == msg.TabID && tab.Type == editor.TabTerminal {
+				m.TabManager.CloseTab(i)
+				m.syncStatusBarWithActiveTab()
+				m.StatusBar.ShowToast("Terminal ditutup (exit)", false, 2*time.Second)
+				break
+			}
 		}
 		return m, nil
 
@@ -636,8 +716,50 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// 5.5. Active Terminal Tab Focus & Raw Keystroke Interception
+		if m.Focus == FocusEditor {
+			tab := m.TabManager.ActiveTab()
+			if tab != nil && tab.Type == editor.TabTerminal && tab.TerminalView != nil {
+				switch msg.String() {
+				case "ctrl+\\", "ctrl+`", "f6":
+					m.Focus = FocusSidebar
+					m.StatusBar.ShowToast("Fokus: Sidebar (tekan Ctrl+\\ untuk kembali ke Terminal)", false, 2*time.Second)
+					return m, nil
+				case "ctrl+shift+\\", "ctrl+t":
+					var cmd tea.Cmd
+					m, cmd = m.openNewTerminalTab()
+					return m, cmd
+				case "ctrl+shift+w", "alt+w":
+					m.TabManager.CloseTab(m.TabManager.ActiveIndex)
+					m.syncStatusBarWithActiveTab()
+					m.StatusBar.ShowToast("Terminal ditutup", false, 1500*time.Millisecond)
+					return m, nil
+				case "ctrl+n":
+					m.TabManager.NextTab()
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+				case "ctrl+shift+p", "ctrl+P", "f1":
+					m.openCommandPalette()
+					return m, nil
+				default:
+					bytes := terminal.KeyToBytes(msg)
+					if len(bytes) > 0 {
+						_, _ = tab.TerminalView.Write(bytes)
+					}
+					return m, nil
+				}
+			}
+		}
+
 		// 6. Global Shortcuts
 		switch msg.String() {
+		case "ctrl+shift+\\", "ctrl+t":
+			var cmd tea.Cmd
+			m, cmd = m.openNewTerminalTab()
+			return m, cmd
+		case "ctrl+\\", "ctrl+`":
+			m.toggleFocus()
+			return m, nil
 		case "ctrl+q":
 			if m.hasDirtyTabs() && !m.AutoSave {
 				m.ConfirmDialog.Open(
@@ -1903,6 +2025,11 @@ func (m *Model) openCommandPalette() {
 		{ID: "view.search", Title: "Switch to Search & Replace Sidebar", Category: "View", Shortcut: "Alt+3"},
 		{ID: "view.markdown", Title: "Toggle Markdown Live Preview", Category: "View", Shortcut: "Ctrl+M"},
 
+		// Terminal
+		{ID: "terminal.new", Title: "Terminal: New Integrated Terminal", Category: "Terminal", Shortcut: "Ctrl+Shift+\\"},
+		{ID: "terminal.toggle_focus", Title: "Terminal: Toggle Focus (Terminal / TUI)", Category: "Terminal", Shortcut: "Ctrl+\\"},
+		{ID: "terminal.close", Title: "Terminal: Close Active Terminal Tab", Category: "Terminal", Shortcut: "Ctrl+Shift+W"},
+
 		// Settings & Tools
 		{ID: "setting.autosave", Title: "Toggle Auto-Save", Category: "Setting", Shortcut: "Alt+S"},
 		{ID: "setting.hidden", Title: "Toggle Hidden Files", Category: "Setting", Shortcut: "."},
@@ -2040,6 +2167,14 @@ func (m *Model) syncStatusBarWithActiveTab() {
 			m.StatusBar.Line = tab.DiffView.ScrollOffset + 1
 			m.StatusBar.Col = 1
 		}
+		return
+	}
+
+	if tab.Type == editor.TabTerminal {
+		m.StatusBar.FilePath = tab.Name
+		m.StatusBar.FileSyntax = "Terminal (PTY)"
+		m.StatusBar.Line = 1
+		m.StatusBar.Col = 1
 		return
 	}
 
@@ -2366,6 +2501,21 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 	case "file.new":
 		parentDir := m.getSelectedParentDir()
 		m.InputDialog.Open(dialog.InputNewFile, "Buat File Baru", parentDir, "")
+	case "terminal.new":
+		var cmd tea.Cmd
+		*m, cmd = m.openNewTerminalTab()
+		return cmd
+	case "terminal.toggle_focus":
+		m.toggleFocus()
+		return nil
+	case "terminal.close":
+		tab := m.TabManager.ActiveTab()
+		if tab != nil && tab.Type == editor.TabTerminal {
+			m.TabManager.CloseTab(m.TabManager.ActiveIndex)
+			m.syncStatusBarWithActiveTab()
+			m.StatusBar.ShowToast("Terminal ditutup", false, 1500*time.Millisecond)
+		}
+		return nil
 
 	case "file.open":
 		m.FilePicker.Open(dialog.PickerModeFile, m.RootDir, m.Explorer.ShowHidden)

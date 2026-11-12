@@ -8,6 +8,7 @@ import (
 
 	"tui-workflow/internal/git"
 	"tui-workflow/internal/markdown"
+	"tui-workflow/internal/terminal"
 )
 
 type TabType int
@@ -16,6 +17,7 @@ const (
 	TabFile TabType = iota
 	TabMarkdown
 	TabDiff
+	TabTerminal
 )
 
 type Tab struct {
@@ -26,6 +28,7 @@ type Tab struct {
 	Buffer          *Buffer
 	DiffView        *git.DiffView
 	MarkdownViewer  *markdown.MarkdownViewer
+	TerminalView    *terminal.TerminalView
 	MarkdownPreview bool
 	IsDiff          bool
 	LastModTime     time.Time
@@ -66,6 +69,19 @@ func NewDiffTab(path, original, modified string) *Tab {
 		DiffView:        git.NewDiffView(path, original, modified),
 		MarkdownPreview: false,
 		IsDiff:          true,
+	}
+}
+
+func NewTerminalTab(id, name string, term *terminal.TerminalView) *Tab {
+	if name == "" && term != nil {
+		name = term.Title
+	}
+	return &Tab{
+		ID:           id,
+		Path:         id,
+		Name:         name,
+		Type:         TabTerminal,
+		TerminalView: term,
 	}
 }
 

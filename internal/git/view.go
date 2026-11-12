@@ -100,9 +100,35 @@ func (gv *GitView) Refresh() {
 	if gv.Repo == nil {
 		return
 	}
+
+	var prevStagedPath, prevChangesPath string
+	if gv.StagedIdx >= 0 && gv.StagedIdx < len(gv.Staged) {
+		prevStagedPath = gv.Staged[gv.StagedIdx].Path
+	}
+	if gv.ChangesIdx >= 0 && gv.ChangesIdx < len(gv.Changes) {
+		prevChangesPath = gv.Changes[gv.ChangesIdx].Path
+	}
+
 	staged, unstaged, _ := gv.Repo.GetStatus()
 	gv.Staged = staged
 	gv.Changes = unstaged
+
+	if prevStagedPath != "" {
+		for i, f := range gv.Staged {
+			if f.Path == prevStagedPath {
+				gv.StagedIdx = i
+				break
+			}
+		}
+	}
+	if prevChangesPath != "" {
+		for i, f := range gv.Changes {
+			if f.Path == prevChangesPath {
+				gv.ChangesIdx = i
+				break
+			}
+		}
+	}
 
 	history, _ := gv.Repo.GetHistory(10)
 	gv.History = history

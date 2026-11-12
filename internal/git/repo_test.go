@@ -301,3 +301,63 @@ func TestRepoDiscardAndBranches(t *testing.T) {
 		t.Errorf("Expected non-empty staged diff, got empty")
 	}
 }
+
+func TestGetStatusDeterministicOrder(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "git-order-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	_, err = gogit.PlainInit(tempDir, false)
+	if err != nil {
+		t.Fatalf("Failed to init git: %v", err)
+	}
+
+	repo, err := OpenRepo(tempDir)
+	if err != nil {
+		t.Fatalf("OpenRepo failed: %v", err)
+	}
+
+	// Create several files in non-alphabetical order
+	filenames := []string{"zebra.txt", "alpha.txt", "mango.txt", "beta.txt", "charlie.txt"}
+	for _, fn := range filenames {
+		_ = os.WriteFile(filepath.Join(tempDir, fn), []byte("content "+fn), 0644)
+	}
+
+	expectedOrder := []string{"alpha.txt", "beta.txt", "charlie.txt", "mango.txt", "zebra.txt"}
+
+	// Call GetStatus multiple times, verify order is always identical and sorted
+	for iter := 0; iter < 10; iter++ {
+		_, unstaged, err := repo.GetStatus()
+		if err != nil {
+			t.Fatalf("GetStatus iteration %d failed: %v", iter, err)
+		}
+		if len(unstaged) != len(expectedOrder) {
+			t.Fatalf("Expected %d unstaged files, got %d", len(expectedOrder), len(unstaged))
+		}
+		for i, expected := range expectedOrder {
+			if unstaged[i].Path != expected {
+				t.Fatalf("Iteration %d: expected unstaged[%d] to be %q, got %q", iter, i, expected, unstaged[i].Path)
+			}
+		}
+	}
+
+	// Stage two files and verify staged list is also sorted
+	_ = repo.StageFile("zebra.txt")
+	_ = repo.StageFile("beta.txt")
+
+	for iter := 0; iter < 10; iter++ {
+		staged, _, err := repo.GetStatus()
+		if err != nil {
+			t.Fatalf("GetStatus with staged iteration %d failed: %v", iter, err)
+		}
+		if len(staged) != 2 {
+			t.Fatalf("Expected 2 staged files, got %d", len(staged))
+		}
+		if staged[0].Path != "beta.txt" || staged[1].Path != "zebra.txt" {
+			t.Fatalf("Expected staged sorted [beta.txt, zebra.txt], got [%s, %s]", staged[0].Path, staged[1].Path)
+		}
+	}
+}
+

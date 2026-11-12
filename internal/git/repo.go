@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -126,6 +127,13 @@ func (r *Repo) GetStatus() (staged []GitFileStatus, unstaged []GitFileStatus, er
 			})
 		}
 	}
+
+	sort.Slice(staged, func(i, j int) bool {
+		return staged[i].Path < staged[j].Path
+	})
+	sort.Slice(unstaged, func(i, j int) bool {
+		return unstaged[i].Path < unstaged[j].Path
+	})
 
 	return staged, unstaged, nil
 }
@@ -416,6 +424,7 @@ func (r *Repo) GetBranches() (branches []string, current string, err error) {
 		}
 		return nil
 	})
+	sort.Strings(branches)
 	return branches, current, nil
 }
 

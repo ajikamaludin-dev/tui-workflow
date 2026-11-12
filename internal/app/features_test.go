@@ -329,7 +329,7 @@ func TestGitCommitAndPushButtonInteraction(t *testing.T) {
 	// Click [Commit] (X = 4)
 	// Click Y is relative to sidebar content row (relLine = msg.Y - 2)
 	screenY := buttonY + 2
-	newM, _ := m.Update(tea.MouseMsg{
+	newM, cmd := m.Update(tea.MouseMsg{
 		X:      4,
 		Y:      screenY,
 		Button: tea.MouseButtonLeft,
@@ -337,18 +337,59 @@ func TestGitCommitAndPushButtonInteraction(t *testing.T) {
 	})
 	m = newM.(Model)
 
+	if !m.GitView.IsLoading || m.GitView.LoadingMsg != "Committing..." {
+		t.Errorf("Expected IsLoading=true with Committing..., got loading=%v msg=%q", m.GitView.IsLoading, m.GitView.LoadingMsg)
+	}
+
+	if cmd != nil {
+		resMsg := cmd()
+		newM, _ = m.Update(resMsg)
+		m = newM.(Model)
+	}
+
 	if !strings.Contains(m.StatusBar.ToastMsg, "Commit sukses") {
 		t.Errorf("Expected toast commit sukses, got %q", m.StatusBar.ToastMsg)
 	}
+	if m.GitView.IsLoading {
+		t.Errorf("Expected IsLoading=false after commit finished")
+	}
 
-	// Click [Push] (X = 12)
-	newM, _ = m.Update(tea.MouseMsg{
-		X:      12,
+	// Working tree is now clean, unpushed commits exist -> re-render to switch button to Push
+	_ = m.GitView.Render(30, 20, true)
+	buttonY = -1
+	for y, tgt := range m.GitView.ItemClickMap {
+		if tgt.Type == git.ClickButtonRow {
+			buttonY = y
+			break
+		}
+	}
+	if buttonY == -1 {
+		t.Fatalf("ClickButtonRow not found after commit")
+	}
+	screenY = buttonY + 2
+
+	// Click [Push]
+	newM, cmd = m.Update(tea.MouseMsg{
+		X:      4,
 		Y:      screenY,
 		Button: tea.MouseButtonLeft,
 		Action: tea.MouseActionPress,
 	})
 	m = newM.(Model)
+
+	if !m.GitView.IsLoading || m.GitView.LoadingMsg != "Pushing..." {
+		t.Errorf("Expected IsLoading=true with Pushing..., got loading=%v msg=%q", m.GitView.IsLoading, m.GitView.LoadingMsg)
+	}
+
+	if cmd != nil {
+		resMsg := cmd()
+		newM, _ = m.Update(resMsg)
+		m = newM.(Model)
+	}
+
+	if m.GitView.IsLoading {
+		t.Errorf("Expected IsLoading=false after push finished")
+	}
 
 	// Since there's no remote configured, it should show push error toast gracefully without crash
 	if !strings.Contains(m.StatusBar.ToastMsg, "Push gagal") && !strings.Contains(m.StatusBar.ToastMsg, "Push berhasil") {

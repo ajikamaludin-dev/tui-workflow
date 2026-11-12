@@ -92,9 +92,27 @@ Menyelesaikan paket perbaikan Git Sidebar & Scrolling sesuai spesifikasi `TODO.m
 - [x] File explorer dapat di-scroll menggunakan mouse wheel.
 - [x] `go vet ./...` 0 error, `go test -v -race ./...` 100% PASS bebas data race.
 
+## Improvement 1 (2026-11-12 — Asynchronous Push & Commit with UI Loading Feedback)
+
+### Analisis Fakta
+- Sebelumnya pemanggilan `git.Push()` dan `git.Commit()` di `internal/app/model.go` berjalan secara sinkron di method `Update()`.
+- Karena proses push berinteraksi dengan remote git server melalui network, pemanggilan sinkron memblokir event loop Bubble Tea sehingga status loading tidak sempat dirender ke layar sebelum eksekusi selesai.
+
+### Rencana Perbaikan
+1. Ubah operasi push dan commit menjadi command asinkron Bubble Tea (`tea.Cmd`): `gitPushCmd(repo)` dan `gitCommitCmd(repo, msg)`.
+2. Saat tombol diklik: aktifkan `IsLoading = true`, `LoadingMsg = "Pushing..."` atau `"Committing..."`, tampilkan status toast, dan kembalikan command ke Bubble Tea agar UI segera me-render state loading.
+3. Tangani hasil respon asinkron pada message handler `gitPushResultMsg` dan `gitCommitResultMsg` di `Update()`: reset `IsLoading = false`, perbarui status bar dan view.
+
+### Tasks
+- [x] Definisikan `gitPushCmd`, `gitCommitCmd`, `gitPushResultMsg`, dan `gitCommitResultMsg` di `internal/app/model.go`
+- [x] Hubungkan event klik mouse dan keyboard `ctrl+enter` dengan command asinkron dan state `IsLoading`
+- [x] Update test `TestGitCommitAndPushButtonInteraction` di `internal/app/features_test.go`
+- [x] Verifikasi: `go vet ./...` ✓, `go test -v -race -count=1 ./...` ✓
+
 ## Decisions
 - **Tombol Bergantian**: Tombol Commit diprioritaskan selama ada perubahan di Staged atau Changes. Jika working tree bersih, tombol beralih ke Push bila terdapat commit yang belum dipublikasikan ke remote.
 - **Unstage All Implementation**: Menggunakan `worktree.Reset` dengan `MixedReset` untuk mengembalikan index ke commit HEAD secara aman tanpa menyentuh file fisik di disk.
+- **Asynchronous Git Operations**: Semua interaksi jaringan (push) dan disk I/O (commit) dijalankan via goroutine background `tea.Cmd` agar UI tetap responsif 60 FPS dan feedback loading tampil seketika.
 
 ## Blockers
 - None.

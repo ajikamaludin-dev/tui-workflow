@@ -133,12 +133,73 @@ func marqueeTickCmd() tea.Cmd {
 	})
 }
 
+type gitPushResultMsg struct {
+	err error
+}
+
+func gitPushCmd(repo *git.Repo) tea.Cmd {
+	return func() tea.Msg {
+		if repo == nil {
+			return gitPushResultMsg{err: fmt.Errorf("repositori git tidak ditemukan")}
+		}
+		err := repo.Push()
+		return gitPushResultMsg{err: err}
+	}
+}
+
+type gitCommitResultMsg struct {
+	hash string
+	err  error
+}
+
+func gitCommitCmd(repo *git.Repo, commitMsg string) tea.Cmd {
+	return func() tea.Msg {
+		if repo == nil {
+			return gitCommitResultMsg{err: fmt.Errorf("repositori git tidak ditemukan")}
+		}
+		hash, err := repo.Commit(commitMsg)
+		return gitCommitResultMsg{hash: hash, err: err}
+	}
+}
+
 func (m Model) Init() tea.Cmd {
 	return marqueeTickCmd()
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case gitPushResultMsg:
+		if m.GitView != nil {
+			m.GitView.IsLoading = false
+			m.GitView.LoadingMsg = ""
+			if msg.err != nil {
+				m.StatusBar.ShowToast("Push gagal: "+msg.err.Error(), true, 4*time.Second)
+			} else {
+				m.GitView.Refresh()
+				m.StatusBar.ShowToast("Push berhasil", false, 3*time.Second)
+			}
+		}
+		return m, nil
+
+	case gitCommitResultMsg:
+		if m.GitView != nil {
+			m.GitView.IsLoading = false
+			m.GitView.LoadingMsg = ""
+			if msg.err != nil {
+				m.StatusBar.ShowToast("Commit gagal: "+msg.err.Error(), true, 4*time.Second)
+			} else {
+				m.GitView.CommitInput.SetValue("")
+				m.GitView.Refresh()
+				m.StatusBar.ShowToast("Commit sukses: "+msg.hash, false, 3*time.Second)
+				if m.GitRepo != nil {
+					if branch, err := m.GitRepo.GetBranchName(); err == nil {
+						m.StatusBar.Branch = branch
+					}
+				}
+			}
+		}
+		return m, nil
+
 	case MarqueeTickMsg:
 		if m.SidebarVisible && m.SidebarView == SidebarFiles && m.Focus == FocusSidebar && m.Explorer != nil {
 			if m.Explorer.SelectedNameExceeds(m.SidebarWidth - 1) {
@@ -299,18 +360,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "ctrl+enter":
-			if m.GitView != nil {
-				hash, err := m.GitView.DoCommit()
-				if err != nil {
-					m.StatusBar.ShowToast("Commit gagal: "+err.Error(), true, 3*time.Second)
-				} else {
-					m.StatusBar.ShowToast("Commit sukses: "+hash, false, 3*time.Second)
-					if m.GitRepo != nil {
-						if branch, err := m.GitRepo.GetBranchName(); err == nil {
-							m.StatusBar.Branch = branch
-						}
-					}
+			if m.GitView != nil && m.GitRepo != nil {
+				if m.GitView.IsLoading {
+					return m, nil
 				}
+				if len(m.GitView.Staged) == 0 {
+					m.StatusBar.ShowToast("Tidak ada perubahan di staging area", true, 3*time.Second)
+					return m, nil
+				}
+				commitMsg := m.GitView.CommitInput.Value()
+				m.GitView.IsLoading = true
+				m.GitView.LoadingMsg = "Committing..."
+				m.StatusBar.ShowToast("Melakukan commit...", false, 3*time.Second)
+				return m, gitCommitCmd(m.GitRepo, commitMsg)
 			}
 			return m, nil
 
@@ -927,24 +989,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					relLine := msg.Y - 2
 					targetFile, action, _ := m.GitView.HandleMouseClick(msg.X, relLine)
 					if action == "commit" {
-						hash, err := m.GitView.DoCommit()
-						if err != nil {
-							m.StatusBar.ShowToast("Commit gagal: "+err.Error(), true, 3*time.Second)
-						} else {
-							m.StatusBar.ShowToast("Commit sukses: "+hash, false, 3*time.Second)
-							if m.GitRepo != nil {
-								if branch, err := m.GitRepo.GetBranchName(); err == nil {
-									m.StatusBar.Branch = branch
-								}
-							}
+						if m.GitView.IsLoading {
+							return m, nil
 						}
+						if len(m.GitView.Staged) == 0 {
+							m.StatusBar.ShowToast("Tidak ada perubahan di staging area", true, 3*time.Second)
+							return m, nil
+						}
+						commitMsg := m.GitView.CommitInput.Value()
+						m.GitView.IsLoading = true
+						m.GitView.LoadingMsg = "Committing..."
+						m.StatusBar.ShowToast("Melakukan commit...", false, 3*time.Second)
+						return m, gitCommitCmd(m.GitRepo, commitMsg)
 					} else if action == "push" {
-						err := m.GitView.Push()
-						if err != nil {
-							m.StatusBar.ShowToast("Push gagal: "+err.Error(), true, 3*time.Second)
-						} else {
-							m.StatusBar.ShowToast("Push berhasil", false, 3*time.Second)
+						if m.GitView.IsLoading {
+							return m, nil
 						}
+						if m.GitRepo == nil {
+							m.StatusBar.ShowToast("Repositori git tidak ditemukan", true, 3*time.Second)
+							return m, nil
+						}
+						m.GitView.IsLoading = true
+						m.GitView.LoadingMsg = "Pushing..."
+						m.StatusBar.ShowToast("Pushing ke remote repository...", false, 5*time.Second)
+						return m, gitPushCmd(m.GitRepo)
 					}
 					if targetFile != nil {
 						if targetFile.Status == "?" || targetFile.Status == "U" {

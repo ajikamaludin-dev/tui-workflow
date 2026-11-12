@@ -16,6 +16,7 @@ import (
 	"tui-workflow/internal/config"
 	"tui-workflow/internal/editor"
 	"tui-workflow/internal/explorer"
+	"tui-workflow/internal/formatter"
 	"tui-workflow/internal/git"
 	"tui-workflow/internal/search"
 	"tui-workflow/internal/ui"
@@ -23,34 +24,34 @@ import (
 )
 
 type Model struct {
-	RootDir        string
-	Config         *config.Config
-	Width          int
-	Height         int
-	Ready          bool
-	Focus          FocusArea
-	SidebarVisible bool
-	SidebarWidth   int
-	SidebarView    SidebarView
-	MenuBar        *ui.MenuBar
-	StatusBar      *ui.StatusBar
-	Explorer       *explorer.Tree
-	GitRepo        *git.Repo
-	GitView        *git.GitView
-	TabManager     *editor.TabManager
-	FilePicker     *dialog.FilePicker
-	InputDialog    *dialog.InputDialog
-	ConfirmDialog  *dialog.ConfirmDialog
-	Switcher       *dialog.BufferSwitcher
-	QuickOpen      *dialog.QuickOpen
-	CommandPalette *dialog.CommandPalette
-	GlobalSearch   *dialog.GlobalSearch
-	FindBar        *dialog.FindBar
-	BranchSwitcher *dialog.BranchSwitcher
-	AISettingsDialog *dialog.AISettingsDialog
-	AIClient       *ai.Client
-	SearchView     *search.SearchView
-	ContextMenu    *ui.ContextMenu
+	RootDir           string
+	Config            *config.Config
+	Width             int
+	Height            int
+	Ready             bool
+	Focus             FocusArea
+	SidebarVisible    bool
+	SidebarWidth      int
+	SidebarView       SidebarView
+	MenuBar           *ui.MenuBar
+	StatusBar         *ui.StatusBar
+	Explorer          *explorer.Tree
+	GitRepo           *git.Repo
+	GitView           *git.GitView
+	TabManager        *editor.TabManager
+	FilePicker        *dialog.FilePicker
+	InputDialog       *dialog.InputDialog
+	ConfirmDialog     *dialog.ConfirmDialog
+	Switcher          *dialog.BufferSwitcher
+	QuickOpen         *dialog.QuickOpen
+	CommandPalette    *dialog.CommandPalette
+	GlobalSearch      *dialog.GlobalSearch
+	FindBar           *dialog.FindBar
+	BranchSwitcher    *dialog.BranchSwitcher
+	AISettingsDialog  *dialog.AISettingsDialog
+	AIClient          *ai.Client
+	SearchView        *search.SearchView
+	ContextMenu       *ui.ContextMenu
 	AutoSave          bool
 	SoftWrap          bool
 	ShowHelp          bool
@@ -115,28 +116,28 @@ func NewModelWithPath(targetPath string) (Model, error) {
 		SidebarVisible:    true,
 		SidebarWidth:      initialSidebarWidth,
 		SidebarView:       SidebarFiles,
-		MenuBar:        ui.NewMenuBar(),
-		StatusBar:      ui.NewStatusBar(),
-		Explorer:       explorer.NewTree(rootDir),
-		GitRepo:        repo,
-		GitView:        gv,
-		TabManager:     tm,
-		FilePicker:     dialog.NewFilePicker(),
-		InputDialog:    dialog.NewInputDialog(),
-		ConfirmDialog:  dialog.NewConfirmDialog(),
-		Switcher:       dialog.NewBufferSwitcher(),
-		QuickOpen:      dialog.NewQuickOpen(),
-		CommandPalette: dialog.NewCommandPalette(),
-		GlobalSearch:   dialog.NewGlobalSearch(),
-		FindBar:        dialog.NewFindBar(),
-		BranchSwitcher: dialog.NewBranchSwitcher(),
-		AISettingsDialog: dialog.NewAISettingsDialog(),
-		AIClient:       ai.NewClient(),
-		SearchView:     search.NewSearchView(rootDir),
-		ContextMenu:    ui.NewContextMenu(),
-		AutoSave:       cfg.AutoSave,
-		SoftWrap:       cfg.SoftWrap,
-		ShowHelp:       false,
+		MenuBar:           ui.NewMenuBar(),
+		StatusBar:         ui.NewStatusBar(),
+		Explorer:          explorer.NewTree(rootDir),
+		GitRepo:           repo,
+		GitView:           gv,
+		TabManager:        tm,
+		FilePicker:        dialog.NewFilePicker(),
+		InputDialog:       dialog.NewInputDialog(),
+		ConfirmDialog:     dialog.NewConfirmDialog(),
+		Switcher:          dialog.NewBufferSwitcher(),
+		QuickOpen:         dialog.NewQuickOpen(),
+		CommandPalette:    dialog.NewCommandPalette(),
+		GlobalSearch:      dialog.NewGlobalSearch(),
+		FindBar:           dialog.NewFindBar(),
+		BranchSwitcher:    dialog.NewBranchSwitcher(),
+		AISettingsDialog:  dialog.NewAISettingsDialog(),
+		AIClient:          ai.NewClient(),
+		SearchView:        search.NewSearchView(rootDir),
+		ContextMenu:       ui.NewContextMenu(),
+		AutoSave:          cfg.AutoSave,
+		SoftWrap:          cfg.SoftWrap,
+		ShowHelp:          false,
 		ShowAbout:         false,
 		ClosingTabIdx:     -1,
 		ContextMenuTabIdx: -1,
@@ -201,6 +202,56 @@ func gitCommitCmd(repo *git.Repo, commitMsg string) tea.Cmd {
 		hash, err := repo.Commit(commitMsg)
 		return gitCommitResultMsg{hash: hash, err: err}
 	}
+}
+
+type FormatCompleteMsg struct {
+	TabID    string
+	NewText  string
+	ToolName string
+	Err      error
+}
+
+func formatBufferCmd(tabID string, content string, filePath string, workspaceDir string, overrides map[string][]string) tea.Cmd {
+	return func() tea.Msg {
+		req := formatter.FormatRequest{
+			Content:         content,
+			FilePath:        filePath,
+			WorkspaceDir:    workspaceDir,
+			CustomOverrides: overrides,
+		}
+		res, err := formatter.Format(req)
+		if err != nil {
+			return FormatCompleteMsg{
+				TabID: tabID,
+				Err:   err,
+			}
+		}
+		return FormatCompleteMsg{
+			TabID:    tabID,
+			NewText:  res.Formatted,
+			ToolName: res.ToolName,
+		}
+	}
+}
+
+func (m *Model) triggerFormatCurrentBuffer() (Model, tea.Cmd) {
+	tab := m.TabManager.ActiveTab()
+	if tab == nil || tab.Buffer == nil || tab.IsDiff {
+		m.StatusBar.ShowToast("Tidak ada file aktif untuk diformat", true, 3*time.Second)
+		return *m, nil
+	}
+
+	content := tab.Buffer.Text()
+	filePath := tab.Path
+	tabID := tab.ID
+	workspaceDir := m.RootDir
+	var overrides map[string][]string
+	if m.Config != nil {
+		overrides = m.Config.Formatters
+	}
+
+	m.StatusBar.ShowToast("Memformat dokumen...", false, 2*time.Second)
+	return *m, formatBufferCmd(tabID, content, filePath, workspaceDir, overrides)
 }
 
 type aiCommitGeneratedMsg struct {
@@ -324,6 +375,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.GitView.LoadingMsg = ""
 		}
 		m.StatusBar.ShowToast(fmt.Sprintf("AI Error: %v", msg.err), true, 4*time.Second)
+		return m, nil
+
+	case FormatCompleteMsg:
+		tab := m.TabManager.ActiveTab()
+		if tab != nil && tab.ID == msg.TabID && tab.Buffer != nil {
+			if msg.Err != nil {
+				m.StatusBar.ShowToast("Format: "+msg.Err.Error(), true, 4*time.Second)
+			} else {
+				if msg.NewText != tab.Buffer.Text() {
+					tab.Buffer.ReplaceContentWithUndo(msg.NewText)
+					m.StatusBar.ShowToast("✓ Formatted with "+msg.ToolName, false, 3*time.Second)
+				} else {
+					m.StatusBar.ShowToast("Dokumen sudah rapi ("+msg.ToolName+")", false, 3*time.Second)
+				}
+			}
+		}
 		return m, nil
 
 	case MarqueeTickMsg:
@@ -673,6 +740,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.openQuickOpen()
 			return m, nil
 
+		case "ctrl+shift+i", "ctrl+shift+I", "alt+shift+f", "alt+F":
+			return m.triggerFormatCurrentBuffer()
+
 		case "ctrl+shift+p", "ctrl+P", "f1":
 			m.openCommandPalette()
 			return m, nil
@@ -760,178 +830,193 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if m.SidebarView == SidebarFiles {
 				switch msg.String() {
-			case "j", "down":
-				m.Explorer.MoveDown()
-				return m, nil
+				case "j", "down":
+					m.Explorer.MoveDown()
+					return m, nil
 
-			case "k", "up":
-				m.Explorer.MoveUp()
-				return m, nil
+				case "k", "up":
+					m.Explorer.MoveUp()
+					return m, nil
 
-			case "enter", "l", "right":
-				node := m.Explorer.SelectedNode()
-				if node != nil {
-					if node.IsDir {
-						m.Explorer.ToggleExpand()
-					} else {
-						m.openFile(node.Path)
-						m.Focus = FocusEditor
+				case "enter", "l", "right":
+					node := m.Explorer.SelectedNode()
+					if node != nil {
+						if node.IsDir {
+							m.Explorer.ToggleExpand()
+						} else {
+							m.openFile(node.Path)
+							m.Focus = FocusEditor
+						}
 					}
-				}
-				return m, nil
+					return m, nil
 
-			case "h", "left":
-				m.Explorer.CollapseOrParent()
-				return m, nil
+				case "h", "left":
+					m.Explorer.CollapseOrParent()
+					return m, nil
 
-			case ".":
-				m.Explorer.ToggleHidden()
-				return m, nil
+				case ".":
+					m.Explorer.ToggleHidden()
+					return m, nil
 
-			case "r":
-				m.Explorer.Refresh()
-				m.StatusBar.ShowToast("Pohon file diperbarui", false, 2*time.Second)
-				return m, nil
-			case "/":
-				m.InputDialog.Open(dialog.InputFilterExplorer, "Filter File Explorer", "Masukkan nama atau ekstensi file:", m.Explorer.FilterQuery)
-				return m, nil
-			case "esc":
-				if m.Explorer.FilterQuery != "" {
-					m.Explorer.SetFilter("")
-					m.StatusBar.ShowToast("Filter file dibersihkan", false, 2*time.Second)
+				case "r":
+					m.Explorer.Refresh()
+					m.StatusBar.ShowToast("Pohon file diperbarui", false, 2*time.Second)
+					return m, nil
+				case "/":
+					m.InputDialog.Open(dialog.InputFilterExplorer, "Filter File Explorer", "Masukkan nama atau ekstensi file:", m.Explorer.FilterQuery)
+					return m, nil
+				case "esc":
+					if m.Explorer.FilterQuery != "" {
+						m.Explorer.SetFilter("")
+						m.StatusBar.ShowToast("Filter file dibersihkan", false, 2*time.Second)
+						return m, nil
+					}
+
+				case "a":
+					parentDir := m.getSelectedParentDir()
+					m.InputDialog.Open(dialog.InputNewFile, "Buat File Baru", parentDir, "")
+					return m, nil
+
+				case "A":
+					parentDir := m.getSelectedParentDir()
+					m.InputDialog.Open(dialog.InputNewFolder, "Buat Folder Baru", parentDir, "")
+					return m, nil
+
+				case "F2":
+					node := m.Explorer.SelectedNode()
+					if node != nil {
+						m.InputDialog.Open(dialog.InputRename, "Ubah Nama: "+node.Name, node.Path, node.Name)
+					}
+					return m, nil
+
+				case "d":
+					node := m.Explorer.SelectedNode()
+					if node != nil {
+						m.ConfirmDialog.Open(
+							dialog.ConfirmDelete,
+							"Konfirmasi Hapus",
+							"Apakah Anda yakin ingin menghapus:\n"+node.Path+"?",
+							node.Path,
+						)
+					}
 					return m, nil
 				}
-
-			case "a":
-				parentDir := m.getSelectedParentDir()
-				m.InputDialog.Open(dialog.InputNewFile, "Buat File Baru", parentDir, "")
-				return m, nil
-
-			case "A":
-				parentDir := m.getSelectedParentDir()
-				m.InputDialog.Open(dialog.InputNewFolder, "Buat Folder Baru", parentDir, "")
-				return m, nil
-
-			case "F2":
-				node := m.Explorer.SelectedNode()
-				if node != nil {
-					m.InputDialog.Open(dialog.InputRename, "Ubah Nama: "+node.Name, node.Path, node.Name)
-				}
-				return m, nil
-
-			case "d":
-				node := m.Explorer.SelectedNode()
-				if node != nil {
-					m.ConfirmDialog.Open(
-						dialog.ConfirmDelete,
-						"Konfirmasi Hapus",
-						"Apakah Anda yakin ingin menghapus:\n"+node.Path+"?",
-						node.Path,
-					)
-				}
-				return m, nil
 			}
 		}
-	}
 
-	// 8. Context-Specific: Modeless Text Editor Buffer or Diff View
-	if m.Focus == FocusEditor {
-		tab := m.TabManager.ActiveTab()
-		if tab != nil && tab.IsDiff && tab.DiffView != nil {
-			switch msg.String() {
-			case "ctrl+w":
-				m.attemptCloseTab(m.TabManager.ActiveIndex)
-				return m, nil
-			case "ctrl+n":
-				m.TabManager.NextTab()
-				m.syncStatusBarWithActiveTab()
-				return m, nil
-			case "up", "k":
-				tab.DiffView.ScrollUp(1)
-				m.syncStatusBarWithActiveTab()
-				return m, nil
-			case "down", "j":
-				tab.DiffView.ScrollDown(1, m.Height-3)
-				m.syncStatusBarWithActiveTab()
-				return m, nil
-			case "pgup":
-				tab.DiffView.ScrollUp(10)
-				m.syncStatusBarWithActiveTab()
-				return m, nil
-			case "pgdown":
-				tab.DiffView.ScrollDown(10, m.Height-3)
-				m.syncStatusBarWithActiveTab()
-				return m, nil
-			case "home":
-				tab.DiffView.ScrollOffset = 0
-				m.syncStatusBarWithActiveTab()
-				return m, nil
-			}
-		} else if tab != nil && tab.Type == editor.TabMarkdown && tab.MarkdownPreview && tab.MarkdownViewer != nil {
-			switch msg.String() {
-			case "ctrl+w":
-				m.attemptCloseTab(m.TabManager.ActiveIndex)
-				return m, nil
-			case "ctrl+n":
-				m.TabManager.NextTab()
-				m.syncStatusBarWithActiveTab()
-				return m, nil
-			case "up", "k":
-				tab.MarkdownViewer.ScrollUp(1)
-				m.syncStatusBarWithActiveTab()
-				return m, nil
-			case "down", "j":
-				tab.MarkdownViewer.ScrollDown(1, m.Height-3)
-				m.syncStatusBarWithActiveTab()
-				return m, nil
-			case "pgup":
-				tab.MarkdownViewer.ScrollUp(10)
-				m.syncStatusBarWithActiveTab()
-				return m, nil
-			case "pgdown":
-				tab.MarkdownViewer.ScrollDown(10, m.Height-3)
-				m.syncStatusBarWithActiveTab()
-				return m, nil
-			case "home":
-				tab.MarkdownViewer.ScrollHome()
-				m.syncStatusBarWithActiveTab()
-				return m, nil
-
-			case "ctrl+c":
-				text := tab.MarkdownViewer.GetSelectedText()
-				if text == "" {
-					text = tab.MarkdownViewer.GetAllCleanText()
-				}
-				if text != "" {
-					_ = clipboard.WriteAll(text)
-					m.StatusBar.ShowToast("Disalin ke clipboard ("+strconv.Itoa(len(text))+" karakter)", false, 2*time.Second)
-				}
-				return m, nil
-
-			case "ctrl+a":
-				tab.MarkdownViewer.SelectAll()
-				m.StatusBar.ShowToast("Semua teks preview dipilih", false, 1*time.Second)
-				return m, nil
-
-			case "ctrl+v":
-				text, err := clipboard.ReadAll()
-				if err == nil && text != "" && tab.Buffer != nil {
-					tab.Buffer.InsertString(text)
+		// 8. Context-Specific: Modeless Text Editor Buffer or Diff View
+		if m.Focus == FocusEditor {
+			tab := m.TabManager.ActiveTab()
+			if tab != nil && tab.IsDiff && tab.DiffView != nil {
+				switch msg.String() {
+				case "ctrl+w":
+					m.attemptCloseTab(m.TabManager.ActiveIndex)
+					return m, nil
+				case "ctrl+n":
+					m.TabManager.NextTab()
 					m.syncStatusBarWithActiveTab()
-					m.StatusBar.ShowToast("Ditempel ke dokumen markdown", false, 2*time.Second)
-				}
-				return m, nil
-
-			case "esc", "escape":
-				if tab.MarkdownViewer.HasSelection {
-					tab.MarkdownViewer.ClearSelection()
+					return m, nil
+				case "up", "k":
+					tab.DiffView.ScrollUp(1)
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+				case "down", "j":
+					tab.DiffView.ScrollDown(1, m.Height-3)
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+				case "pgup":
+					tab.DiffView.ScrollUp(10)
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+				case "pgdown":
+					tab.DiffView.ScrollDown(10, m.Height-3)
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+				case "home":
+					tab.DiffView.ScrollOffset = 0
+					m.syncStatusBarWithActiveTab()
 					return m, nil
 				}
-			}
-		} else if tab != nil && tab.Buffer != nil {
-			buf := tab.Buffer
-			switch msg.String() {
+			} else if tab != nil && tab.Type == editor.TabMarkdown && tab.MarkdownPreview && tab.MarkdownViewer != nil {
+				switch msg.String() {
+				case "ctrl+w":
+					m.attemptCloseTab(m.TabManager.ActiveIndex)
+					return m, nil
+				case "ctrl+n":
+					m.TabManager.NextTab()
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+				case "up", "k":
+					tab.MarkdownViewer.ScrollUp(1)
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+				case "down", "j":
+					tab.MarkdownViewer.ScrollDown(1, m.Height-3)
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+				case "pgup":
+					tab.MarkdownViewer.ScrollUp(10)
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+				case "pgdown":
+					tab.MarkdownViewer.ScrollDown(10, m.Height-3)
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+				case "home":
+					tab.MarkdownViewer.ScrollHome()
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+
+				case "ctrl+c":
+					text := tab.MarkdownViewer.GetSelectedText()
+					if text == "" {
+						text = tab.MarkdownViewer.GetAllCleanText()
+					}
+					if text != "" {
+						_ = clipboard.WriteAll(text)
+						m.StatusBar.ShowToast("Disalin ke clipboard ("+strconv.Itoa(len(text))+" karakter)", false, 2*time.Second)
+					}
+					return m, nil
+
+				case "ctrl+a":
+					tab.MarkdownViewer.SelectAll()
+					m.StatusBar.ShowToast("Semua teks preview dipilih", false, 1*time.Second)
+					return m, nil
+
+				case "ctrl+v":
+					text, err := clipboard.ReadAll()
+					if err == nil && text != "" && tab.Buffer != nil {
+						tab.Buffer.InsertString(text)
+						m.syncStatusBarWithActiveTab()
+						m.StatusBar.ShowToast("Ditempel ke dokumen markdown", false, 2*time.Second)
+					}
+					return m, nil
+
+				case "esc", "escape":
+					if tab.MarkdownViewer.HasSelection {
+						tab.MarkdownViewer.ClearSelection()
+						return m, nil
+					}
+				}
+			} else if tab != nil && tab.Buffer != nil {
+				buf := tab.Buffer
+				switch msg.String() {
+				case "ctrl+shift+i", "ctrl+shift+I", "alt+shift+f", "alt+F":
+					return m.triggerFormatCurrentBuffer()
+
 				case "ctrl+s":
+					if m.Config != nil && m.Config.FormatOnSave {
+						req := formatter.FormatRequest{
+							Content:         tab.Buffer.Text(),
+							FilePath:        tab.Path,
+							WorkspaceDir:    m.RootDir,
+							CustomOverrides: m.Config.Formatters,
+						}
+						res, err := formatter.Format(req)
+						if err == nil && res.Formatted != tab.Buffer.Text() {
+							tab.Buffer.ReplaceContentWithUndo(res.Formatted)
+						}
+					}
 					if err := m.TabManager.SaveActive(); err != nil {
 						m.StatusBar.ShowToast("Error simpan: "+err.Error(), true, 3*time.Second)
 					} else {
@@ -1785,6 +1870,8 @@ func (m *Model) openCommandPalette() {
 	commands := []dialog.CommandPaletteItem{
 		// File
 		{ID: "file.new", Title: "New File", Category: "File", Shortcut: "a"},
+		{ID: "file.format", Title: "Format Document", Category: "Edit", Shortcut: "Ctrl+Shift+I"},
+		{ID: "setting.format_on_save", Title: "Toggle Format on Save", Category: "Settings", Shortcut: ""},
 		{ID: "file.open", Title: "Open File", Category: "File", Shortcut: "Ctrl+O"},
 		{ID: "file.open_folder", Title: "Open Folder", Category: "File", Shortcut: "Ctrl+K"},
 		{ID: "file.save", Title: "Save File", Category: "File", Shortcut: "Ctrl+S"},
@@ -2285,6 +2372,23 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 
 	case "file.open_folder":
 		m.FilePicker.Open(dialog.PickerModeFolder, m.RootDir, m.Explorer.ShowHidden)
+
+	case "file.format":
+		var cmd tea.Cmd
+		*m, cmd = m.triggerFormatCurrentBuffer()
+		return cmd
+
+	case "setting.format_on_save":
+		if m.Config != nil {
+			m.Config.FormatOnSave = !m.Config.FormatOnSave
+			_ = config.SaveConfig(m.Config)
+			if m.Config.FormatOnSave {
+				m.StatusBar.ShowToast("Format on Save Diaktifkan", false, 2*time.Second)
+			} else {
+				m.StatusBar.ShowToast("Format on Save Dimatikan", true, 2*time.Second)
+			}
+		}
+		return nil
 
 	case "file.save":
 		if err := m.TabManager.SaveActive(); err != nil {

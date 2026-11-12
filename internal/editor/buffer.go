@@ -119,6 +119,30 @@ func (b *Buffer) SetText(content string) {
 	b.typingGroup = false
 }
 
+// ReplaceContentWithUndo replaces buffer content while recording an undo snapshot.
+// Allows operations like code formatting to be undone via Ctrl+Z.
+func (b *Buffer) ReplaceContentWithUndo(content string) {
+	b.endTypingGroup()
+	b.pushUndo()
+
+	b.Lines = make([][]rune, 0)
+	normalized := strings.ReplaceAll(content, "\r\n", "\n")
+	normalized = strings.ReplaceAll(normalized, "\r", "\n")
+	rawLines := strings.Split(normalized, "\n")
+	for _, rl := range rawLines {
+		b.Lines = append(b.Lines, []rune(rl))
+	}
+	if len(b.Lines) == 0 {
+		b.Lines = append(b.Lines, []rune{})
+	}
+
+	b.clampCursor()
+	b.cachedDirty = true
+	b.cachedHigh = nil
+	b.cachedStyles = nil
+	b.IsDirty = true
+}
+
 func (b *Buffer) LineCount() int {
 	return len(b.Lines)
 }

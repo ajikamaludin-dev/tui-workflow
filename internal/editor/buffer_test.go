@@ -452,3 +452,26 @@ func TestBufferTabWrappingAndGutterSafety(t *testing.T) {
 		t.Errorf("Expected physical col 4 (after 4 tabs), got %d", pCol)
 	}
 }
+
+func TestBufferReplaceContentWithUndo(t *testing.T) {
+	buf := NewBuffer("line 1\nline 2")
+	buf.SetCursor(1, 2)
+
+	formatted := "line 1 formatted\nline 2 formatted\nline 3"
+	buf.ReplaceContentWithUndo(formatted)
+
+	if buf.Text() != formatted {
+		t.Fatalf("Expected formatted text, got %q", buf.Text())
+	}
+	if !buf.IsDirty {
+		t.Errorf("Expected buffer to be dirty after format")
+	}
+
+	// Undo formatting
+	if !buf.Undo() {
+		t.Fatalf("Expected Undo to succeed")
+	}
+	if buf.Text() != "line 1\nline 2" {
+		t.Errorf("Expected text restored to original after undo, got %q", buf.Text())
+	}
+}

@@ -313,6 +313,7 @@ func renderHelpModal() string {
 │   • Tab / Shift+Tab : Indent / Outdent 4 Spasi   │
 │   • Ctrl+/          : Toggle Komentar Baris      │
 │   • Ctrl+S / Ctrl+W : Simpan / Tutup Tab         │
+│   • Ctrl+Shift+I    : Format Dokumen (CLI)       │
 │   • Ctrl+M / Alt+M  : Toggle Preview Markdown    │
 │   • Ctrl+A / C / V  : Pilih / Salin / Tempel Teks│
 │                                                  │

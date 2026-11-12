@@ -15,12 +15,14 @@ type AIConfig struct {
 }
 
 type Config struct {
-	ShowHidden   bool     `json:"show_hidden"`
-	AutoSave     bool     `json:"auto_save"`
-	SoftWrap     bool     `json:"soft_wrap"`
-	SidebarWidth int      `json:"sidebar_width,omitempty"`
-	LastDir      string   `json:"last_dir,omitempty"`
-	AI           AIConfig `json:"ai"`
+	ShowHidden   bool                `json:"show_hidden"`
+	AutoSave     bool                `json:"auto_save"`
+	SoftWrap     bool                `json:"soft_wrap"`
+	FormatOnSave bool                `json:"format_on_save"`
+	SidebarWidth int                 `json:"sidebar_width,omitempty"`
+	LastDir      string              `json:"last_dir,omitempty"`
+	AI           AIConfig            `json:"ai"`
+	Formatters   map[string][]string `json:"formatters,omitempty"`
 }
 
 func DefaultConfig() *Config {
@@ -28,6 +30,7 @@ func DefaultConfig() *Config {
 		ShowHidden:   true,
 		AutoSave:     true,
 		SoftWrap:     true,
+		FormatOnSave: false,
 		SidebarWidth: 30,
 		LastDir:      "",
 		AI: AIConfig{
@@ -36,6 +39,7 @@ func DefaultConfig() *Config {
 			Models:       []string{"gpt-4o-mini", "gpt-4o"},
 			DefaultModel: "gpt-4o-mini",
 		},
+		Formatters: make(map[string][]string),
 	}
 }
 

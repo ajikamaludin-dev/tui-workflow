@@ -173,6 +173,24 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
    - Line number gutter independen pada kedua sisi.
    - Scrolling tersinkronisasi (synchronized vertical scroll) antara sisi kiri dan kanan.
 
+#### E. Document Code Formatter Engine (CLI Integration)
+1. **Pemicu:** Shortcut `Ctrl+Shift+I` / `Alt+Shift+F`, Top Menu `[File] ➔ Format Document`, Command Palette (`F1`).
+2. **Format on Save:** Opsi toggle via `[Setting] ➔ Toggle Format on Save` atau opsi config `format_on_save`.
+3. **Smart Fallback Chain:**
+   - React / JS / TS (`.jsx`, `.tsx`, `.js`, `.ts`): Local `./node_modules/.bin/biome` / `prettier` ➔ Global `biome` ➔ `prettier` ➔ `deno fmt`.
+   - Blade (`.blade.php`): `blade-formatter` ➔ Local/Global `pint`.
+   - PHP (`.php`): Local `./vendor/bin/pint` ➔ Global `pint` ➔ `php-cs-fixer`.
+   - Go (`.go`): `gofmt` ➔ `goimports`.
+   - Python (`.py`): `ruff` ➔ `black` ➔ `autopep8`.
+   - Rust (`.rs`): `rustfmt`.
+   - C / C++ / Java / C#: `clang-format`.
+   - Shell (`.sh`, `.bash`): `shfmt`.
+   - HTML / CSS / JSON / YAML / Markdown: Biome ➔ Prettier.
+   - Lua (`.lua`): `stylua`.
+   - SQL (`.sql`): `sql-formatter`.
+4. **Piping & Non-Blocking:** Mengalirkan buffer via STDIN/STDOUT dengan timeout 4s tanpa flickering atau blocking UI.
+5. **Undo Support:** Hasil format dapat dibatalkan seketika menggunakan `Ctrl+Z` via `ReplaceContentWithUndo`.
+
 ### 4.4. Auto-Save & Dialog Unsaved Changes
 
 #### A. Auto-Save on Focus Change
@@ -273,6 +291,9 @@ tui-workflow/
 │   │   └── autosave.go          # Auto-save triggers & focus change watcher
 │   ├── syntax/
 │   │   └── highlighter.go       # Chroma integration, token lexer & caching
+│   ├── formatter/
+│   │   ├── formatter.go         # Smart fallback CLI formatters (Prettier, Biome, Pint, Gofmt)
+│   │   └── formatter_test.go    # Unit testing & pipe verification
 │   └── markdown/
 │       └── preview.go           # Glamour rendered preview viewport & toggle
 ├── docs/

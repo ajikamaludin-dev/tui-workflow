@@ -90,7 +90,8 @@
 ### Text Editor
 | Pintasan | Aksi |
 |---|---|
-| `Ctrl + S` | Simpan buffer aktif ke disk |
+| `Ctrl + S` | Simpan buffer aktif ke disk (opsional auto-format jika format_on_save aktif) |
+| `Ctrl + Shift + I` / `Alt + Shift + F` | Format dokumen aktif menggunakan CLI formatter (Prettier, Biome, Pint, Gofmt, dll) |
 | `Ctrl + W` | Tutup tab aktif |
 | `Ctrl + N` | Pindah ke tab berikutnya secara berurutan |
 | `Ctrl + Z` | Batalkan perubahan teks terakhir (Undo) |

@@ -22,3 +22,5 @@
 | 20 | [ ] | auto listen file jika changes file dari luar editor |
 | 21 | [ ] | ijin kan block copy dan paste action di previewe markdown |
 | 22 | [ ] | search text in open editor with ctrl+f | 
+
+tes

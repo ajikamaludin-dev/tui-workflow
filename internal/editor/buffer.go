@@ -81,6 +81,23 @@ func (b *Buffer) Text() string {
 	return sb.String()
 }
 
+// SetText replaces the buffer content with a new string.
+func (b *Buffer) SetText(content string) {
+	b.Lines = make([][]rune, 0)
+	normalized := strings.ReplaceAll(content, "\r\n", "\n")
+	normalized = strings.ReplaceAll(normalized, "\r", "\n")
+	rawLines := strings.Split(normalized, "\n")
+	for _, rl := range rawLines {
+		b.Lines = append(b.Lines, []rune(rl))
+	}
+	if len(b.Lines) == 0 {
+		b.Lines = append(b.Lines, []rune{})
+	}
+	b.clampCursor()
+	b.cachedDirty = true
+	b.cachedHigh = nil
+}
+
 func (b *Buffer) LineCount() int {
 	return len(b.Lines)
 }

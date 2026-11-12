@@ -42,13 +42,15 @@ type Model struct {
 	QuickOpen      *dialog.QuickOpen
 	CommandPalette *dialog.CommandPalette
 	GlobalSearch   *dialog.GlobalSearch
-	FindBar        *dialog.FindBar
-	ContextMenu    *ui.ContextMenu
-	AutoSave       bool
-	SoftWrap       bool
-	ShowHelp       bool
-	ShowAbout      bool
-	ClosingTabIdx  int
+	FindBar           *dialog.FindBar
+	ContextMenu       *ui.ContextMenu
+	AutoSave          bool
+	SoftWrap          bool
+	ShowHelp          bool
+	ShowAbout         bool
+	ClosingTabIdx     int
+	ContextMenuTabIdx int
+	ResizingSidebar   bool
 }
 
 func NewModelWithPath(targetPath string) (Model, error) {
@@ -91,13 +93,21 @@ func NewModelWithPath(targetPath string) (Model, error) {
 
 	cfg, _ := config.LoadConfig()
 
+	initialSidebarWidth := 30
+	if cfg.SidebarWidth > 0 {
+		initialSidebarWidth = cfg.SidebarWidth
+	}
+	if initialSidebarWidth < 15 {
+		initialSidebarWidth = 15
+	}
+
 	m := Model{
-		RootDir:        rootDir,
-		Config:         cfg,
-		Focus:          FocusEditor,
-		SidebarVisible: true,
-		SidebarWidth:   30,
-		SidebarView:    SidebarFiles,
+		RootDir:           rootDir,
+		Config:            cfg,
+		Focus:             FocusEditor,
+		SidebarVisible:    true,
+		SidebarWidth:      initialSidebarWidth,
+		SidebarView:       SidebarFiles,
 		MenuBar:        ui.NewMenuBar(),
 		StatusBar:      ui.NewStatusBar(),
 		Explorer:       explorer.NewTree(rootDir),
@@ -116,8 +126,9 @@ func NewModelWithPath(targetPath string) (Model, error) {
 		AutoSave:       cfg.AutoSave,
 		SoftWrap:       cfg.SoftWrap,
 		ShowHelp:       false,
-		ShowAbout:      false,
-		ClosingTabIdx:  -1,
+		ShowAbout:         false,
+		ClosingTabIdx:     -1,
+		ContextMenuTabIdx: -1,
 	}
 	m.Explorer.ShowHidden = cfg.ShowHidden
 	m.StatusBar.AutoSave = cfg.AutoSave
@@ -181,12 +192,24 @@ func gitCommitCmd(repo *git.Repo, commitMsg string) tea.Cmd {
 	}
 }
 
+type FileWatchTickMsg time.Time
+
+func fileWatchTickCmd() tea.Cmd {
+	return tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
+		return FileWatchTickMsg(t)
+	})
+}
+
 func (m Model) Init() tea.Cmd {
-	return marqueeTickCmd()
+	return tea.Batch(marqueeTickCmd(), fileWatchTickCmd())
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case FileWatchTickMsg:
+		m.checkWatchedFiles()
+		return m, fileWatchTickCmd()
+
 	case gitLoadingTickMsg:
 		if m.GitView != nil && m.GitView.IsLoading {
 			m.GitView.AdvanceSpinner()
@@ -457,6 +480,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.toggleSoftWrap()
 			return m, nil
 
+		case "alt+[":
+			m.adjustSidebarWidth(-2)
+			return m, nil
+
+		case "alt+]":
+			m.adjustSidebarWidth(2)
+			return m, nil
+
 		case "alt+1":
 			m.SidebarView = SidebarFiles
 			return m, nil
@@ -525,6 +556,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "?":
+			// Allow typing '?' in active editor buffer
+			if m.Focus == FocusEditor {
+				tab := m.TabManager.ActiveTab()
+				if tab != nil && tab.Buffer != nil && !tab.IsDiff && !(tab.Type == editor.TabMarkdown && tab.MarkdownPreview) {
+					break
+				}
+			}
 			m.ShowHelp = !m.ShowHelp
 			return m, nil
 		}
@@ -674,6 +712,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				tab.MarkdownViewer.ScrollHome()
 				m.syncStatusBarWithActiveTab()
 				return m, nil
+
+			case "ctrl+c":
+				text := tab.MarkdownViewer.GetSelectedText()
+				if text == "" {
+					text = tab.MarkdownViewer.GetAllCleanText()
+				}
+				if text != "" {
+					_ = clipboard.WriteAll(text)
+					m.StatusBar.ShowToast("Disalin ke clipboard ("+strconv.Itoa(len(text))+" karakter)", false, 2*time.Second)
+				}
+				return m, nil
+
+			case "ctrl+a":
+				tab.MarkdownViewer.SelectAll()
+				m.StatusBar.ShowToast("Semua teks preview dipilih", false, 1*time.Second)
+				return m, nil
+
+			case "ctrl+v":
+				text, err := clipboard.ReadAll()
+				if err == nil && text != "" && tab.Buffer != nil {
+					tab.Buffer.InsertString(text)
+					m.syncStatusBarWithActiveTab()
+					m.StatusBar.ShowToast("Ditempel ke dokumen markdown", false, 2*time.Second)
+				}
+				return m, nil
+
+			case "escape":
+				if tab.MarkdownViewer.HasSelection {
+					tab.MarkdownViewer.ClearSelection()
+					return m, nil
+				}
 			}
 		} else if tab != nil && tab.Buffer != nil {
 			buf := tab.Buffer
@@ -849,9 +918,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			fmt.Print("\x1b]22;default\x1b\\")
 		}
 
-		// Right-click inside editor area -> Open Context Menu
+		// Right-click handling
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonRight {
+			// Tab Bar right-click (Row 1, X >= editorStartX)
+			if msg.Y == 1 && msg.X >= editorStartX {
+				relX := msg.X - editorStartX
+				clickedTabIdx := m.TabManager.FindTabAt(relX)
+				if clickedTabIdx >= 0 && clickedTabIdx < m.TabManager.Count() {
+					m.ContextMenuTabIdx = clickedTabIdx
+					items := []ui.ContextMenuItem{
+						{ID: "tab_close_this", Label: "Tutup", Shortcut: "Ctrl+W"},
+						{ID: "tab_close_others", Label: "Tutup Lainnya"},
+						{ID: "tab_close_right", Label: "Tutup ke Kanan"},
+						{ID: "tab_close_left", Label: "Tutup ke Kiri"},
+						{ID: "tab_close_all", Label: "Tutup Semua"},
+					}
+					if m.TabManager.Count() <= 1 {
+						items[1].Disabled = true
+						items[2].Disabled = true
+						items[3].Disabled = true
+					} else {
+						if clickedTabIdx == m.TabManager.Count()-1 {
+							items[2].Disabled = true
+						}
+						if clickedTabIdx == 0 {
+							items[3].Disabled = true
+						}
+					}
+					m.ContextMenu.OpenCustom(msg.X, msg.Y+1, items, m.Width, m.Height)
+					return m, nil
+				}
+			}
+
+			// Right-click inside editor area -> Open Editor Context Menu
 			if msg.Y >= 2 && msg.Y < m.Height-1 && msg.X >= editorStartX {
+				m.ContextMenuTabIdx = -1
 				m.Focus = FocusEditor
 				hasSelection := false
 				if tab := m.TabManager.ActiveTab(); tab != nil && tab.Buffer != nil {
@@ -919,7 +1020,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Mouse scroll wheel in sidebar (Row 2 to Height-2)
 		if m.SidebarVisible && msg.X < m.SidebarWidth && msg.Y >= 2 && msg.Y < m.Height-1 {
-			sidebarH := m.Height - 3
+			sidebarH := m.Height - 4
+			if sidebarH < 1 {
+				sidebarH = 1
+			}
 			if msg.Button == tea.MouseButtonWheelUp {
 				if m.SidebarView == SidebarFiles && m.Explorer != nil {
 					m.Explorer.ScrollUp(3)
@@ -1103,20 +1207,33 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-			// Sidebar tree rows click (Row 2 to Height-2)
-			if m.SidebarVisible && msg.X < m.SidebarWidth && msg.Y >= 2 && msg.Y < m.Height-1 && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			// Row 2: Sidebar refresh button row click
+			if msg.Y == 2 && m.SidebarVisible && msg.X < m.SidebarWidth && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+				m.Focus = FocusSidebar
+				if m.SidebarView == SidebarFiles {
+					m.Explorer.Refresh()
+					m.StatusBar.ShowToast("File explorer dimuat ulang", false, 2*time.Second)
+				} else if m.SidebarView == SidebarGit && m.GitView != nil {
+					m.GitView.Refresh()
+					m.StatusBar.ShowToast("Git status diperbarui", false, 2*time.Second)
+				}
+				return m, nil
+			}
+
+			// Sidebar tree rows click (Row 3 to Height-2)
+			if m.SidebarVisible && msg.X < m.SidebarWidth && msg.Y >= 3 && msg.Y < m.Height-1 && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
 				if m.Focus != FocusSidebar && m.AutoSave {
 					_, _ = editor.TriggerAutoSave(m.TabManager)
 				}
 				m.Focus = FocusSidebar
 				if m.SidebarView == SidebarFiles {
-					relLine := msg.Y - 2
+					relLine := msg.Y - 3
 					action, node := m.Explorer.HandleClick(relLine)
 					if action == "open" && node != nil {
 						m.openFile(node.Path)
 					}
 				} else if m.SidebarView == SidebarGit && m.GitView != nil {
-					relLine := msg.Y - 2
+					relLine := msg.Y - 3
 					targetFile, action, _ := m.GitView.HandleMouseClick(msg.X, relLine)
 					if action == "commit" {
 						if m.GitView.IsLoading {
@@ -1316,6 +1433,7 @@ func (m *Model) openCommandPalette() {
 		{ID: "git.stage_all", Title: "Git: Stage All Changes", Category: "Git", Shortcut: ""},
 		{ID: "git.unstage_all", Title: "Git: Unstage All Changes", Category: "Git", Shortcut: ""},
 		{ID: "git.refresh", Title: "Git: Refresh Worktree Status", Category: "Git", Shortcut: ""},
+		{ID: "files.refresh", Title: "Files: Refresh File Explorer", Category: "Files", Shortcut: ""},
 	}
 	m.CommandPalette.Open(commands)
 }
@@ -1763,6 +1881,12 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 			m.Explorer.Refresh()
 		}
 		m.StatusBar.ShowToast("Status explorer & git diperbarui", false, 2*time.Second)
+
+	case "files.refresh":
+		if m.Explorer != nil {
+			m.Explorer.Refresh()
+		}
+		m.StatusBar.ShowToast("File explorer dimuat ulang", false, 2*time.Second)
 	}
 	return nil
 }
@@ -1807,6 +1931,134 @@ func (m *Model) handleFilePickerConfirmed(selectedPath string) {
 }
 
 func (m *Model) handleContextMenuAction(action string) tea.Cmd {
+	switch action {
+	case "tab_close_this":
+		if m.ContextMenuTabIdx >= 0 {
+			m.attemptCloseTab(m.ContextMenuTabIdx)
+		}
+		return nil
+
+	case "tab_close_others":
+		targetIdx := m.ContextMenuTabIdx
+		if targetIdx < 0 || targetIdx >= m.TabManager.Count() {
+			return nil
+		}
+		if m.AutoSave {
+			for i, t := range m.TabManager.Tabs {
+				if i != targetIdx && t.IsDirty() {
+					_ = m.TabManager.SaveTab(i)
+				}
+			}
+			m.TabManager.CloseOtherTabs(targetIdx)
+			m.syncStatusBarWithActiveTab()
+		} else {
+			firstDirty := -1
+			for i, t := range m.TabManager.Tabs {
+				if i != targetIdx && t.IsDirty() {
+					firstDirty = i
+					break
+				}
+			}
+			if firstDirty != -1 {
+				m.attemptCloseTab(firstDirty)
+				m.StatusBar.ShowToast("Simpan atau buang perubahan sebelum menutup tab lainnya", true, 3*time.Second)
+			} else {
+				m.TabManager.CloseOtherTabs(targetIdx)
+				m.syncStatusBarWithActiveTab()
+			}
+		}
+		return nil
+
+	case "tab_close_right":
+		targetIdx := m.ContextMenuTabIdx
+		if targetIdx < 0 || targetIdx >= m.TabManager.Count() {
+			return nil
+		}
+		if m.AutoSave {
+			for i := targetIdx + 1; i < m.TabManager.Count(); i++ {
+				if m.TabManager.Tabs[i].IsDirty() {
+					_ = m.TabManager.SaveTab(i)
+				}
+			}
+			m.TabManager.CloseTabsToRight(targetIdx)
+			m.syncStatusBarWithActiveTab()
+		} else {
+			firstDirty := -1
+			for i := targetIdx + 1; i < m.TabManager.Count(); i++ {
+				if m.TabManager.Tabs[i].IsDirty() {
+					firstDirty = i
+					break
+				}
+			}
+			if firstDirty != -1 {
+				m.attemptCloseTab(firstDirty)
+				m.StatusBar.ShowToast("Simpan atau buang perubahan sebelum menutup tab di sebelah kanan", true, 3*time.Second)
+			} else {
+				m.TabManager.CloseTabsToRight(targetIdx)
+				m.syncStatusBarWithActiveTab()
+			}
+		}
+		return nil
+
+	case "tab_close_left":
+		targetIdx := m.ContextMenuTabIdx
+		if targetIdx <= 0 || targetIdx >= m.TabManager.Count() {
+			return nil
+		}
+		if m.AutoSave {
+			for i := 0; i < targetIdx; i++ {
+				if m.TabManager.Tabs[i].IsDirty() {
+					_ = m.TabManager.SaveTab(i)
+				}
+			}
+			m.TabManager.CloseTabsToLeft(targetIdx)
+			m.syncStatusBarWithActiveTab()
+		} else {
+			firstDirty := -1
+			for i := 0; i < targetIdx; i++ {
+				if m.TabManager.Tabs[i].IsDirty() {
+					firstDirty = i
+					break
+				}
+			}
+			if firstDirty != -1 {
+				m.attemptCloseTab(firstDirty)
+				m.StatusBar.ShowToast("Simpan atau buang perubahan sebelum menutup tab di sebelah kiri", true, 3*time.Second)
+			} else {
+				m.TabManager.CloseTabsToLeft(targetIdx)
+				m.syncStatusBarWithActiveTab()
+			}
+		}
+		return nil
+
+	case "tab_close_all":
+		if m.AutoSave {
+			for i, t := range m.TabManager.Tabs {
+				if t.IsDirty() {
+					_ = m.TabManager.SaveTab(i)
+				}
+			}
+			m.TabManager.CloseAllTabs()
+			m.syncStatusBarWithActiveTab()
+		} else {
+			firstDirty := -1
+			for i, t := range m.TabManager.Tabs {
+				if t.IsDirty() {
+					firstDirty = i
+					break
+				}
+			}
+			if firstDirty != -1 {
+				m.attemptCloseTab(firstDirty)
+				m.StatusBar.ShowToast("Simpan atau buang perubahan sebelum menutup semua tab", true, 3*time.Second)
+			} else {
+				m.TabManager.CloseAllTabs()
+				m.syncStatusBarWithActiveTab()
+			}
+		}
+		return nil
+	}
+
 	tab := m.TabManager.ActiveTab()
 	if tab == nil || tab.Buffer == nil {
 		return nil

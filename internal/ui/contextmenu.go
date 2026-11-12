@@ -32,18 +32,31 @@ func NewContextMenu() *ContextMenu {
 }
 
 func (m *ContextMenu) Open(x, y int, hasSelection bool, hasClipboard bool, screenW, screenH int) {
-	m.Active = true
-	m.SelectedIdx = 0
-	if !hasSelection && hasClipboard {
-		m.SelectedIdx = 1 // Default to Paste if no selection but clipboard exists
-	}
-
-	m.Items = []ContextMenuItem{
+	items := []ContextMenuItem{
 		{ID: "copy", Label: "Salin", Shortcut: "Ctrl+C", Disabled: !hasSelection},
 		{ID: "paste", Label: "Tempel", Shortcut: "Ctrl+V", Disabled: !hasClipboard},
 		{ID: "cut", Label: "Potong", Shortcut: "Ctrl+X", Disabled: !hasSelection},
 		{ID: "select_all", Label: "Pilih Semua", Shortcut: "Ctrl+A", Disabled: false},
 	}
+	m.OpenCustom(x, y, items, screenW, screenH)
+	if !hasSelection && hasClipboard {
+		m.SelectedIdx = 1 // Default to Paste if no selection but clipboard exists
+	}
+}
+
+func (m *ContextMenu) OpenCustom(x, y int, items []ContextMenuItem, screenW, screenH int) {
+	m.Active = true
+	m.SelectedIdx = 0
+	m.Items = items
+
+	maxW := 24
+	for _, it := range items {
+		w := ansi.StringWidth(it.Label) + ansi.StringWidth(it.Shortcut) + 6
+		if w > maxW {
+			maxW = w
+		}
+	}
+	m.Width = maxW
 
 	// Clamp X and Y within screen boundary
 	if screenW > 0 && x+m.Width > screenW {
@@ -62,7 +75,6 @@ func (m *ContextMenu) Open(x, y int, hasSelection bool, hasClipboard bool, scree
 	m.X = x
 	m.Y = y
 }
-
 func (m *ContextMenu) Close() {
 	m.Active = false
 }

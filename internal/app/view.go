@@ -125,22 +125,37 @@ func (m Model) renderSidebar(width, height int) string {
 	}
 	header := tabFiles + tabGit
 	headerLen := lipgloss.Width(header)
-	if headerLen < width {
-		header += strings.Repeat(" ", width-headerLen)
+	if headerLen < width-1 {
+		header += strings.Repeat(" ", width-1-headerLen)
 	}
-	header = ui.CurrentTheme.SidebarHeaderStyle.Width(width).Render(header)
+	header = ui.CurrentTheme.SidebarHeaderStyle.Width(width - 1).MaxHeight(1).Render(header)
+	header = ansi.Truncate(header, width-1, "")
 
-	bodyHeight := height - 1
+	// Dedicated refresh button row at the top inside the active tab
+	refreshBtn := lipgloss.NewStyle().
+		Foreground(ui.CurrentTheme.Accent).
+		Bold(true).
+		Render(" [⟳ Refresh]")
+	refreshRow := ui.CurrentTheme.SidebarHeaderStyle.
+		Width(width - 1).
+		MaxHeight(1).
+		Render(refreshBtn)
+	refreshRow = ansi.Truncate(refreshRow, width-1, "")
+
+	bodyHeight := height - 2
+	if bodyHeight < 1 {
+		bodyHeight = 1
+	}
 	var body string
 	if m.SidebarView == SidebarFiles {
 		body = m.Explorer.Render(width-1, bodyHeight, m.Focus == FocusSidebar)
 	} else if m.GitView != nil {
 		body = m.GitView.Render(width-1, bodyHeight, m.Focus == FocusSidebar)
 	} else {
-		body = " Bukan repositori Git"
+		body = "  Bukan repositori Git"
 	}
 
-	colContent := header + "\n" + body
+	colContent := header + "\n" + refreshRow + "\n" + body
 
 	borderStyle := ui.CurrentTheme.SidebarStyle.
 		Width(width).

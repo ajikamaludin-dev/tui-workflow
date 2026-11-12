@@ -44,17 +44,25 @@ func (h *Highlighter) DetectLanguage(path string) string {
 		return "JSON"
 	case ".yaml", ".yml":
 		return "YAML"
-	case ".sh", ".bash":
+	case ".sh", ".bash", ".zsh":
 		return "Shell"
 	case ".py":
 		return "Python"
-	case ".js":
+	case ".js", ".mjs", ".cjs":
 		return "JavaScript"
-	case ".ts":
+	case ".jsx":
+		return "JSX"
+	case ".ts", ".mts", ".cts":
 		return "TypeScript"
-	case ".html":
+	case ".tsx":
+		return "TSX"
+	case ".php", ".phtml", ".php4", ".php5":
+		return "PHP"
+	case ".dart":
+		return "Dart"
+	case ".html", ".htm":
 		return "HTML"
-	case ".css":
+	case ".css", ".scss", ".sass", ".less":
 		return "CSS"
 	case ".sql":
 		return "SQL"
@@ -62,8 +70,16 @@ func (h *Highlighter) DetectLanguage(path string) string {
 		return "Rust"
 	case ".c", ".h":
 		return "C"
-	case ".cpp", ".hpp":
+	case ".cpp", ".hpp", ".cc", ".cxx":
 		return "C++"
+	case ".java":
+		return "Java"
+	case ".kt", ".kts":
+		return "Kotlin"
+	case ".xml":
+		return "XML"
+	case ".toml":
+		return "TOML"
 	default:
 		return "Plain Text"
 	}

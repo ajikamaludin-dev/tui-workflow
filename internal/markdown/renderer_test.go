@@ -40,4 +40,38 @@ func TestMarkdownRenderer(t *testing.T) {
 	if mv.ScrollOffset != 0 {
 		t.Errorf("Expected ScrollOffset to be 0 after ScrollHome")
 	}
+
+	// Selection & Copy Test
+	mv.SelectAll()
+	if !mv.HasSelection {
+		t.Errorf("Expected HasSelection to be true after SelectAll")
+	}
+	allText := mv.GetSelectedText()
+	if len(allText) == 0 {
+		t.Errorf("Expected non-empty text from GetSelectedText")
+	}
+
+	// Partial selection on a line with content
+	targetLine := -1
+	for idx, l := range mv.cachedLines {
+		if len(l) > 5 {
+			targetLine = idx
+			break
+		}
+	}
+	if targetLine >= 0 {
+		mv.StartSelection(targetLine, 0)
+		mv.UpdateSelection(targetLine, 5)
+		selPart := mv.GetSelectedText()
+		if len(selPart) == 0 {
+			t.Errorf("Expected partial selected text on line %d", targetLine)
+		}
+	} else {
+		t.Errorf("No cached line with >5 chars found")
+	}
+
+	mv.ClearSelection()
+	if mv.HasSelection {
+		t.Errorf("Expected HasSelection to be false after ClearSelection")
+	}
 }

@@ -113,6 +113,7 @@ func (tm *TabManager) OpenFile(path string) (*Tab, error) {
 	}
 
 	tab := NewFileTab(path, string(content))
+	tab.LastModTime = info.ModTime()
 	if tab.Buffer != nil {
 		tab.Buffer.SoftWrap = tm.DefaultSoftWrap
 	}
@@ -150,6 +151,10 @@ func (tm *TabManager) SaveActive() error {
 		return fmt.Errorf("gagal menyimpan file: %w", err)
 	}
 
+	if info, errStat := os.Stat(tab.Path); errStat == nil {
+		tab.LastModTime = info.ModTime()
+	}
+
 	tab.Buffer.IsDirty = false
 	return nil
 }
@@ -166,6 +171,10 @@ func (tm *TabManager) SaveTab(idx int) error {
 	err := os.WriteFile(tab.Path, []byte(tab.Buffer.Text()), 0644)
 	if err != nil {
 		return fmt.Errorf("gagal menyimpan file '%s': %w", tab.Name, err)
+	}
+
+	if info, errStat := os.Stat(tab.Path); errStat == nil {
+		tab.LastModTime = info.ModTime()
 	}
 
 	tab.Buffer.IsDirty = false
@@ -202,11 +211,57 @@ func (tm *TabManager) CloseOtherTabs(keepIdx int) {
 	tm.TabScrollOffset = 0
 }
 
+// CloseTabsToRight closes all tabs to the right of target index.
+func (tm *TabManager) CloseTabsToRight(idx int) {
+	if idx < 0 || idx >= len(tm.Tabs) {
+		return
+	}
+	tm.Tabs = tm.Tabs[:idx+1]
+	if tm.ActiveIndex > idx {
+		tm.ActiveIndex = idx
+	}
+	if tm.TabScrollOffset >= len(tm.Tabs) {
+		tm.TabScrollOffset = len(tm.Tabs) - 1
+	}
+	if tm.TabScrollOffset < 0 {
+		tm.TabScrollOffset = 0
+	}
+}
+
+// CloseTabsToLeft closes all tabs to the left of target index.
+func (tm *TabManager) CloseTabsToLeft(idx int) {
+	if idx <= 0 || idx >= len(tm.Tabs) {
+		return
+	}
+	tm.Tabs = append([]*Tab(nil), tm.Tabs[idx:]...)
+	if tm.ActiveIndex < idx {
+		tm.ActiveIndex = 0
+	} else {
+		tm.ActiveIndex -= idx
+	}
+	if tm.TabScrollOffset >= len(tm.Tabs) {
+		tm.TabScrollOffset = len(tm.Tabs) - 1
+	}
+	if tm.TabScrollOffset < 0 {
+		tm.TabScrollOffset = 0
+	}
+}
+
 // CloseAllTabs closes all tabs.
 func (tm *TabManager) CloseAllTabs() {
 	tm.Tabs = make([]*Tab, 0)
 	tm.ActiveIndex = 0
 	tm.TabScrollOffset = 0
+}
+
+// FindTabAt returns tab index at clickX, or -1 if not on any tab.
+func (tm *TabManager) FindTabAt(clickX int) int {
+	for _, reg := range tm.ClickRegions {
+		if clickX >= reg.StartX && clickX <= reg.EndX {
+			return reg.TabIdx
+		}
+	}
+	return -1
 }
 
 func (tm *TabManager) ScrollTabsLeft() {

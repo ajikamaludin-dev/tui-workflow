@@ -77,3 +77,38 @@ func TestContextMenu(t *testing.T) {
 		t.Errorf("expected left click outside to close menu, got handled: %v, active: %v", handled, cm.Active)
 	}
 }
+
+func TestContextMenuCustom(t *testing.T) {
+	cm := NewContextMenu()
+	customItems := []ContextMenuItem{
+		{ID: "close_this", Label: "Tutup", Shortcut: "Ctrl+W"},
+		{ID: "close_others", Label: "Tutup Lainnya"},
+		{ID: "close_right", Label: "Tutup ke Kanan"},
+		{ID: "close_left", Label: "Tutup ke Kiri"},
+		{ID: "close_all", Label: "Tutup Semua"},
+	}
+
+	cm.OpenCustom(15, 2, customItems, 80, 24)
+	if !cm.Active {
+		t.Fatalf("expected custom context menu to be active")
+	}
+	if len(cm.Items) != 5 {
+		t.Fatalf("expected 5 items, got %d", len(cm.Items))
+	}
+
+	rendered := cm.Render()
+	if !strings.Contains(rendered, "Tutup Lainnya") || !strings.Contains(rendered, "Tutup ke Kanan") {
+		t.Errorf("rendered menu missing custom labels: %s", rendered)
+	}
+
+	// Click on item 1: "Tutup Lainnya" at X=17, Y=4
+	action, handled := cm.HandleMouse(tea.MouseMsg{
+		X:      17,
+		Y:      4,
+		Button: tea.MouseButtonLeft,
+		Action: tea.MouseActionPress,
+	})
+	if !handled || action != "close_others" || cm.Active {
+		t.Errorf("expected action 'close_others', got %q, handled=%v, active=%v", action, handled, cm.Active)
+	}
+}

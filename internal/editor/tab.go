@@ -1,8 +1,10 @@
 package editor
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"tui-workflow/internal/git"
 	"tui-workflow/internal/markdown"
@@ -26,6 +28,7 @@ type Tab struct {
 	MarkdownViewer  *markdown.MarkdownViewer
 	MarkdownPreview bool
 	IsDiff          bool
+	LastModTime     time.Time
 }
 
 func NewFileTab(path, content string) *Tab {
@@ -71,6 +74,23 @@ func (t *Tab) IsDirty() bool {
 		return t.Buffer.IsDirty
 	}
 	return false
+}
+
+// ReloadFromDisk reloads the tab buffer directly from the file on disk.
+func (t *Tab) ReloadFromDisk() error {
+	if t.Path == "" || t.Buffer == nil {
+		return nil
+	}
+	content, err := os.ReadFile(t.Path)
+	if err != nil {
+		return err
+	}
+	if info, errStat := os.Stat(t.Path); errStat == nil {
+		t.LastModTime = info.ModTime()
+	}
+	t.Buffer.SetText(string(content))
+	t.Buffer.IsDirty = false
+	return nil
 }
 
 func (t *Tab) Title() string {

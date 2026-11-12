@@ -327,8 +327,8 @@ func TestGitCommitAndPushButtonInteraction(t *testing.T) {
 	}
 
 	// Click [Commit] (X = 4)
-	// Click Y is relative to sidebar content row (relLine = msg.Y - 2)
-	screenY := buttonY + 2
+	// Click Y is relative to sidebar content row (relLine = msg.Y - 3)
+	screenY := buttonY + 3
 	newM, cmd := m.Update(tea.MouseMsg{
 		X:      4,
 		Y:      screenY,
@@ -376,7 +376,7 @@ func TestGitCommitAndPushButtonInteraction(t *testing.T) {
 	if buttonY == -1 {
 		t.Fatalf("ClickButtonRow not found after commit")
 	}
-	screenY = buttonY + 2
+	screenY = buttonY + 3
 
 	// Click [Push]
 	newM, cmd = m.Update(tea.MouseMsg{

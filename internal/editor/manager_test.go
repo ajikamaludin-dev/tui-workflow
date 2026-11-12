@@ -134,3 +134,57 @@ func TestTabBarScrollingAndTitleLimit(t *testing.T) {
 		t.Errorf("Expected TabScrollOffset to return to %d, got %d", initialOffset, tm.TabScrollOffset)
 	}
 }
+
+func TestTabManagerCloseBatch(t *testing.T) {
+	createManager := func() *TabManager {
+		tm := NewTabManager()
+		for i := 0; i < 5; i++ {
+			name := fmt.Sprintf("file_%d.txt", i)
+			tm.Tabs = append(tm.Tabs, &Tab{
+				Path:   name,
+				Name:   name,
+				Buffer: NewBuffer("content"),
+			})
+		}
+		tm.ActiveIndex = 2
+		return tm
+	}
+
+	// 1. CloseTabsToRight from index 2 -> tabs 0, 1, 2 remain
+	tm := createManager()
+	tm.CloseTabsToRight(2)
+	if len(tm.Tabs) != 3 {
+		t.Fatalf("Expected 3 tabs after CloseTabsToRight(2), got %d", len(tm.Tabs))
+	}
+	if tm.Tabs[2].Name != "file_2.txt" {
+		t.Errorf("Expected last tab to be file_2.txt, got %s", tm.Tabs[2].Name)
+	}
+
+	// 2. CloseTabsToLeft from index 2 -> tabs 2, 3, 4 remain (3 tabs)
+	tm = createManager()
+	tm.CloseTabsToLeft(2)
+	if len(tm.Tabs) != 3 {
+		t.Fatalf("Expected 3 tabs after CloseTabsToLeft(2), got %d", len(tm.Tabs))
+	}
+	if tm.Tabs[0].Name != "file_2.txt" {
+		t.Errorf("Expected first tab to be file_2.txt, got %s", tm.Tabs[0].Name)
+	}
+	if tm.ActiveIndex != 0 {
+		t.Errorf("Expected ActiveIndex 0, got %d", tm.ActiveIndex)
+	}
+
+	// 3. FindTabAt
+	tm = createManager()
+	_ = tm.RenderTabBar(100)
+	if len(tm.ClickRegions) > 0 {
+		firstTab := tm.ClickRegions[0]
+		found := tm.FindTabAt(firstTab.StartX)
+		if found != firstTab.TabIdx {
+			t.Errorf("Expected FindTabAt to return %d, got %d", firstTab.TabIdx, found)
+		}
+		outOfBounds := tm.FindTabAt(999)
+		if outOfBounds != -1 {
+			t.Errorf("Expected FindTabAt(999) to return -1, got %d", outOfBounds)
+		}
+	}
+}

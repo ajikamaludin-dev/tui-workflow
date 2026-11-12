@@ -171,9 +171,9 @@ Workflow terstruktur untuk memastikan pengerjaan fitur, refactoring, atau perbai
 1. Start Session ──> 2. Plan (CURRENT.md) ──> 3. User Approval
                             │                         │
                             ▼                         ▼
-                     Revisi Plan             4. Work (in_progress)
-                                                      │
-                                                      ▼
+                 Revisi Plan / Improvment     4. Work (in_progress)
+                            ^                         │
+                            |                         ▼
 5. Done / Archive <─── 6. Review ◄────────── Verifikasi (vet + test)
    (mv ke done/)       (Human Checklist)
 ```

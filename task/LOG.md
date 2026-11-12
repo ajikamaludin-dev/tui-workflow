@@ -9,3 +9,4 @@
 | 2026-11-12 | Git Sidebar & Workflow Fixes | done | dev |
 | 2026-11-12 | Workspace Quick Open, Command Palette, Global Search, and Editor Find | done | dev |
 | 2026-11-12 | Editor Ergonomics: Soft-Wrap Toggle, Word Jump, and Mouse Click Precision | done | dev |
+| 2026-11-12 | Tab Context Menu, Sidebar Refresh Buttons, and Extended Language Syntax Highlighting | done | dev |

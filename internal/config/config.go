@@ -8,18 +8,20 @@ import (
 )
 
 type Config struct {
-	ShowHidden bool   `json:"show_hidden"`
-	AutoSave   bool   `json:"auto_save"`
-	SoftWrap   bool   `json:"soft_wrap"`
-	LastDir    string `json:"last_dir,omitempty"`
+	ShowHidden   bool   `json:"show_hidden"`
+	AutoSave     bool   `json:"auto_save"`
+	SoftWrap     bool   `json:"soft_wrap"`
+	SidebarWidth int    `json:"sidebar_width,omitempty"`
+	LastDir      string `json:"last_dir,omitempty"`
 }
 
 func DefaultConfig() *Config {
 	return &Config{
-		ShowHidden: true,
-		AutoSave:   true,
-		SoftWrap:   true,
-		LastDir:    "",
+		ShowHidden:   true,
+		AutoSave:     true,
+		SoftWrap:     true,
+		SidebarWidth: 30,
+		LastDir:      "",
 	}
 }
 
@@ -58,6 +60,9 @@ func LoadConfig() (*Config, error) {
 	cfg := DefaultConfig()
 	if err := json.Unmarshal(data, cfg); err != nil {
 		return DefaultConfig(), err
+	}
+	if cfg.SidebarWidth <= 0 {
+		cfg.SidebarWidth = 30
 	}
 	return cfg, nil
 }

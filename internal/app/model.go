@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
+	"tui-workflow/internal/ai"
 	"tui-workflow/internal/config"
 	"tui-workflow/internal/editor"
 	"tui-workflow/internal/explorer"
@@ -45,6 +47,8 @@ type Model struct {
 	GlobalSearch   *dialog.GlobalSearch
 	FindBar        *dialog.FindBar
 	BranchSwitcher *dialog.BranchSwitcher
+	AISettingsDialog *dialog.AISettingsDialog
+	AIClient       *ai.Client
 	SearchView     *search.SearchView
 	ContextMenu    *ui.ContextMenu
 	AutoSave          bool
@@ -126,6 +130,8 @@ func NewModelWithPath(targetPath string) (Model, error) {
 		GlobalSearch:   dialog.NewGlobalSearch(),
 		FindBar:        dialog.NewFindBar(),
 		BranchSwitcher: dialog.NewBranchSwitcher(),
+		AISettingsDialog: dialog.NewAISettingsDialog(),
+		AIClient:       ai.NewClient(),
 		SearchView:     search.NewSearchView(rootDir),
 		ContextMenu:    ui.NewContextMenu(),
 		AutoSave:       cfg.AutoSave,
@@ -197,6 +203,53 @@ func gitCommitCmd(repo *git.Repo, commitMsg string) tea.Cmd {
 	}
 }
 
+type aiCommitGeneratedMsg struct {
+	message string
+}
+
+type aiCommitErrorMsg struct {
+	err error
+}
+
+func aiGenerateCommitCmd(client *ai.Client, cfg config.AIConfig, repo *git.Repo) tea.Cmd {
+	return func() tea.Msg {
+		if repo == nil {
+			return aiCommitErrorMsg{err: fmt.Errorf("repositori git tidak ditemukan")}
+		}
+		diff, err := repo.GetStagedDiff()
+		if err != nil {
+			return aiCommitErrorMsg{err: err}
+		}
+		if strings.TrimSpace(diff) == "" {
+			return aiCommitErrorMsg{err: fmt.Errorf("staging area kosong, stage file terlebih dahulu")}
+		}
+		msg, err := client.GenerateCommitMessage(context.Background(), cfg, diff)
+		if err != nil {
+			return aiCommitErrorMsg{err: err}
+		}
+		return aiCommitGeneratedMsg{message: msg}
+	}
+}
+
+func (m *Model) triggerAICommit() (Model, tea.Cmd) {
+	if m.GitRepo == nil || m.GitView == nil {
+		m.StatusBar.ShowToast("Bukan repositori git", true, 3*time.Second)
+		return *m, nil
+	}
+	if m.GitView.IsLoading {
+		return *m, nil
+	}
+	if len(m.GitView.Staged) == 0 {
+		m.StatusBar.ShowToast("Tidak ada perubahan di staging area (+ untuk stage)", true, 3*time.Second)
+		return *m, nil
+	}
+	m.GitView.IsLoading = true
+	m.GitView.LoadingMsg = "AI Generating..."
+	m.GitView.SpinnerFrame = 0
+	m.StatusBar.ShowToast("🤖 Menghasilkan commit message via AI...", false, 4*time.Second)
+	return *m, tea.Batch(aiGenerateCommitCmd(m.AIClient, m.Config.AI, m.GitRepo), gitLoadingTickCmd())
+}
+
 type FileWatchTickMsg time.Time
 
 func fileWatchTickCmd() tea.Cmd {
@@ -252,6 +305,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+		return m, nil
+
+	case aiCommitGeneratedMsg:
+		if m.GitView != nil {
+			m.GitView.IsLoading = false
+			m.GitView.LoadingMsg = ""
+			m.GitView.CommitInput.SetValue(msg.message)
+			m.GitView.CommitInput.Focus()
+			m.GitView.FocusArea = git.GitFocusCommitInput
+		}
+		m.StatusBar.ShowToast("Saran commit message berhasil disarankan AI (Ctrl+Enter untuk commit)", false, 4*time.Second)
+		return m, nil
+
+	case aiCommitErrorMsg:
+		if m.GitView != nil {
+			m.GitView.IsLoading = false
+			m.GitView.LoadingMsg = ""
+		}
+		m.StatusBar.ShowToast(fmt.Sprintf("AI Error: %v", msg.err), true, 4*time.Second)
 		return m, nil
 
 	case MarqueeTickMsg:
@@ -407,6 +479,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
+		// 0.85. AI Settings Dialog Handling if active
+		if m.AISettingsDialog != nil && m.AISettingsDialog.Active {
+			m.AISettingsDialog.SetScreenSize(m.Width, m.Height)
+			saved, canceled, newCfg, cmd := m.AISettingsDialog.Update(msg)
+			if saved {
+				m.Config.AI = newCfg
+				_ = config.SaveConfig(m.Config)
+				m.StatusBar.ShowToast("Pengaturan AI berhasil disimpan", false, 3*time.Second)
+			} else if canceled {
+				// Dialog closed
+			}
+			return m, cmd
+		}
+
 		// 1. Buffer Switcher Modal Handling
 		if m.Switcher.Active {
 			targetIdx, closed, cmd := m.Switcher.Update(msg)
@@ -548,6 +634,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "alt+b":
 			m.openBranchSwitcher()
+			return m, nil
+
+		case "alt+g":
+			return m.triggerAICommit()
+
+		case "alt+i":
+			m.openAISettings()
 			return m, nil
 
 		case "ctrl+enter":
@@ -1457,6 +1550,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.GitView.SpinnerFrame = 0
 						m.StatusBar.ShowToast("Pushing ke remote repository...", false, 5*time.Second)
 						return m, tea.Batch(gitPushCmd(m.GitRepo), gitLoadingTickCmd())
+					} else if action == "ai_commit" {
+						return m.triggerAICommit()
 					}
 					if action == "discard" && targetFile != nil {
 						m.ConfirmDialog.Open(
@@ -1724,6 +1819,7 @@ func (m *Model) openCommandPalette() {
 		// Settings & Tools
 		{ID: "setting.autosave", Title: "Toggle Auto-Save", Category: "Setting", Shortcut: "Alt+S"},
 		{ID: "setting.hidden", Title: "Toggle Hidden Files", Category: "Setting", Shortcut: "."},
+		{ID: "setting.ai", Title: "Settings: Configure AI Model (OpenAI API)", Category: "Setting", Shortcut: "Alt+I"},
 		{ID: "setting.shortcuts", Title: "Keyboard Shortcuts Help", Category: "Help", Shortcut: "?"},
 		{ID: "about.open", Title: "About tui-workflow", Category: "Help", Shortcut: "Alt+A"},
 
@@ -1731,6 +1827,7 @@ func (m *Model) openCommandPalette() {
 		{ID: "git.stage_all", Title: "Git: Stage All Changes", Category: "Git", Shortcut: ""},
 		{ID: "git.unstage_all", Title: "Git: Unstage All Changes", Category: "Git", Shortcut: ""},
 		{ID: "git.branch_switcher", Title: "Git: Switch Branch", Category: "Git", Shortcut: "Alt+B"},
+		{ID: "git.ai_commit", Title: "Git: Generate Commit Message with AI", Category: "Git", Shortcut: "Alt+G"},
 		{ID: "git.refresh", Title: "Git: Refresh Worktree Status", Category: "Git", Shortcut: ""},
 		{ID: "files.refresh", Title: "Files: Refresh File Explorer", Category: "Files", Shortcut: ""},
 	}
@@ -2235,6 +2332,14 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 	case "setting.shortcuts":
 		m.ShowHelp = true
 
+	case "setting.ai":
+		m.openAISettings()
+
+	case "git.ai_commit":
+		var cmd tea.Cmd
+		*m, cmd = m.triggerAICommit()
+		return cmd
+
 	case "about.open":
 		m.ShowAbout = true
 
@@ -2586,4 +2691,10 @@ func (m *Model) handleContextMenuAction(action string) tea.Cmd {
 		m.syncStatusBarWithActiveTab()
 	}
 	return nil
+}
+
+func (m *Model) openAISettings() {
+	if m.AISettingsDialog != nil && m.Config != nil {
+		m.AISettingsDialog.Open(m.Config.AI)
+	}
 }

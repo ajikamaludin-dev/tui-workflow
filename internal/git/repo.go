@@ -430,3 +430,66 @@ func (r *Repo) CheckoutBranch(branchName string) error {
 		Force:  false,
 	})
 }
+
+// GetStagedDiff returns unified diff text of all staged files against HEAD.
+func (r *Repo) GetStagedDiff() (string, error) {
+	if r == nil || r.worktree == nil {
+		return "", fmt.Errorf("worktree tidak valid")
+	}
+
+	staged, _, err := r.GetStatus()
+	if err != nil {
+		return "", err
+	}
+	if len(staged) == 0 {
+		return "", nil
+	}
+
+	var idxEntries map[string]plumbing.Hash
+	if idx, err := r.r.Storer.Index(); err == nil && idx != nil {
+		idxEntries = make(map[string]plumbing.Hash, len(idx.Entries))
+		for _, entry := range idx.Entries {
+			idxEntries[entry.Name] = entry.Hash
+		}
+	}
+
+	var sb strings.Builder
+	for _, f := range staged {
+		orig, _ := r.GetFileContentAtHEAD(f.Path)
+
+		var stagedContent string
+		if f.Status == "D" {
+			stagedContent = ""
+		} else if hash, exists := idxEntries[f.Path]; exists {
+			if blob, err := r.r.BlobObject(hash); err == nil {
+				if reader, err := blob.Reader(); err == nil {
+					data, _ := io.ReadAll(reader)
+					_ = reader.Close()
+					stagedContent = string(data)
+				}
+			}
+		} else {
+			// Fallback to worktree file
+			fullPath := filepath.Join(r.RootPath, f.Path)
+			if data, err := os.ReadFile(fullPath); err == nil {
+				stagedContent = string(data)
+			}
+		}
+
+		diffRes := ComputeSplitDiff(f.Path, orig, stagedContent)
+		patch := FormatUnifiedDiff(diffRes, 3)
+		if patch != "" {
+			sb.WriteString(fmt.Sprintf("diff --git a/%s b/%s\n", f.Path, f.Path))
+			if f.Status == "A" {
+				sb.WriteString(fmt.Sprintf("--- /dev/null\n+++ b/%s\n", f.Path))
+			} else if f.Status == "D" {
+				sb.WriteString(fmt.Sprintf("--- a/%s\n+++ /dev/null\n", f.Path))
+			} else {
+				sb.WriteString(fmt.Sprintf("--- a/%s\n+++ b/%s\n", f.Path, f.Path))
+			}
+			sb.WriteString(patch)
+		}
+	}
+
+	return sb.String(), nil
+}

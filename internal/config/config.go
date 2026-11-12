@@ -7,12 +7,20 @@ import (
 	"path/filepath"
 )
 
+type AIConfig struct {
+	ProviderURL  string   `json:"provider_url"`
+	APIKey       string   `json:"api_key"`
+	Models       []string `json:"models"`
+	DefaultModel string   `json:"default_model"`
+}
+
 type Config struct {
-	ShowHidden   bool   `json:"show_hidden"`
-	AutoSave     bool   `json:"auto_save"`
-	SoftWrap     bool   `json:"soft_wrap"`
-	SidebarWidth int    `json:"sidebar_width,omitempty"`
-	LastDir      string `json:"last_dir,omitempty"`
+	ShowHidden   bool     `json:"show_hidden"`
+	AutoSave     bool     `json:"auto_save"`
+	SoftWrap     bool     `json:"soft_wrap"`
+	SidebarWidth int      `json:"sidebar_width,omitempty"`
+	LastDir      string   `json:"last_dir,omitempty"`
+	AI           AIConfig `json:"ai"`
 }
 
 func DefaultConfig() *Config {
@@ -22,6 +30,12 @@ func DefaultConfig() *Config {
 		SoftWrap:     true,
 		SidebarWidth: 30,
 		LastDir:      "",
+		AI: AIConfig{
+			ProviderURL:  "https://api.openai.com/v1",
+			APIKey:       "",
+			Models:       []string{"gpt-4o-mini", "gpt-4o"},
+			DefaultModel: "gpt-4o-mini",
+		},
 	}
 }
 
@@ -63,6 +77,15 @@ func LoadConfig() (*Config, error) {
 	}
 	if cfg.SidebarWidth <= 0 {
 		cfg.SidebarWidth = 30
+	}
+	if cfg.AI.ProviderURL == "" {
+		cfg.AI.ProviderURL = "https://api.openai.com/v1"
+	}
+	if len(cfg.AI.Models) == 0 {
+		cfg.AI.Models = []string{"gpt-4o-mini", "gpt-4o"}
+	}
+	if cfg.AI.DefaultModel == "" {
+		cfg.AI.DefaultModel = "gpt-4o-mini"
 	}
 	return cfg, nil
 }

@@ -277,4 +277,27 @@ func TestRepoDiscardAndBranches(t *testing.T) {
 	if len(branches) == 0 || current == "" {
 		t.Errorf("Expected branches and current branch to be populated, got branches=%v current=%q", branches, current)
 	}
+
+	// 4. Test GetStagedDiff
+	diff, err := repo.GetStagedDiff()
+	if err != nil {
+		t.Fatalf("GetStagedDiff on clean repo returned error: %v", err)
+	}
+	if diff != "" {
+		t.Errorf("Expected empty staged diff on clean repo, got: %s", diff)
+	}
+
+	// Modify tracked.txt and stage it
+	_ = os.WriteFile(trackedFile, []byte("head content\nnew line in tracked"), 0644)
+	if err := repo.StageFile("tracked.txt"); err != nil {
+		t.Fatalf("StageFile failed: %v", err)
+	}
+
+	diff, err = repo.GetStagedDiff()
+	if err != nil {
+		t.Fatalf("GetStagedDiff failed: %v", err)
+	}
+	if len(diff) == 0 {
+		t.Errorf("Expected non-empty staged diff, got empty")
+	}
 }

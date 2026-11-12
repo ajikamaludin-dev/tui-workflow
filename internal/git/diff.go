@@ -32,6 +32,94 @@ type SplitDiffResult struct {
 	Rows     []DiffRow
 }
 
+// FormatUnifiedDiff formats a SplitDiffResult into standard unified diff text with context lines.
+func FormatUnifiedDiff(diffResult SplitDiffResult, contextLines int) string {
+	if len(diffResult.Rows) == 0 {
+		return ""
+	}
+
+	n := len(diffResult.Rows)
+	include := make([]bool, n)
+	hasChange := false
+
+	for i, r := range diffResult.Rows {
+		if r.LeftType == DiffDeleted || r.RightType == DiffAdded {
+			hasChange = true
+			start := i - contextLines
+			if start < 0 {
+				start = 0
+			}
+			end := i + contextLines
+			if end >= n {
+				end = n - 1
+			}
+			for k := start; k <= end; k++ {
+				include[k] = true
+			}
+		}
+	}
+
+	if !hasChange {
+		return ""
+	}
+
+	var sb strings.Builder
+	idx := 0
+	for idx < n {
+		if !include[idx] {
+			idx++
+			continue
+		}
+
+		// Find contiguous chunk
+		chunkStart := idx
+		for idx < n && include[idx] {
+			idx++
+		}
+		chunkEnd := idx // exclusive
+
+		firstRow := diffResult.Rows[chunkStart]
+		origStart := firstRow.LeftNum
+		if origStart <= 0 {
+			origStart = 1
+		}
+		modStart := firstRow.RightNum
+		if modStart <= 0 {
+			modStart = 1
+		}
+
+		origCount := 0
+		modCount := 0
+		for k := chunkStart; k < chunkEnd; k++ {
+			row := diffResult.Rows[k]
+			if row.LeftType != DiffEmpty {
+				origCount++
+			}
+			if row.RightType != DiffEmpty {
+				modCount++
+			}
+		}
+
+		sb.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@\n", origStart, origCount, modStart, modCount))
+		for k := chunkStart; k < chunkEnd; k++ {
+			row := diffResult.Rows[k]
+			switch {
+			case row.LeftType == DiffDeleted && row.RightType == DiffAdded:
+				sb.WriteString("-" + row.LeftText + "\n")
+				sb.WriteString("+" + row.RightText + "\n")
+			case row.LeftType == DiffDeleted:
+				sb.WriteString("-" + row.LeftText + "\n")
+			case row.RightType == DiffAdded:
+				sb.WriteString("+" + row.RightText + "\n")
+			case row.LeftType == DiffUnchanged:
+				sb.WriteString(" " + row.LeftText + "\n")
+			}
+		}
+	}
+
+	return sb.String()
+}
+
 // ComputeSplitDiff calculates a side-by-side split diff using LCS
 func ComputeSplitDiff(filePath, original, modified string) SplitDiffResult {
 	origLines := splitLines(original)

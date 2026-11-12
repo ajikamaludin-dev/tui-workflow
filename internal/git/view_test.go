@@ -218,3 +218,31 @@ func TestGitViewSpinnerAnimation(t *testing.T) {
 		t.Errorf("Expected rendered to contain Pushing... after full rotation, got %s", rendered)
 	}
 }
+
+func TestGitView_CornerAIButton(t *testing.T) {
+	repo, tempDir := setupTestRepo(t)
+	defer os.RemoveAll(tempDir)
+
+	gv := NewGitView(repo)
+	// Render sidebar with width 32
+	_ = gv.Render(32, 20, true)
+
+	if gv.AIButtonStartX <= 0 {
+		t.Errorf("expected AIButtonStartX > 0, got %d", gv.AIButtonStartX)
+	}
+
+	// Click on the right corner (relX >= AIButtonStartX, relY on commit input row e.g. line 1)
+	_, action, handled := gv.HandleMouseClick(gv.AIButtonStartX+1, 1)
+	if !handled || action != "ai_commit" {
+		t.Errorf("expected action 'ai_commit', got action=%q handled=%v", action, handled)
+	}
+
+	// Click on the input field text area (relX = 5, relY = 1)
+	_, action, handled = gv.HandleMouseClick(5, 1)
+	if !handled || action != "" {
+		t.Errorf("expected focus input (action ''), got action=%q handled=%v", action, handled)
+	}
+	if gv.FocusArea != GitFocusCommitInput {
+		t.Errorf("expected focus area GitFocusCommitInput, got %v", gv.FocusArea)
+	}
+}

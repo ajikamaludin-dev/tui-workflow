@@ -47,6 +47,8 @@ type GitView struct {
 	LoadingMsg    string
 	SpinnerFrame  int
 
+	AIButtonStartX int
+
 	// Last click coordinate mapping for mouse handling
 	ItemClickMap map[int]GitClickTarget
 }
@@ -67,6 +69,7 @@ const (
 	ClickButtonRow
 	ClickStageAllAction
 	ClickUnstageAllAction
+	ClickAICommitAction
 )
 
 type GitClickTarget struct {
@@ -408,6 +411,12 @@ func (gv *GitView) HandleMouseClick(relX, relY int) (*GitFileStatus, string, boo
 
 	switch target.Type {
 	case ClickCommitInput:
+		if gv.AIButtonStartX > 0 && relX >= gv.AIButtonStartX {
+			if gv.IsLoading {
+				return nil, "", true
+			}
+			return nil, "ai_commit", true
+		}
 		gv.FocusArea = GitFocusCommitInput
 		gv.CommitInput.Focus()
 		return nil, "", true
@@ -424,6 +433,13 @@ func (gv *GitView) HandleMouseClick(relX, relY int) (*GitFileStatus, string, boo
 			return nil, "push", true
 		}
 		return nil, "", true
+
+	case ClickAICommitAction:
+		gv.CommitInput.Blur()
+		if gv.IsLoading {
+			return nil, "", true
+		}
+		return nil, "ai_commit", true
 
 	case ClickSectionStaged:
 		gv.CommitInput.Blur()
@@ -526,15 +542,27 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 		return strings.Join(lines[:height], "\n")
 	}
 
-	gv.CommitInput.Width = width - 4
-	if gv.CommitInput.Width < 10 {
-		gv.CommitInput.Width = 10
-	}
-
 	var lines []string
 	currentY := 0
 
-	// 1. Commit Box
+	// 1. Commit Box with AI suggest button at top-right corner
+	aiBtnStr := "✨"
+	if width >= 32 {
+		aiBtnStr = "✨ AI"
+	}
+	aiBtnStyled := lipgloss.NewStyle().
+		Foreground(ui.CurrentTheme.Yellow).
+		Bold(true).
+		Render(aiBtnStr)
+
+	aiBtnWidth := ansi.StringWidth(aiBtnStr)
+	inputWidth := width - 4 - aiBtnWidth - 1
+	if inputWidth < 8 {
+		inputWidth = 8
+	}
+	gv.CommitInput.Width = inputWidth
+	gv.AIButtonStartX = (width - 2) - aiBtnWidth - 2
+
 	inputBorder := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(ui.CurrentTheme.BorderColor).
@@ -544,7 +572,12 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 		inputBorder = inputBorder.BorderForeground(ui.CurrentTheme.Accent)
 	}
 
-	commitRender := inputBorder.Render(gv.CommitInput.View())
+	space := (width - 4) - ansi.StringWidth(gv.CommitInput.View()) - aiBtnWidth
+	if space < 1 {
+		space = 1
+	}
+	inputRow := gv.CommitInput.View() + strings.Repeat(" ", space) + aiBtnStyled
+	commitRender := inputBorder.Render(inputRow)
 	commitLines := strings.Split(commitRender, "\n")
 	for i, cLine := range commitLines {
 		gv.ItemClickMap[currentY+i] = GitClickTarget{Type: ClickCommitInput}

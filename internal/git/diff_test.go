@@ -36,4 +36,17 @@ func TestComputeSplitDiff(t *testing.T) {
 	if len(rendered) == 0 {
 		t.Errorf("Rendered diff view should not be empty")
 	}
+
+	// Test FormatUnifiedDiff
+	unified := FormatUnifiedDiff(res, 1)
+	if len(unified) == 0 {
+		t.Errorf("Expected non-empty unified diff")
+	}
+	if !contains(unified, "+line 2 (modified)") {
+		t.Errorf("Expected unified diff to contain added line, got:\n%s", unified)
+	}
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || (len(s) > 0 && len(substr) > 0 && (s[:len(substr)] == substr || (len(s) > len(substr) && (contains(s[1:], substr))))))
 }

@@ -83,6 +83,7 @@
 | `Ctrl + P` | Quick Open File di Workspace |
 | `Alt + S` | Toggle Auto-Save on Focus Change (ON / OFF) |
 | `Alt + Z` | Toggle Soft-Wrap pada Editor |
+| `Alt + I` | Konfigurasi Model AI (OpenAI API Format: Provider URL, API Key, Model) |
 | `?` | Tampilkan Modal Panduan Pintasan Keyboard |
 | `Esc` | Tutup menu dropdown, modal dialog, atau kembali ke editor |
 
@@ -126,6 +127,7 @@
 | `d` / klik `[x]` | Buang semua perubahan lokal pada file terpilih (Discard Changes) |
 | `Alt + B` | Buka pemilih branch Git lokal (Branch Switcher modal) |
 | `Tab` | Pindah fokus ke kotak input pesan commit |
+| `Alt + G` / klik `[✨ AI]` | Hasilkan pesan commit otomatis menggunakan AI dari perubahan staged |
 | `Ctrl + Enter` | Lakukan Commit dengan pesan yang diketik |
 
 ---

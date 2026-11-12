@@ -80,6 +80,9 @@ func (m Model) View() string {
 	} else if m.ConfirmDialog.Active {
 		modal := m.ConfirmDialog.Render()
 		baseView = overlayCenter(baseView, modal, m.Width, m.Height)
+	} else if m.AISettingsDialog != nil && m.AISettingsDialog.Active {
+		modal := m.AISettingsDialog.Render()
+		baseView = overlayCenter(baseView, modal, m.Width, m.Height)
 	} else if m.ShowHelp {
 		modal := renderHelpModal()
 		baseView = overlayCenter(baseView, modal, m.Width, m.Height)
@@ -293,6 +296,7 @@ func renderHelpModal() string {
 │   • Alt+R / Alt+T   : Menu Search / Setting      │
 │   • Alt+A           : Menu About                 │
 │   • Alt+S / Alt+Z   : Auto-Save / Soft-Wrap      │
+│   • Alt+I           : Pengaturan AI (OpenAI)     │
 │   • ? / Esc         : Buka Bantuan / Tutup Dialog│
 │                                                  │
 │ Pencarian & Navigasi:                            │
@@ -314,6 +318,7 @@ func renderHelpModal() string {
 │                                                  │
 │ Git Source Control:                              │
 │   • Alt+B           : Ganti Branch (Checkout)    │
+│   • Alt+G           : AI Generate Commit Message │
 │   • d / [x]         : Buang Perubahan (Discard)  │
 │   • + / -           : Stage / Unstage File       │
 │   • Ctrl+Enter      : Lakukan Commit             │

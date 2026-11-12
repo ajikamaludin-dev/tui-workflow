@@ -31,11 +31,18 @@ func TestConfigLoadAndSave(t *testing.T) {
 	if cfg.SidebarWidth != 30 {
 		t.Errorf("expected default SidebarWidth to be 30, got %d", cfg.SidebarWidth)
 	}
+	if cfg.AI.DefaultModel != "gpt-4o-mini" {
+		t.Errorf("expected default AI model to be gpt-4o-mini, got %s", cfg.AI.DefaultModel)
+	}
 
 	cfg.ShowHidden = false
 	cfg.AutoSave = false
 	cfg.SidebarWidth = 35
 	cfg.LastDir = "/custom/path"
+	cfg.AI.ProviderURL = "https://openrouter.ai/api/v1"
+	cfg.AI.APIKey = "sk-test-123"
+	cfg.AI.DefaultModel = "anthropic/claude-3.5-sonnet"
+	cfg.AI.Models = []string{"anthropic/claude-3.5-sonnet", "openai/gpt-4o"}
 	if err := SaveConfig(cfg); err != nil {
 		t.Fatalf("unexpected error saving config: %v", err)
 	}
@@ -46,6 +53,9 @@ func TestConfigLoadAndSave(t *testing.T) {
 	}
 	if loaded.ShowHidden != false || loaded.AutoSave != false || loaded.SidebarWidth != 35 || loaded.LastDir != "/custom/path" {
 		t.Errorf("saved config does not match loaded: %+v", loaded)
+	}
+	if loaded.AI.ProviderURL != "https://openrouter.ai/api/v1" || loaded.AI.APIKey != "sk-test-123" || loaded.AI.DefaultModel != "anthropic/claude-3.5-sonnet" {
+		t.Errorf("saved AI config does not match loaded: %+v", loaded.AI)
 	}
 
 	cfgPath, err := GetConfigPath()

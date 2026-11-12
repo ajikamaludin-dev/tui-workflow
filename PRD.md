@@ -121,6 +121,8 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
    - `-` atau klik ikon `-`: Unstage file (`git reset`).
    - `d` atau klik ikon `[x]`: Buang semua perubahan lokal file terpilih (`git checkout -- <file>` / discard untracked) dengan konfirmasi.
    - `Alt+b` atau klik header branch: Buka modal dialog pemilihan dan perpindahan branch Git lokal.
+   - `Alt+g` atau klik tombol `[✨ AI]`: Hasilkan pesan commit otomatis menggunakan LLM (OpenAI API format) dari staged changes.
+   - `Alt+i` (atau menu Setting > AI Configuration): Konfigurasi endpoint OpenAI API, API Key, daftar model, dan model default.
    - `Enter` atau klik file pada daftar Git: Buka **Git Side-by-Side Split Diff Tab** di Kolom 2.
    - `Ctrl+Enter`: Jalankan commit jika pesan tidak kosong dan ada staged changes.
 

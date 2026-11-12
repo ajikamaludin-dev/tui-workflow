@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -22,7 +22,7 @@ const (
 
 type GitView struct {
 	Repo        *Repo
-	CommitInput textinput.Model
+	CommitInput textarea.Model
 
 	Staged   []GitFileStatus
 	Changes  []GitFileStatus
@@ -79,15 +79,22 @@ type GitClickTarget struct {
 }
 
 func NewGitView(repo *Repo) *GitView {
-	ti := textinput.New()
-	ti.Prompt = ""
-	ti.Placeholder = "Message (Ctrl+Enter to commit)"
-	ti.CharLimit = 200
-	ti.Width = 24
+	ta := textarea.New()
+	ta.Prompt = ""
+	ta.ShowLineNumbers = false
+	ta.Placeholder = "Message (Ctrl+Enter to commit)"
+	ta.CharLimit = 500
+	ta.SetHeight(3)
+	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
+	ta.BlurredStyle.CursorLine = lipgloss.NewStyle()
+	ta.FocusedStyle.Placeholder = lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgSecondary)
+	ta.BlurredStyle.Placeholder = lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgSecondary)
+	ta.FocusedStyle.Text = lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgPrimary)
+	ta.BlurredStyle.Text = lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgPrimary)
 
 	gv := &GitView{
 		Repo:         repo,
-		CommitInput:  ti,
+		CommitInput:  ta,
 		FocusArea:    GitFocusCommitInput,
 		ItemClickMap: make(map[int]GitClickTarget),
 	}
@@ -337,7 +344,12 @@ func (gv *GitView) Update(msg tea.Msg) (tea.Cmd, *GitFileStatus) {
 
 		case tea.KeyUp:
 			if gv.FocusArea == GitFocusCommitInput {
-				// stay
+				if gv.CommitInput.Line() > 0 || gv.CommitInput.LineInfo().RowOffset > 0 {
+					var cmd tea.Cmd
+					gv.CommitInput, cmd = gv.CommitInput.Update(msg)
+					return cmd, nil
+				}
+				// stay at top row
 			} else if gv.FocusArea == GitFocusStaged {
 				if gv.StagedIdx > 0 {
 					gv.StagedIdx--
@@ -361,8 +373,17 @@ func (gv *GitView) Update(msg tea.Msg) (tea.Cmd, *GitFileStatus) {
 
 		case tea.KeyDown:
 			if gv.FocusArea == GitFocusCommitInput {
-				gv.FocusArea = GitFocusStaged
-				gv.CommitInput.Blur()
+				isLastLine := gv.CommitInput.Line() >= gv.CommitInput.LineCount()-1
+				lineInfo := gv.CommitInput.LineInfo()
+				isLastRow := lineInfo.RowOffset >= lineInfo.Height-1
+				if isLastLine && isLastRow {
+					gv.FocusArea = GitFocusStaged
+					gv.CommitInput.Blur()
+				} else {
+					var cmd tea.Cmd
+					gv.CommitInput, cmd = gv.CommitInput.Update(msg)
+					return cmd, nil
+				}
 			} else if gv.FocusArea == GitFocusStaged {
 				if gv.StagedIdx < len(gv.Staged)-1 {
 					gv.StagedIdx++
@@ -582,29 +603,39 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 		Render(aiBtnStr)
 
 	aiBtnWidth := ansi.StringWidth(aiBtnStr)
-	inputWidth := width - 4 - aiBtnWidth - 1
+	gv.AIButtonStartX = (width - 2) - aiBtnWidth - 2
+
+	inputWidth := width - 2
 	if inputWidth < 8 {
 		inputWidth = 8
 	}
-	gv.CommitInput.Width = inputWidth
-	gv.AIButtonStartX = (width - 2) - aiBtnWidth - 2
+	gv.CommitInput.SetWidth(inputWidth)
+	gv.CommitInput.SetHeight(3)
+
+	borderColor := ui.CurrentTheme.BorderColor
+	if gv.FocusArea == GitFocusCommitInput && isFocused {
+		borderColor = ui.CurrentTheme.Accent
+	}
 
 	inputBorder := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(ui.CurrentTheme.BorderColor).
-		Width(width - 2)
+		BorderForeground(borderColor).
+		Width(inputWidth)
 
-	if gv.FocusArea == GitFocusCommitInput && isFocused {
-		inputBorder = inputBorder.BorderForeground(ui.CurrentTheme.Accent)
-	}
-
-	space := (width - 4) - ansi.StringWidth(gv.CommitInput.View()) - aiBtnWidth
-	if space < 1 {
-		space = 1
-	}
-	inputRow := gv.CommitInput.View() + strings.Repeat(" ", space) + aiBtnStyled
-	commitRender := inputBorder.Render(inputRow)
+	commitRender := inputBorder.Render(gv.CommitInput.View())
 	commitLines := strings.Split(commitRender, "\n")
+
+	// Inject AI suggest button into top border
+	if len(commitLines) > 0 {
+		start := gv.AIButtonStartX
+		if start-2 >= 1 && width-start-aiBtnWidth-2 >= 0 {
+			borderStyle := lipgloss.NewStyle().Foreground(borderColor)
+			leftDashes := strings.Repeat("─", start-2)
+			rightDashes := strings.Repeat("─", width-start-aiBtnWidth-2)
+			commitLines[0] = borderStyle.Render("╭"+leftDashes) + " " + aiBtnStyled + " " + borderStyle.Render(rightDashes+"╮")
+		}
+	}
+
 	for i, cLine := range commitLines {
 		gv.ItemClickMap[currentY+i] = GitClickTarget{Type: ClickCommitInput}
 		lines = append(lines, cLine)

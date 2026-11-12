@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	gogit "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
@@ -244,5 +245,55 @@ func TestGitView_CornerAIButton(t *testing.T) {
 	}
 	if gv.FocusArea != GitFocusCommitInput {
 		t.Errorf("expected focus area GitFocusCommitInput, got %v", gv.FocusArea)
+	}
+}
+
+func TestGitView_MultilineCommitInputAndTextWrap(t *testing.T) {
+	repo, tempDir := setupTestRepo(t)
+	defer os.RemoveAll(tempDir)
+
+	gv := NewGitView(repo)
+
+	// Verify height is 3 lines
+	if gv.CommitInput.Height() != 3 {
+		t.Errorf("Expected CommitInput.Height() to be 3, got %d", gv.CommitInput.Height())
+	}
+
+	// Verify rendering with long message wraps
+	longMsg := "feat(git): add multiline commit input with auto wrap for long commit messages"
+	gv.CommitInput.SetValue(longMsg)
+
+	rendered := gv.Render(30, 20, true)
+
+	// Rendered output should contain parts of wrapped message
+	if !strings.Contains(rendered, "feat(git):") {
+		t.Errorf("Expected rendered to contain 'feat(git):', got:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "multiline") {
+		t.Errorf("Expected rendered to contain 'multiline', got:\n%s", rendered)
+	}
+
+	// Test keyboard navigation: Up stays at top row when row=0
+	gv.CommitInput.SetCursor(0)
+	gv.Update(tea.KeyMsg{Type: tea.KeyUp})
+	if gv.FocusArea != GitFocusCommitInput {
+		t.Errorf("Expected focus to remain GitFocusCommitInput on KeyUp, got %v", gv.FocusArea)
+	}
+
+	// Test KeyDown moves down in text until last line, then moves to GitFocusStaged
+	gv.CommitInput.SetValue("line 1\nline 2")
+	gv.CommitInput.CursorUp()
+	if gv.CommitInput.Line() != 0 {
+		t.Fatalf("Expected cursor on line 0, got %d", gv.CommitInput.Line())
+	}
+	// Line 1 -> KeyDown moves to Line 2
+	gv.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if gv.FocusArea != GitFocusCommitInput {
+		t.Errorf("Expected focus to remain GitFocusCommitInput while navigating lines, got %v", gv.FocusArea)
+	}
+	// On line 2 (last line) -> KeyDown exits to GitFocusStaged
+	gv.Update(tea.KeyMsg{Type: tea.KeyDown})
+	if gv.FocusArea != GitFocusStaged {
+		t.Errorf("Expected focus to transition to GitFocusStaged at bottom line, got %v", gv.FocusArea)
 	}
 }

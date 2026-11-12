@@ -22,5 +22,4 @@
 | 20 | [ ] | auto listen file jika changes file dari luar editor |
 | 21 | [ ] | ijin kan block copy dan paste action di previewe markdown |
 | 22 | [ ] | search text in open editor with ctrl+f | 
-
-tes
+| 23 | [ ] | integrasi ai llm model dengan format openai api , user bisa setting provider url, api dan models serta default model , kemudian implementasi pertama digunakan untuk generate commit message dari changes yang dilakukan di project yang open |

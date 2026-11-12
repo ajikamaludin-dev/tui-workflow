@@ -27,18 +27,18 @@ type BufferSnapshot struct {
 }
 
 type Buffer struct {
-	Lines       [][]rune
-	CursorRow   int
-	CursorCol   int
-	ScrollRow   int
-	ScrollCol   int
-	SoftWrap    bool
-	IsDirty     bool
-	Highlighter     *syntax.Highlighter
-	cachedHigh      []string
-	cachedStyles    [][]string
-	cachedPath      string
-	cachedDirty     bool
+	Lines        [][]rune
+	CursorRow    int
+	CursorCol    int
+	ScrollRow    int
+	ScrollCol    int
+	SoftWrap     bool
+	IsDirty      bool
+	Highlighter  *syntax.Highlighter
+	cachedHigh   []string
+	cachedStyles [][]string
+	cachedPath   string
+	cachedDirty  bool
 
 	// Selection state
 	HasSelection    bool
@@ -60,16 +60,16 @@ type Buffer struct {
 
 func NewBuffer(content string) *Buffer {
 	b := &Buffer{
-		Lines:       make([][]rune, 0),
-		CursorRow:   0,
-		CursorCol:   0,
-		ScrollRow:   0,
-		ScrollCol:   0,
-		SoftWrap:       true,
-		IsDirty:        false,
-		Highlighter:    syntax.NewHighlighter(),
-		cachedDirty:    true,
-		maxUndoStack:   100,
+		Lines:        make([][]rune, 0),
+		CursorRow:    0,
+		CursorCol:    0,
+		ScrollRow:    0,
+		ScrollCol:    0,
+		SoftWrap:     true,
+		IsDirty:      false,
+		Highlighter:  syntax.NewHighlighter(),
+		cachedDirty:  true,
+		maxUndoStack: 100,
 	}
 
 	normalized := strings.ReplaceAll(content, "\r\n", "\n")
@@ -755,6 +755,22 @@ func (b *Buffer) GutterWidth() int {
 	return b.GutterDigits() + 4
 }
 
+// TabWidth defines visual spacing for tab characters in the editor.
+const TabWidth = 4
+
+// runeVisualWidth returns the visual cell width of rune r at the given visual column.
+func runeVisualWidth(r rune, curVisualCol int) int {
+	if r == '\t' {
+		rem := curVisualCol % TabWidth
+		return TabWidth - rem
+	}
+	w := ansi.StringWidth(string(r))
+	if w <= 0 {
+		return 1
+	}
+	return w
+}
+
 // RowColFromVisual converts a visual row offset (from top of viewport) and visual column
 // offset into the corresponding physical line and column.
 func (b *Buffer) RowColFromVisual(relY, textX, textWidth int) (int, int) {
@@ -774,14 +790,16 @@ func (b *Buffer) RowColFromVisual(relY, textX, textWidth int) (int, int) {
 			return lastRow, len(b.Lines[lastRow])
 		}
 		physRow := vIdx
-		physCol := b.ScrollCol + textX
-		if physCol > len(b.Lines[physRow]) {
-			physCol = len(b.Lines[physRow])
+		pLine := b.Lines[physRow]
+		curVis := 0
+		for c, r := range pLine {
+			rw := runeVisualWidth(r, curVis)
+			if curVis+rw > b.ScrollCol+textX {
+				return physRow, c
+			}
+			curVis += rw
 		}
-		if physCol < 0 {
-			physCol = 0
-		}
-		return physRow, physCol
+		return physRow, len(pLine)
 	}
 
 	vLines := b.ComputeVisualLines(textWidth)
@@ -796,29 +814,27 @@ func (b *Buffer) RowColFromVisual(relY, textX, textWidth int) (int, int) {
 		lastRow := len(b.Lines) - 1
 		return lastRow, len(b.Lines[lastRow])
 	}
-
 	vl := vLines[vIdx]
 	physRow := vl.PhysicalLineIdx
-	physCol := vl.StartCol + textX
-	if physRow < len(b.Lines) {
-		if physCol > len(b.Lines[physRow]) {
-			physCol = len(b.Lines[physRow])
+	curVis := 0
+	for c, r := range vl.Runes {
+		rw := runeVisualWidth(r, curVis)
+		if curVis+rw > textX {
+			return physRow, vl.StartCol + c
 		}
+		curVis += rw
 	}
-	if physCol > vl.EndCol {
-		physCol = vl.EndCol
-	}
-	if physCol < vl.StartCol {
-		physCol = vl.StartCol
-	}
-	return physRow, physCol
+	return physRow, vl.EndCol
 }
+
+// ComputeVisualLines
 
 // ComputeVisualLines generates visual lines, handling soft-wrap or horizontal window slicing.
 func (b *Buffer) ComputeVisualLines(textWidth int) []VisualLine {
 	if textWidth < 10 {
 		textWidth = 10
 	}
+
 	var vLines []VisualLine
 	for pIdx, pLine := range b.Lines {
 		if len(pLine) == 0 {
@@ -837,9 +853,15 @@ func (b *Buffer) ComputeVisualLines(textWidth int) []VisualLine {
 			if start > len(pLine) {
 				start = len(pLine)
 			}
-			end := b.ScrollCol + textWidth
-			if end > len(pLine) {
-				end = len(pLine)
+			end := start
+			visWidth := 0
+			for end < len(pLine) {
+				rw := runeVisualWidth(pLine[end], visWidth)
+				if visWidth+rw > textWidth && end > start {
+					break
+				}
+				visWidth += rw
+				end++
 			}
 			var runes []rune
 			if start < end {
@@ -859,10 +881,20 @@ func (b *Buffer) ComputeVisualLines(textWidth int) []VisualLine {
 
 		start := 0
 		for start < len(pLine) {
-			end := start + textWidth
-			if end > len(pLine) {
-				end = len(pLine)
+			end := start
+			visWidth := 0
+			for end < len(pLine) {
+				rw := runeVisualWidth(pLine[end], visWidth)
+				if visWidth+rw > textWidth && end > start {
+					break
+				}
+				visWidth += rw
+				end++
 			}
+			if end == start && end < len(pLine) {
+				end = start + 1
+			}
+
 			vLines = append(vLines, VisualLine{
 				PhysicalLineIdx: pIdx,
 				IsContinuation:  start > 0,
@@ -988,36 +1020,52 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 		physRow := vl.PhysicalLineIdx
 		activeStyle := ""
 
+		curVisualCol := 0
 		for cIdx, r := range lineRunes {
 			physCol := vl.StartCol + cIdx
 			isCursor := vIdx == visualCursorRow && cIdx == visualCursorCol && focused
 			isSelected := b.IsSelected(physRow, physCol)
 			isMatch, isActiveMatch := b.MatchAt(physRow, physCol)
 
+			rw := runeVisualWidth(r, curVisualCol)
+			var rStr string
+			if r == '\t' {
+				rStr = strings.Repeat(" ", rw)
+			} else {
+				rStr = string(r)
+			}
+
 			if isCursor && !b.HasSelection {
 				if activeStyle != "" {
 					textPart.WriteString("\x1b[0m")
 					activeStyle = ""
 				}
-				textPart.WriteString(cursorIBeamStyle.Render(string(r)))
+				if r == '\t' {
+					textPart.WriteString(cursorIBeamStyle.Render(" "))
+					if rw > 1 {
+						textPart.WriteString(strings.Repeat(" ", rw-1))
+					}
+				} else {
+					textPart.WriteString(cursorIBeamStyle.Render(rStr))
+				}
 			} else if isSelected {
 				if activeStyle != "" {
 					textPart.WriteString("\x1b[0m")
 					activeStyle = ""
 				}
-				textPart.WriteString(selectionStyle.Render(string(r)))
+				textPart.WriteString(selectionStyle.Render(rStr))
 			} else if isActiveMatch {
 				if activeStyle != "" {
 					textPart.WriteString("\x1b[0m")
 					activeStyle = ""
 				}
-				textPart.WriteString(ui.CurrentTheme.SearchActiveMatch.Render(string(r)))
+				textPart.WriteString(ui.CurrentTheme.SearchActiveMatch.Render(rStr))
 			} else if isMatch {
 				if activeStyle != "" {
 					textPart.WriteString("\x1b[0m")
 					activeStyle = ""
 				}
-				textPart.WriteString(ui.CurrentTheme.SearchMatchStyle.Render(string(r)))
+				textPart.WriteString(ui.CurrentTheme.SearchMatchStyle.Render(rStr))
 			} else {
 				syntaxStyle := ""
 				if physRow < len(b.cachedStyles) && physCol < len(b.cachedStyles[physRow]) {
@@ -1033,8 +1081,10 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 					}
 					activeStyle = syntaxStyle
 				}
-				textPart.WriteRune(r)
+				textPart.WriteString(rStr)
 			}
+
+			curVisualCol += rw
 		}
 
 		if activeStyle != "" {
@@ -1051,8 +1101,12 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 		if padding < 0 {
 			padding = 0
 		}
-
 		renderedRow := gutterText + textPart.String() + strings.Repeat(" ", padding)
+		if ansi.StringWidth(renderedRow) > width {
+			renderedRow = ansi.Truncate(renderedRow, width, "")
+		} else if ansi.StringWidth(renderedRow) < width {
+			renderedRow += strings.Repeat(" ", width-ansi.StringWidth(renderedRow))
+		}
 		renderedRows = append(renderedRows, renderedRow)
 	}
 

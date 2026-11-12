@@ -14,3 +14,4 @@
 | 2026-11-12 | [2026-11-12 - Undo-Redo, Find-Replace, Go-to-Line & Block Indent, Git Discard & Branch Switcher](done/2026-11-12%20-%20Undo-Redo%2C%20Find-Replace%2C%20Go-to-Line%20%26%20Block%20Indent%2C%20Git%20Discard%20%26%20Branch%20Switcher.md) | done |
 | 2026-11-12 | [2026-11-12 - Integrasi AI LLM Model (OpenAI API Format) & AI Commit Message Generator](done/2026-11-12%20-%20Integrasi%20AI%20LLM%20Model%20%28OpenAI%20API%20Format%29%20%26%20AI%20Commit%20Message%20Generator.md) | done |
 | 2026-11-12 | [2026-11-12 - Syntax Highlighting with Color in Editor](done/2026-11-12%20-%20Syntax%20Highlighting%20with%20Color%20in%20Editor.md) | done |
+| 2026-11-12 | [2026-11-12 - Fix Text Wrap and Tab Overflow Overwriting Line Number Gutter](done/2026-11-12%20-%20Fix%20Text%20Wrap%20and%20Tab%20Overflow%20Overwriting%20Line%20Number%20Gutter.md) | done |

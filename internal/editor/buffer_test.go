@@ -405,3 +405,50 @@ func TestBufferSyntaxHighlighting(t *testing.T) {
 		t.Errorf("Expected ANSI syntax highlight in wrapped lines")
 	}
 }
+
+func TestBufferTabWrappingAndGutterSafety(t *testing.T) {
+	// Recreate line 183 from internal/ai/client.go: 4 tabs followed by a long string
+	tabLine := "\t\t\t\tContent: \"You are an expert developer. Generate a concise, conventional git commit message (format: <type>: <summary>, e.g., 'feat: add ai commit message generator') based on the provided git diff.\""
+	buf := NewBuffer(tabLine)
+	buf.SoftWrap = true
+
+	viewWidth := 80
+	viewHeight := 10
+	rendered := buf.Render(viewWidth, viewHeight, "client.go", true)
+
+	rows := strings.Split(rendered, "\n")
+	if len(rows) != viewHeight {
+		t.Fatalf("Expected exactly %d rows, got %d", viewHeight, len(rows))
+	}
+
+	for i, r := range rows {
+		w := ansi.StringWidth(r)
+		if w != viewWidth {
+			t.Errorf("Row %d width = %d, expected exactly %d. Row text: %q", i, w, viewWidth, r)
+		}
+	}
+
+	// Verify that continuation line exists and contains the gutter separator '┊'
+	foundContinuation := false
+	for _, r := range rows {
+		if strings.Contains(r, "┊") {
+			foundContinuation = true
+			break
+		}
+	}
+	if !foundContinuation {
+		t.Errorf("Expected wrapped tab line to produce a continuation line with '┊' gutter")
+	}
+
+	// Verify RowColFromVisual click mapping on tabbed line
+	// Clicking at textX = 16 (after 4 tabs of 4 columns each) should map to physical col 4
+	gutterW := buf.GutterWidth()
+	textX := 16 // 4 tabs * 4 = 16 visual columns
+	pRow, pCol := buf.RowColFromVisual(0, textX, viewWidth-gutterW)
+	if pRow != 0 {
+		t.Errorf("Expected physical row 0, got %d", pRow)
+	}
+	if pCol != 4 {
+		t.Errorf("Expected physical col 4 (after 4 tabs), got %d", pCol)
+	}
+}

@@ -13,3 +13,4 @@
 | 2026-11-12 | File Watcher, Adjustable Sidebar Width, and Markdown Preview Copy/Paste | done | dev |
 | 2026-11-12 | Undo-Redo, Find-Replace, Go-to-Line & Block Indent, Git Discard & Branch Switcher | done | dev |
 | 2026-11-12 | Integrasi AI LLM Model (OpenAI API Format) & AI Commit Message Generator | done | dev |
+| 2026-11-12 | Syntax Highlighting with Color in Editor | done | dev |

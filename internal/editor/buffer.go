@@ -7,6 +7,7 @@ import (
 	"unicode"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"tui-workflow/internal/syntax"
 	"tui-workflow/internal/ui"
 )
@@ -33,9 +34,11 @@ type Buffer struct {
 	ScrollCol   int
 	SoftWrap    bool
 	IsDirty     bool
-	Highlighter *syntax.Highlighter
-	cachedHigh  []string
-	cachedDirty bool
+	Highlighter     *syntax.Highlighter
+	cachedHigh      []string
+	cachedStyles    [][]string
+	cachedPath      string
+	cachedDirty     bool
 
 	// Selection state
 	HasSelection    bool
@@ -110,6 +113,7 @@ func (b *Buffer) SetText(content string) {
 	b.clampCursor()
 	b.cachedDirty = true
 	b.cachedHigh = nil
+	b.cachedStyles = nil
 	b.undoStack = nil
 	b.redoStack = nil
 	b.typingGroup = false
@@ -928,8 +932,13 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 	}
 
 	// 5. Highlighting
-	if b.cachedDirty {
-		b.cachedHigh = b.Highlighter.HighlightCode(b.Text(), path)
+	if b.cachedDirty || b.cachedPath != path {
+		if b.Highlighter != nil {
+			b.cachedStyles = b.Highlighter.HighlightCodeStyles(b.Text(), path)
+		} else {
+			b.cachedStyles = nil
+		}
+		b.cachedPath = path
 		b.cachedDirty = false
 	}
 
@@ -976,8 +985,9 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 		// Text part
 		lineRunes := vl.Runes
 		var textPart strings.Builder
-
 		physRow := vl.PhysicalLineIdx
+		activeStyle := ""
+
 		for cIdx, r := range lineRunes {
 			physCol := vl.StartCol + cIdx
 			isCursor := vIdx == visualCursorRow && cIdx == visualCursorCol && focused
@@ -985,23 +995,58 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 			isMatch, isActiveMatch := b.MatchAt(physRow, physCol)
 
 			if isCursor && !b.HasSelection {
+				if activeStyle != "" {
+					textPart.WriteString("\x1b[0m")
+					activeStyle = ""
+				}
 				textPart.WriteString(cursorIBeamStyle.Render(string(r)))
 			} else if isSelected {
+				if activeStyle != "" {
+					textPart.WriteString("\x1b[0m")
+					activeStyle = ""
+				}
 				textPart.WriteString(selectionStyle.Render(string(r)))
 			} else if isActiveMatch {
+				if activeStyle != "" {
+					textPart.WriteString("\x1b[0m")
+					activeStyle = ""
+				}
 				textPart.WriteString(ui.CurrentTheme.SearchActiveMatch.Render(string(r)))
 			} else if isMatch {
+				if activeStyle != "" {
+					textPart.WriteString("\x1b[0m")
+					activeStyle = ""
+				}
 				textPart.WriteString(ui.CurrentTheme.SearchMatchStyle.Render(string(r)))
 			} else {
+				syntaxStyle := ""
+				if physRow < len(b.cachedStyles) && physCol < len(b.cachedStyles[physRow]) {
+					syntaxStyle = b.cachedStyles[physRow][physCol]
+				}
+
+				if syntaxStyle != activeStyle {
+					if activeStyle != "" {
+						textPart.WriteString("\x1b[0m")
+					}
+					if syntaxStyle != "" {
+						textPart.WriteString(syntaxStyle)
+					}
+					activeStyle = syntaxStyle
+				}
 				textPart.WriteRune(r)
 			}
+		}
+
+		if activeStyle != "" {
+			textPart.WriteString("\x1b[0m")
+			activeStyle = ""
 		}
 
 		if vIdx == visualCursorRow && focused && !b.HasSelection && visualCursorCol >= len(lineRunes) {
 			textPart.WriteString(cursorIBeamStyle.Render("│"))
 		}
 
-		plainTextLen := lipgloss.Width(textPart.String())
+		plainTextLen := ansi.StringWidth(textPart.String())
 		padding := textWidth - plainTextLen
 		if padding < 0 {
 			padding = 0

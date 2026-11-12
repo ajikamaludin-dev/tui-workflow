@@ -3,6 +3,8 @@ package editor
 import (
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestBufferOperations(t *testing.T) {
@@ -350,5 +352,56 @@ func TestBufferIndentOutdent(t *testing.T) {
 	buf.OutdentSelection()
 	if string(buf.Lines[0]) != "func main() {" || string(buf.Lines[1]) != "println(\"hi\")" || string(buf.Lines[2]) != "}" {
 		t.Errorf("Multiline outdent failed: %v", buf.Lines)
+	}
+}
+
+func TestBufferSyntaxHighlighting(t *testing.T) {
+	code := "package main\n\nfunc main() {\n    x := 42\n}"
+	buf := NewBuffer(code)
+
+	// 1. Render without focus
+	rendered := buf.Render(80, 10, "main.go", false)
+	if !strings.Contains(rendered, "\x1b[") {
+		t.Errorf("Expected ANSI syntax highlight escape codes in rendered output, got: %q", rendered)
+	}
+	// Plain text should be stripped to original code
+	stripped := ansi.Strip(rendered)
+	if !strings.Contains(stripped, "package main") || !strings.Contains(stripped, "func main()") {
+		t.Errorf("Expected stripped text to contain code, got: %q", stripped)
+	}
+
+	// 2. Render with cursor (focused)
+	buf.SetCursor(2, 5) // at 'm' in 'main'
+	renderedCursor := buf.Render(80, 10, "main.go", true)
+	if !strings.Contains(renderedCursor, "\x1b[") {
+		t.Errorf("Expected ANSI escape codes with cursor, got: %q", renderedCursor)
+	}
+
+	// 3. Render with selection
+	buf.StartSelection(0, 0)
+	buf.UpdateSelection(0, 7) // select "package"
+	renderedSel := buf.Render(80, 10, "main.go", true)
+	if !strings.Contains(renderedSel, "\x1b[") {
+		t.Errorf("Expected ANSI escape codes with selection, got: %q", renderedSel)
+	}
+
+	// 4. Render with search matches
+	buf.ClearSelection()
+	buf.SetSearchQuery("main")
+	renderedSearch := buf.Render(80, 10, "main.go", true)
+	if !strings.Contains(renderedSearch, "\x1b[") {
+		t.Errorf("Expected ANSI escape codes with search, got: %q", renderedSearch)
+	}
+
+	// 5. Soft-wrap: narrow width
+	buf.SetSearchQuery("")
+	longLineCode := "var veryLongVariableNameWithDescription = \"this is a long string that definitely wraps across multiple visual lines\""
+	wrapBuf := NewBuffer(longLineCode)
+	renderedWrap := wrapBuf.Render(30, 10, "test.go", false)
+	if !strings.Contains(renderedWrap, "┊") {
+		t.Errorf("Expected continuation line gutter symbol ┊ for wrapped code")
+	}
+	if !strings.Contains(renderedWrap, "\x1b[") {
+		t.Errorf("Expected ANSI syntax highlight in wrapped lines")
 	}
 }

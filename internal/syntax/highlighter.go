@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/alecthomas/chroma/v2"
 	"github.com/alecthomas/chroma/v2/formatters"
@@ -110,3 +111,70 @@ func (h *Highlighter) HighlightCode(code, path string) []string {
 	// Split by newline while preserving line count
 	return strings.Split(formatted, "\n")
 }
+
+// ParseLineStyles parses an ANSI-formatted line and returns a slice of ANSI style strings,
+// one for each visual rune in the line.
+func ParseLineStyles(ansiLine string) []string {
+	if ansiLine == "" {
+		return nil
+	}
+
+	var styles []string
+	currentStyle := ""
+	n := len(ansiLine)
+	i := 0
+
+	for i < n {
+		if ansiLine[i] == 0x1b && i+1 < n {
+			// Check for CSI sequence: ESC [
+			if ansiLine[i+1] == '[' {
+				j := i + 2
+				for j < n && (ansiLine[j] < 0x40 || ansiLine[j] > 0x7e) {
+					j++
+				}
+				if j < n {
+					finalByte := ansiLine[j]
+					seq := ansiLine[i : j+1]
+					if finalByte == 'm' {
+						if seq == "\x1b[0m" || seq == "\x1b[m" {
+							currentStyle = ""
+						} else {
+							if currentStyle == "" {
+								currentStyle = seq
+							} else {
+								currentStyle += seq
+							}
+						}
+					}
+					i = j + 1
+					continue
+				}
+			}
+			// Other escape sequence, skip ESC byte
+			i++
+			continue
+		}
+
+		r, size := utf8.DecodeRuneInString(ansiLine[i:])
+		if r == utf8.RuneError && size <= 1 {
+			i++
+			continue
+		}
+
+		styles = append(styles, currentStyle)
+		i += size
+	}
+
+	return styles
+}
+
+// HighlightCodeStyles highlights code and returns a 2D slice: [physicalLineIdx][runeColIdx]ansiEscape.
+func (h *Highlighter) HighlightCodeStyles(code, path string) [][]string {
+	lines := h.HighlightCode(code, path)
+	result := make([][]string, len(lines))
+	for i, l := range lines {
+		result[i] = ParseLineStyles(l)
+	}
+	return result
+}
+

@@ -328,6 +328,67 @@ func (q *QuickOpen) Update(msg tea.Msg) (targetTabIdx int, targetPath string, cl
 	return -1, "", false, tiCmd
 }
 
+// HandleMouse processes mouse clicks and scrolling inside or outside QuickOpen.
+func (q *QuickOpen) HandleMouse(relX, relY int, isWheelUp, isWheelDown bool) (tabIdx int, path string, closed bool, handled bool) {
+	if !q.Active {
+		return -1, "", false, false
+	}
+
+	rendered := q.Render()
+	lines := strings.Split(rendered, "\n")
+	boxH := len(lines)
+	boxW := q.Width
+
+	// Outside click: dismiss dialog
+	if relX < 0 || relX >= boxW || relY < 0 || relY >= boxH {
+		q.Close()
+		return -1, "", true, true
+	}
+
+	if isWheelUp {
+		if q.Selected > 0 {
+			q.Selected--
+		} else if q.ScrollTop > 0 {
+			q.ScrollTop--
+		}
+		q.adjustScroll()
+		return -1, "", false, true
+	}
+
+	if isWheelDown {
+		if q.Selected < len(q.Filtered)-1 {
+			q.Selected++
+		}
+		q.adjustScroll()
+		return -1, "", false, true
+	}
+
+	// Layout mapping:
+	// Border top: relY = 0
+	// Padding top: relY = 1
+	// Title: relY = 2 (MarginBottom 1 makes relY = 3 blank)
+	// Input: relY = 4
+	// Blank: relY = 5
+	// List items: relY = 6 ...
+	if relY == 4 {
+		q.Filter.Focus()
+		return -1, "", false, true
+	}
+
+	listStartY := 6
+	if relY >= listStartY && relY < listStartY+q.MaxRows {
+		clickedIdx := q.ScrollTop + (relY - listStartY)
+		if clickedIdx >= 0 && clickedIdx < len(q.Filtered) {
+			q.Selected = clickedIdx
+			it := q.Filtered[clickedIdx]
+			q.Close()
+			return it.TabIndex, it.RelPath, true, true
+		}
+	}
+
+	return -1, "", false, true
+}
+
 // Render renders the QuickOpen modal box.
 func (q *QuickOpen) Render() string {
 	if !q.Active {

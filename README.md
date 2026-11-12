@@ -205,46 +205,63 @@ go vet ./...
 tui-workflow/
 ├── cmd/
 │   └── tui-workflow/
-│       └── main.go                  # Titik masuk aplikasi (Program initialization)
+│       └── main.go              # Titik masuk aplikasi (Program initialization)
+├── docs/
+│   └── architecture.md          # Spesifikasi teknis arsitektur 4-zona & event loop
 ├── internal/
+│   ├── ai/                      # Integrasi model AI (OpenAI API Format commit messages)
 │   ├── app/
-│   │   ├── e2e_test.go              # End-to-End headless test suite
-│   │   ├── keymap.go                # Konstanta fokus & pemetaan pintasan
-│   │   ├── model.go                 # Model Bubble Tea utama (Root Model)
-│   │   ├── resize.go                # Pengecekan ukuran layar minimum (80x24)
-│   │   └── view.go                  # Perakitan layout utama 4-zona & overlays
+│   │   ├── e2e_test.go          # End-to-End headless test suite
+│   │   ├── keymap.go            # Konstanta fokus & pemetaan pintasan
+│   │   ├── model.go             # Model Bubble Tea utama (Root Model)
+│   │   ├── resize.go            # Pengecekan ukuran layar minimum (80x24)
+│   │   └── view.go              # Perakitan layout utama 4-zona & overlays
+│   ├── config/                  # Konfigurasi aplikasi & persistensi JSON
 │   ├── editor/
-│   │   ├── autosave.go              # Logika auto-save pada pergantian fokus
-│   │   ├── buffer.go                # Custom line-based text buffer engine
-│   │   ├── leak_test.go             # Uji performa & memory leak tab churn
-│   │   ├── manager.go               # Multi-tab bar manager & horizontal scroll
-│   │   └── tab.go                   # Struktur tab (editor, diff, markdown)
+│   │   ├── autosave.go          # Logika auto-save pada pergantian fokus
+│   │   ├── buffer.go            # Custom line-based text buffer engine
+│   │   ├── leak_test.go         # Uji performa & memory leak tab churn
+│   │   ├── manager.go           # Multi-tab bar manager & horizontal scroll
+│   │   └── tab.go               # Struktur tab (editor, diff, markdown, terminal)
 │   ├── explorer/
-│   │   ├── node.go                  # Struktur node tree direktori & file
-│   │   ├── operations.go            # Logika filesystem CRUD (Create, Rename, Delete)
-│   │   └── tree.go                  # Komponen navigasi treeview explorer
+│   │   ├── node.go              # Struktur node tree direktori & file
+│   │   ├── operations.go        # Logika filesystem CRUD (Create, Rename, Delete)
+│   │   └── tree.go              # Komponen navigasi treeview explorer & marquee
+│   ├── formatter/               # Integrasi CLI Code Formatter (gofmt, prettier, shfmt)
 │   ├── git/
-│   │   ├── diff.go                  # Engine komputasi LCS Side-by-Side Split Diff
-│   │   ├── repo.go                  # Wrapper API go-git/v5
-│   │   └── view.go                  # Komponen Sidebar Git view & commit box
+│   │   ├── diff.go              # Engine komputasi LCS Side-by-Side Split Diff
+│   │   ├── repo.go              # Wrapper API go-git/v5
+│   │   └── view.go              # Komponen Sidebar Git view & commit box
+│   ├── logger/                  # Debug & event logger
 │   ├── markdown/
-│   │   └── renderer.go              # Glamour Markdown live preview dengan cache
+│   │   └── renderer.go          # Glamour Markdown live preview dengan cache
+│   ├── search/                  # Global Workspace Search engine
 │   ├── syntax/
-│   │   └── highlighter.go           # Chroma real-time tokenizer & detector
+│   │   └── highlighter.go       # Chroma real-time tokenizer & detector
+│   ├── terminal/
+│   │   └── pty.go               # Embedded subshell PTY pseudoterminal manager
 │   └── ui/
 │       ├── dialog/
-│       │   ├── confirm.go           # Modal konfirmasi (Delete & Unsaved changes)
-│       │   ├── input.go             # Modal input teks (New file, folder, rename)
-│       │   └── switcher.go          # Modal Quick Buffer Switcher (Ctrl+P)
-│       ├── menu.go                  # Top Menu Bar component & dropdown handler
-│       ├── statusbar.go             # Status bar bawah adaptif 1 baris
-│       └── theme.go                 # Skema warna palet VS Code Dark & styling
-├── CONTRIBUTING.md                  # Panduan kontribusi proyek
+│       │   ├── aisettings.go    # Modal konfigurasi endpoint AI
+│       │   ├── branch.go        # Modal Branch Switcher Git
+│       │   ├── confirm.go       # Modal konfirmasi (Delete & Unsaved changes)
+│       │   ├── filepicker.go    # Modal navigasi file picker
+│       │   ├── findbar.go       # Floating search & replace bar
+│       │   ├── globalsearch.go  # Modal pencarian teks global workspace
+│       │   ├── input.go         # Modal input teks (New file, folder, rename)
+│       │   ├── normalize.go     # Normalisasi background ANSI modal dialog
+│       │   ├── palette.go       # Modal Command Palette (F1 / Ctrl+Shift+P)
+│       │   ├── quickopen.go     # Modal Quick Open File Workspace (Ctrl+P)
+│       │   └── switcher.go      # Modal Quick Buffer Switcher
+│       ├── menu.go              # Top Menu Bar component & dropdown handler
+│       ├── statusbar.go         # Status bar bawah interaktif 1 baris
+│       └── theme.go             # Skema warna palet VS Code Dark & styling
+├── CONTRIBUTING.md               # Panduan kontribusi proyek
 ├── go.mod
 ├── go.sum
-├── LICENSE                          # Lisensi MIT
-├── PRD.md                           # Dokumen Spesifikasi Requirement Produk
-└── README.md                        # Dokumentasi Proyek
+├── LICENSE                      # Lisensi MIT
+├── PRD.md                       # Dokumen Spesifikasi Requirement Produk
+└── README.md                    # Dokumentasi Proyek
 ```
 
 ---

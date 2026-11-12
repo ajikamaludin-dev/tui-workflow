@@ -36,7 +36,8 @@ type Buffer struct {
 	IsDirty      bool
 	Highlighter  *syntax.Highlighter
 	cachedHigh   []string
-	cachedStyles [][]string
+	cachedStyles   [][]string
+	cachedRawLines []string
 	cachedPath   string
 	cachedDirty  bool
 
@@ -114,6 +115,7 @@ func (b *Buffer) SetText(content string) {
 	b.cachedDirty = true
 	b.cachedHigh = nil
 	b.cachedStyles = nil
+	b.cachedRawLines = nil
 	b.undoStack = nil
 	b.redoStack = nil
 	b.typingGroup = false
@@ -140,6 +142,7 @@ func (b *Buffer) ReplaceContentWithUndo(content string) {
 	b.cachedDirty = true
 	b.cachedHigh = nil
 	b.cachedStyles = nil
+	b.cachedRawLines = nil
 	b.IsDirty = true
 }
 
@@ -987,11 +990,13 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 		b.ScrollRow = 0
 	}
 
-	// 5. Highlighting
+	// 5. Highlighting (Lazy Viewport-Bounded Line Parsing)
 	if b.cachedDirty || b.cachedPath != path {
 		if b.Highlighter != nil {
-			b.cachedStyles = b.Highlighter.HighlightCodeStyles(b.Text(), path)
+			b.cachedRawLines = b.Highlighter.HighlightCodeLines(b.Text(), path)
+			b.cachedStyles = make([][]string, len(b.cachedRawLines))
 		} else {
+			b.cachedRawLines = nil
 			b.cachedStyles = nil
 		}
 		b.cachedPath = path
@@ -1092,8 +1097,13 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 				textPart.WriteString(ui.CurrentTheme.SearchMatchStyle.Render(rStr))
 			} else {
 				syntaxStyle := ""
-				if physRow < len(b.cachedStyles) && physCol < len(b.cachedStyles[physRow]) {
-					syntaxStyle = b.cachedStyles[physRow][physCol]
+				if physRow < len(b.cachedStyles) {
+					if b.cachedStyles[physRow] == nil && physRow < len(b.cachedRawLines) {
+						b.cachedStyles[physRow] = syntax.ParseLineStyles(b.cachedRawLines[physRow])
+					}
+					if physCol < len(b.cachedStyles[physRow]) {
+						syntaxStyle = b.cachedStyles[physRow][physCol]
+					}
 				}
 
 				if syntaxStyle != activeStyle {

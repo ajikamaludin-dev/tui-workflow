@@ -184,6 +184,67 @@ func (cp *CommandPalette) Update(msg tea.Msg) (actionID string, closed bool, cmd
 	return "", false, tiCmd
 }
 
+// HandleMouse processes mouse clicks and scrolling inside or outside Command Palette.
+func (cp *CommandPalette) HandleMouse(relX, relY int, isWheelUp, isWheelDown bool) (actionID string, closed bool, handled bool) {
+	if !cp.Active {
+		return "", false, false
+	}
+
+	rendered := cp.Render()
+	lines := strings.Split(rendered, "\n")
+	boxH := len(lines)
+	boxW := cp.Width
+
+	// Outside click: dismiss dialog
+	if relX < 0 || relX >= boxW || relY < 0 || relY >= boxH {
+		cp.Close()
+		return "", true, true
+	}
+
+	if isWheelUp {
+		if cp.Selected > 0 {
+			cp.Selected--
+		} else if cp.ScrollTop > 0 {
+			cp.ScrollTop--
+		}
+		cp.adjustScroll()
+		return "", false, true
+	}
+
+	if isWheelDown {
+		if cp.Selected < len(cp.Filtered)-1 {
+			cp.Selected++
+		}
+		cp.adjustScroll()
+		return "", false, true
+	}
+
+	// Layout mapping:
+	// Border top: relY = 0
+	// Padding top: relY = 1
+	// Title: relY = 2 (MarginBottom 1 makes relY = 3 blank)
+	// Input: relY = 4
+	// Blank: relY = 5
+	// List items: relY = 6 ...
+	if relY == 4 {
+		cp.Filter.Focus()
+		return "", false, true
+	}
+
+	listStartY := 6
+	if relY >= listStartY && relY < listStartY+cp.MaxRows {
+		clickedIdx := cp.ScrollTop + (relY - listStartY)
+		if clickedIdx >= 0 && clickedIdx < len(cp.Filtered) {
+			cp.Selected = clickedIdx
+			action := cp.Filtered[clickedIdx].ID
+			cp.Close()
+			return action, true, true
+		}
+	}
+
+	return "", false, true
+}
+
 // Render renders the Command Palette box.
 func (cp *CommandPalette) Render() string {
 	if !cp.Active {

@@ -273,6 +273,61 @@ func (d *AISettingsDialog) Update(msg tea.Msg) (saved bool, canceled bool, newCf
 	return false, false, config.AIConfig{}, curCmd
 }
 
+// HandleMouse processes mouse clicks inside or outside the AI Settings dialog.
+func (d *AISettingsDialog) HandleMouse(relX, relY int) (confirmed bool, canceled bool, cfg config.AIConfig, handled bool) {
+	if !d.Active {
+		return false, false, config.AIConfig{}, false
+	}
+
+	rendered := d.Render()
+	lines := strings.Split(rendered, "\n")
+	boxH := len(lines)
+	boxW := d.Width
+
+	// Outside click: dismiss dialog
+	if relX < 0 || relX >= boxW || relY < 0 || relY >= boxH {
+		d.Close()
+		return false, true, config.AIConfig{}, true
+	}
+
+	// Line mappings based on Render layout:
+	// relY 4..5: Provider URL
+	// relY 7..8: API Key
+	// relY 10..11: Available Models
+	// relY 13..14: Default Model
+	// relY 16: Buttons
+	switch {
+	case relY == 4 || relY == 5:
+		d.Focused = AIFieldProvider
+		d.updateFocus()
+		return false, false, config.AIConfig{}, true
+	case relY == 7 || relY == 8:
+		d.Focused = AIFieldAPIKey
+		d.updateFocus()
+		return false, false, config.AIConfig{}, true
+	case relY == 10 || relY == 11:
+		d.Focused = AIFieldModels
+		d.updateFocus()
+		return false, false, config.AIConfig{}, true
+	case relY == 13 || relY == 14:
+		d.Focused = AIFieldDefaultModel
+		d.updateFocus()
+		return false, false, config.AIConfig{}, true
+	case relY == 16:
+		// Save button vs Cancel button hit-test
+		if relX >= 2 && relX <= 28 {
+			cfg := d.GetConfig()
+			d.Close()
+			return true, false, cfg, true
+		} else if relX >= 29 && relX <= 55 {
+			d.Close()
+			return false, true, config.AIConfig{}, true
+		}
+	}
+
+	return false, false, config.AIConfig{}, true
+}
+
 func (d *AISettingsDialog) Render() string {
 	if !d.Active {
 		return ""

@@ -168,6 +168,11 @@ func ParseLineStyles(ansiLine string) []string {
 	return styles
 }
 
+// HighlightCodeLines highlights code and returns formatted ANSI lines.
+func (h *Highlighter) HighlightCodeLines(code, path string) []string {
+	return h.HighlightCode(code, path)
+}
+
 // HighlightCodeStyles highlights code and returns a 2D slice: [physicalLineIdx][runeColIdx]ansiEscape.
 func (h *Highlighter) HighlightCodeStyles(code, path string) [][]string {
 	lines := h.HighlightCode(code, path)

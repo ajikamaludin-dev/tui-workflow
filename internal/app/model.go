@@ -12,6 +12,7 @@ import (
 
 	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"tui-workflow/internal/ai"
 	"tui-workflow/internal/config"
 	"tui-workflow/internal/editor"
@@ -448,9 +449,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.SidebarVisible && m.SidebarView == SidebarFiles && m.Focus == FocusSidebar && m.Explorer != nil {
 			if m.Explorer.SelectedNameExceeds(m.SidebarWidth - 1) {
 				m.Explorer.TickMarquee()
+				return m, marqueeTickCmd()
 			}
 		}
-		return m, marqueeTickCmd()
+		// When not needed or idle outside sidebar, check back in 1 second instead of 250ms
+		return m, tea.Tick(1*time.Second, func(t time.Time) tea.Msg {
+			return MarqueeTickMsg(t)
+		})
 
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
@@ -1334,6 +1339,297 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Intercept mouse clicks for active modals
+		if m.FindBar != nil && m.FindBar.Active {
+			barStr := m.FindBar.Render()
+			findWidth := lipgloss.Width(barStr)
+			findX := m.Width - findWidth - 2
+			editorStartX := 0
+			if m.SidebarVisible {
+				editorStartX = m.SidebarWidth
+			}
+			if findX < editorStartX+1 {
+				findX = editorStartX + 1
+			}
+			relX := msg.X - findX
+			relY := msg.Y - 1 // Floating at row 1
+			action, closed, handled := m.FindBar.HandleMouse(relX, relY)
+			if handled {
+				tab := m.TabManager.ActiveTab()
+				if closed {
+					if tab != nil && tab.Buffer != nil {
+						tab.Buffer.ClearSearch()
+					}
+					return m, nil
+				}
+				if tab != nil && tab.Buffer != nil {
+					switch action {
+					case "next":
+						tab.Buffer.FindNext()
+						cur, tot := tab.Buffer.MatchInfo()
+						m.FindBar.SetMatches(cur, tot)
+						m.syncStatusBarWithActiveTab()
+					case "prev":
+						tab.Buffer.FindPrev()
+						cur, tot := tab.Buffer.MatchInfo()
+						m.FindBar.SetMatches(cur, tot)
+						m.syncStatusBarWithActiveTab()
+					case "replace_one":
+						if tab.Buffer.ReplaceCurrent(m.FindBar.ReplaceInput.Value()) {
+							cur, tot := tab.Buffer.MatchInfo()
+							m.FindBar.SetMatches(cur, tot)
+							m.syncStatusBarWithActiveTab()
+							m.StatusBar.ShowToast("1 kecocokan diganti", false, 1*time.Second)
+						}
+					case "replace_all":
+						count := tab.Buffer.ReplaceAll(m.FindBar.Input.Value(), m.FindBar.ReplaceInput.Value())
+						cur, tot := tab.Buffer.MatchInfo()
+						m.FindBar.SetMatches(cur, tot)
+						m.syncStatusBarWithActiveTab()
+						m.StatusBar.ShowToast(fmt.Sprintf("%d kecocokan diganti", count), false, 2*time.Second)
+					}
+				}
+				return m, nil
+			}
+		}
+
+		if m.CommandPalette != nil && m.CommandPalette.Active {
+			modalW := m.CommandPalette.Width
+			modalH := strings.Count(m.CommandPalette.Render(), "\n") + 1
+			startX := (m.Width - modalW) / 2
+			startY := (m.Height - modalH) / 3
+			if startY < 1 {
+				startY = 1
+			}
+			relX := msg.X - startX
+			relY := msg.Y - startY
+			isWheelUp := msg.Button == tea.MouseButtonWheelUp
+			isWheelDown := msg.Button == tea.MouseButtonWheelDown
+			if msg.Action == tea.MouseActionPress || isWheelUp || isWheelDown {
+				actionID, closed, handled := m.CommandPalette.HandleMouse(relX, relY, isWheelUp, isWheelDown)
+				if handled {
+					if closed && actionID != "" {
+						menuCmd := m.handleMenuAction(actionID)
+						return m, menuCmd
+					}
+					return m, nil
+				}
+			}
+			return m, nil
+		}
+
+		if m.QuickOpen != nil && m.QuickOpen.Active {
+			modalW := m.QuickOpen.Width
+			modalH := strings.Count(m.QuickOpen.Render(), "\n") + 1
+			startX := (m.Width - modalW) / 2
+			startY := (m.Height - modalH) / 3
+			if startY < 1 {
+				startY = 1
+			}
+			relX := msg.X - startX
+			relY := msg.Y - startY
+			isWheelUp := msg.Button == tea.MouseButtonWheelUp
+			isWheelDown := msg.Button == tea.MouseButtonWheelDown
+			if msg.Action == tea.MouseActionPress || isWheelUp || isWheelDown {
+				tabIdx, relPath, closed, handled := m.QuickOpen.HandleMouse(relX, relY, isWheelUp, isWheelDown)
+				if handled {
+					if closed {
+						if tabIdx >= 0 {
+							m.TabManager.ActiveIndex = tabIdx
+							m.Focus = FocusEditor
+							m.syncStatusBarWithActiveTab()
+						} else if relPath != "" {
+							fullPath := filepath.Join(m.RootDir, relPath)
+							m.openFile(fullPath)
+						}
+					}
+					return m, nil
+				}
+			}
+			return m, nil
+		}
+
+		if m.GlobalSearch != nil && m.GlobalSearch.Active {
+			modalW := m.GlobalSearch.Width
+			modalH := strings.Count(m.GlobalSearch.Render(), "\n") + 1
+			startX := (m.Width - modalW) / 2
+			startY := (m.Height - modalH) / 3
+			if startY < 1 {
+				startY = 1
+			}
+			relX := msg.X - startX
+			relY := msg.Y - startY
+			isWheelUp := msg.Button == tea.MouseButtonWheelUp
+			isWheelDown := msg.Button == tea.MouseButtonWheelDown
+			if msg.Action == tea.MouseActionPress || isWheelUp || isWheelDown {
+				relPath, lineNum, colNum, closed, handled := m.GlobalSearch.HandleMouse(relX, relY, isWheelUp, isWheelDown)
+				if handled {
+					if closed && relPath != "" {
+						fullPath := filepath.Join(m.RootDir, relPath)
+						m.openFileAt(fullPath, lineNum, colNum)
+					}
+					return m, nil
+				}
+			}
+			return m, nil
+		}
+
+		if m.BranchSwitcher != nil && m.BranchSwitcher.Active {
+			modalW := m.BranchSwitcher.Width
+			modalH := strings.Count(m.BranchSwitcher.Render(), "\n") + 1
+			startX := (m.Width - modalW) / 2
+			startY := (m.Height - modalH) / 3
+			if startY < 1 {
+				startY = 1
+			}
+			relX := msg.X - startX
+			relY := msg.Y - startY
+			isWheelUp := msg.Button == tea.MouseButtonWheelUp
+			isWheelDown := msg.Button == tea.MouseButtonWheelDown
+			if msg.Action == tea.MouseActionPress || isWheelUp || isWheelDown {
+				targetBranch, closed, handled := m.BranchSwitcher.HandleMouse(relX, relY, isWheelUp, isWheelDown)
+				if handled {
+					if closed && targetBranch != "" && m.GitRepo != nil {
+						if err := m.GitRepo.CheckoutBranch(targetBranch); err != nil {
+							m.StatusBar.ShowToast("Gagal ganti branch: "+err.Error(), true, 3*time.Second)
+						} else {
+							m.StatusBar.Branch = targetBranch
+							if m.GitView != nil {
+								m.GitView.Refresh()
+							}
+							m.StatusBar.ShowToast("Beralih ke branch: "+targetBranch, false, 2*time.Second)
+						}
+					}
+					return m, nil
+				}
+			}
+			return m, nil
+		}
+
+		if m.AISettingsDialog != nil && m.AISettingsDialog.Active {
+			modalW := m.AISettingsDialog.Width
+			modalH := strings.Count(m.AISettingsDialog.Render(), "\n") + 1
+			startX := (m.Width - modalW) / 2
+			startY := (m.Height - modalH) / 2
+			if startY < 1 {
+				startY = 1
+			}
+			relX := msg.X - startX
+			relY := msg.Y - startY
+			if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+				confirmed, canceled, newCfg, handled := m.AISettingsDialog.HandleMouse(relX, relY)
+				if handled {
+					if confirmed {
+						m.Config.AI = newCfg
+						_ = config.SaveConfig(m.Config)
+						m.StatusBar.ShowToast("Konfigurasi AI berhasil disimpan", false, 3*time.Second)
+					} else if canceled {
+						m.StatusBar.ShowToast("Pengaturan AI dibatalkan", false, 2*time.Second)
+					}
+					return m, nil
+				}
+			}
+			return m, nil
+		}
+
+		if m.FilePicker != nil && m.FilePicker.Active {
+			modalW := m.FilePicker.Width
+			modalH := m.FilePicker.Height
+			startX := (m.Width - modalW) / 2
+			startY := (m.Height - modalH) / 2
+			relX := msg.X - startX
+			relY := msg.Y - startY
+			isWheelUp := msg.Button == tea.MouseButtonWheelUp
+			isWheelDown := msg.Button == tea.MouseButtonWheelDown
+			if msg.Action == tea.MouseActionPress || isWheelUp || isWheelDown {
+				confirmed, canceled, selectedPath, handled := m.FilePicker.HandleMouse(relX, relY, isWheelUp, isWheelDown)
+				if confirmed {
+					m.handleFilePickerConfirmed(selectedPath)
+				} else if canceled {
+					m.StatusBar.ShowToast("Operasi dibatalkan", false, 2*time.Second)
+				}
+				if handled {
+					return m, nil
+				}
+			}
+			return m, nil
+		}
+
+		if m.InputDialog.Active {
+			if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+				modalW := m.InputDialog.Width
+				modalH := strings.Count(m.InputDialog.Render(), "\n") + 1
+				startX := (m.Width - modalW) / 2
+				startY := (m.Height - modalH) / 2
+				relX := msg.X - startX
+				relY := msg.Y - startY
+				confirmed, canceled, handled := m.InputDialog.HandleMouse(relX, relY)
+				if confirmed {
+					m.handleInputConfirmed()
+				} else if canceled {
+					m.StatusBar.ShowToast("Operasi dibatalkan", false, 2*time.Second)
+				}
+				if handled {
+					return m, nil
+				}
+			}
+			return m, nil
+		}
+
+		if m.ConfirmDialog.Active {
+			if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+				modalW := m.ConfirmDialog.Width
+				modalH := strings.Count(m.ConfirmDialog.Render(), "\n") + 1
+				startX := (m.Width - modalW) / 2
+				startY := (m.Height - modalH) / 2
+				relX := msg.X - startX
+				relY := msg.Y - startY
+				confirmed, canceled, discard, handled := m.ConfirmDialog.HandleMouse(relX, relY)
+				if confirmed {
+					m.handleConfirmConfirmed()
+				} else if discard {
+					m.handleDiscardConfirmed()
+				} else if canceled {
+					if m.ConfirmDialog.Type == dialog.ConfirmExternalChange {
+						m.StatusBar.ShowToast("Perubahan eksternal diabaikan (lokal dipertahankan)", false, 2*time.Second)
+					} else {
+						m.StatusBar.ShowToast("Operasi dibatalkan", false, 2*time.Second)
+					}
+					m.ClosingTabIdx = -1
+				}
+				if handled {
+					return m, nil
+				}
+			}
+			return m, nil
+		}
+
+		if m.Switcher.Active {
+			modalW := m.Switcher.Width
+			modalH := strings.Count(m.Switcher.Render(), "\n") + 1
+			startX := (m.Width - modalW) / 2
+			startY := (m.Height - modalH) / 3
+			if startY < 1 {
+				startY = 1
+			}
+			relX := msg.X - startX
+			relY := msg.Y - startY
+			isWheelUp := msg.Button == tea.MouseButtonWheelUp
+			isWheelDown := msg.Button == tea.MouseButtonWheelDown
+			if msg.Action == tea.MouseActionPress || isWheelUp || isWheelDown {
+				targetIdx, closed, handled := m.Switcher.HandleMouse(relX, relY, isWheelUp, isWheelDown)
+				if handled {
+					if closed && targetIdx >= 0 {
+						m.TabManager.ActiveIndex = targetIdx
+						m.Focus = FocusEditor
+						m.syncStatusBarWithActiveTab()
+					}
+					return m, nil
+				}
+			}
+			return m, nil
+		}
+
 		// Resizing Sidebar Handling
 		if m.SidebarVisible {
 			isAtBorder := (msg.X == m.SidebarWidth-1 || msg.X == m.SidebarWidth) && msg.Y >= 1 && msg.Y < m.Height-1
@@ -1567,88 +1863,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Intercept mouse clicks for active modals
-		if m.FilePicker != nil && m.FilePicker.Active {
-			modalW := m.FilePicker.Width
-			modalH := m.FilePicker.Height
-			startX := (m.Width - modalW) / 2
-			startY := (m.Height - modalH) / 2
-			relX := msg.X - startX
-			relY := msg.Y - startY
-			isWheelUp := msg.Button == tea.MouseButtonWheelUp
-			isWheelDown := msg.Button == tea.MouseButtonWheelDown
-			if msg.Action == tea.MouseActionPress || isWheelUp || isWheelDown {
-				confirmed, canceled, selectedPath, handled := m.FilePicker.HandleMouse(relX, relY, isWheelUp, isWheelDown)
-				if confirmed {
-					m.handleFilePickerConfirmed(selectedPath)
-				} else if canceled {
-					m.StatusBar.ShowToast("Operasi dibatalkan", false, 2*time.Second)
-				}
-				if handled {
-					return m, nil
-				}
-			}
-			return m, nil
-		}
-
-		if m.InputDialog.Active {
-			if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-				modalW := m.InputDialog.Width
-				modalH := strings.Count(m.InputDialog.Render(), "\n") + 1
-				startX := (m.Width - modalW) / 2
-				startY := (m.Height - modalH) / 2
-				relX := msg.X - startX
-				relY := msg.Y - startY
-				confirmed, canceled, handled := m.InputDialog.HandleMouse(relX, relY)
-				if confirmed {
-					m.handleInputConfirmed()
-				} else if canceled {
-					m.StatusBar.ShowToast("Operasi dibatalkan", false, 2*time.Second)
-				}
-				if handled {
-					return m, nil
-				}
-			}
-			return m, nil
-		}
-
-		if m.ConfirmDialog.Active {
-			if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-				modalW := m.ConfirmDialog.Width
-				modalH := strings.Count(m.ConfirmDialog.Render(), "\n") + 1
-				startX := (m.Width - modalW) / 2
-				startY := (m.Height - modalH) / 2
-				relX := msg.X - startX
-				relY := msg.Y - startY
-				confirmed, canceled, discard, handled := m.ConfirmDialog.HandleMouse(relX, relY)
-				if confirmed {
-					m.handleConfirmConfirmed()
-				} else if discard {
-					m.handleDiscardConfirmed()
-				} else if canceled {
-					if m.ConfirmDialog.Type == dialog.ConfirmExternalChange {
-						m.StatusBar.ShowToast("Perubahan eksternal diabaikan (lokal dipertahankan)", false, 2*time.Second)
-					} else {
-						m.StatusBar.ShowToast("Operasi dibatalkan", false, 2*time.Second)
-					}
-					m.ClosingTabIdx = -1
-				}
-				if handled {
-					return m, nil
-				}
-			}
-			return m, nil
-		}
-
-		if m.Switcher.Active {
+		if m.ShowHelp || m.ShowAbout {
 			if msg.Action == tea.MouseActionPress {
-				m.Switcher.Close()
+				m.ShowHelp = false
+				m.ShowAbout = false
 			}
 			return m, nil
 		}
 
 		// Mouse click handling
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			// Row 1: Sidebar Title / Branch click (Sidebar columns)
+			if msg.Y == 1 && m.SidebarVisible && msg.X < m.SidebarWidth {
+				m.Focus = FocusSidebar
+				if m.SidebarView == SidebarGit {
+					m.openBranchSwitcher()
+					return m, nil
+				}
+			}
+
 			// Row 1: Tab Bar click (Editor columns)
 			if msg.Y == 1 && msg.X >= editorStartX {
 				relX := msg.X - editorStartX
@@ -1814,6 +2047,44 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					physRow, physCol := tab.Buffer.RowColFromVisual(relY, textX, textW)
 					tab.Buffer.StartSelection(physRow, physCol)
 					m.syncStatusBarWithActiveTab()
+				}
+				return m, nil
+			}
+
+			// Row Height-1: Status Bar click
+			if msg.Y == m.Height-1 {
+				action := m.StatusBar.HandleMouseClick(msg.X)
+				switch action {
+				case "toggle_autosave":
+					m.AutoSave = !m.AutoSave
+					m.StatusBar.AutoSave = m.AutoSave
+					if m.AutoSave {
+						m.StatusBar.ShowToast("Auto-Save Diaktifkan", false, 2*time.Second)
+					} else {
+						m.StatusBar.ShowToast("Auto-Save Dimatikan", true, 2*time.Second)
+					}
+					if m.Config != nil {
+						m.Config.AutoSave = m.AutoSave
+						_ = config.SaveConfig(m.Config)
+					}
+					return m, nil
+
+				case "branch_switcher":
+					m.openBranchSwitcher()
+					return m, nil
+
+				case "goto_line":
+					curLine := 1
+					tab := m.TabManager.ActiveTab()
+					if tab != nil && tab.Buffer != nil {
+						curLine = tab.Buffer.CursorRow + 1
+					}
+					m.InputDialog.Open(dialog.InputGotoLine, "Lompat ke Baris [baris:kolom]", "", strconv.Itoa(curLine))
+					return m, nil
+
+				case "help":
+					m.ShowHelp = true
+					return m, nil
 				}
 				return m, nil
 			}

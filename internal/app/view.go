@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"tui-workflow/internal/editor"
 	"tui-workflow/internal/ui"
+	"tui-workflow/internal/ui/dialog"
 )
 
 func (m Model) View() string {
@@ -127,7 +128,14 @@ func (m Model) renderSidebar(width, height int) string {
 	case SidebarFiles:
 		title = " 📁 EXPLORER"
 	case SidebarGit:
-		title = " 🌿 SOURCE CONTROL"
+		branchName := ""
+		if m.GitRepo != nil {
+			branchName, _ = m.GitRepo.GetBranchName()
+		}
+		if branchName == "" {
+			branchName = "HEAD"
+		}
+		title = " 🌿 SOURCE CONTROL (" + branchName + ")"
 	case SidebarSearch:
 		title = " 🔍 CARI & GANTI"
 	}
@@ -286,76 +294,126 @@ func (m Model) renderEditor(width, height int) string {
 }
 
 func renderHelpModal() string {
-	content := `┌─ BANTUAN & SHORTCUT tui-workflow ────────────────┐
-│                                                  │
-│ Global & Navigasi:                               │
-│   • Ctrl+Q          : Keluar dari aplikasi       │
-│   • Ctrl+E / F6     : Ganti Fokus Sidebar/Editor │
-│   • Ctrl+B          : Toggle Sidebar             │
-│   • Alt+[ / Alt+]   : Persempit / Perlebar Side  │
-│   • Alt+1 / 2 / 3   : Switch Files / Git / Search│
-│   • Alt+F / Alt+E   : Menu File / Edit           │
-│   • Alt+R / Alt+T   : Menu Search / Setting      │
-│   • Alt+A           : Menu About                 │
-│   • Alt+S / Alt+Z   : Auto-Save / Soft-Wrap      │
-│   • Alt+I           : Pengaturan AI (OpenAI)     │
-│   • ? / Esc         : Buka Bantuan / Tutup Dialog│
-│                                                  │
-│ Pencarian & Navigasi:                            │
-│   • F1              : Command Palette            │
-│   • Ctrl+P          : Quick Open Workspace       │
-│   • Ctrl+F          : Cari Teks di Buffer        │
-│   • Ctrl+H          : Cari & Ganti di Buffer     │
-│   • Ctrl+G          : Lompat ke Baris (Go Line)  │
-│   • F4              : Global Search Workspace    │
-│   • Ctrl+O / Ctrl+K : Buka File / Folder         │
-│                                                  │
-│ Editor & Buffer:                                 │
-│   • Ctrl+Z / Ctrl+Y : Undo / Redo Perubahan Teks │
-│   • Tab / Shift+Tab : Indent / Outdent 4 Spasi   │
-│   • Ctrl+/          : Toggle Komentar Baris      │
-│   • Ctrl+S / Ctrl+W : Simpan / Tutup Tab         │
-│   • Ctrl+Shift+I    : Format Dokumen (CLI)       │
-│   • Ctrl+M / Alt+M  : Toggle Preview Markdown    │
-│   • Ctrl+A / C / V  : Pilih / Salin / Tempel Teks│
-│                                                  │
-│ Terminal & Shell (PTY):                          │
-│   • Ctrl+Shift+\    : Buka Tab Terminal Baru     │
-│   • Ctrl+\          : Ganti Fokus Terminal / TUI │
-│   • Ctrl+Shift+W    : Tutup Tab Terminal Aktif   │
-│ Git Source Control:                              │
-│   • Alt+B           : Ganti Branch (Checkout)    │
-│   • Alt+G           : AI Generate Commit Message │
-│   • d / [x]         : Buang Perubahan (Discard)  │
-│   • + / -           : Stage / Unstage File       │
-│   • Ctrl+Enter      : Lakukan Commit             │
-│                                                  │
-│ [Tekan Esc atau ? untuk menutup modal ini]       │
-└──────────────────────────────────────────────────┘`
-	return ui.CurrentTheme.WarningBoxStyle.
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(ui.CurrentTheme.FgHighlight).
+		MarginBottom(1)
+
+	renderedTitle := titleStyle.Render("📖 BANTUAN & PANDUAN PINTASAN KEYBOARD")
+
+	content := `Global & Navigasi:
+  • Ctrl+Q          : Keluar dari aplikasi
+  • Ctrl+E / F6     : Ganti Fokus Sidebar / Editor
+  • Ctrl+B          : Toggle Sembunyikan / Tampilkan Sidebar
+  • Alt+[ / Alt+]   : Persempit / Perlebar Lebar Kolom Sidebar
+  • Alt+1 / 2 / 3   : Beralih Tab Sidebar (Files / Git / Search)
+  • Alt+F / Alt+E   : Buka Menu File / Edit
+  • Alt+R / Alt+T   : Buka Menu Search / Setting
+  • Alt+A           : Buka Dialog About
+  • Alt+S / Alt+Z   : Toggle Auto-Save / Soft-Wrap
+  • Alt+I           : Pengaturan AI Model (OpenAI API Format)
+  • ? / Esc         : Buka Bantuan / Tutup Dialog Pop-up
+
+Pencarian & File:
+  • F1 / Ctrl+Shift+P : Buka Command Palette Lengkap
+  • Ctrl+P          : Buka Cepat File Workspace (Quick Open)
+  • Ctrl+F          : Cari Teks di Buffer Editor
+  • Ctrl+H          : Cari & Ganti Teks di Buffer Editor
+  • Ctrl+G          : Lompat ke Nomor Baris (Go to Line)
+  • F4              : Cari Teks Global di Seluruh Workspace
+  • Ctrl+O / Ctrl+K : Buka File / Buka Folder Baru
+
+Editor & Buffer:
+  • Ctrl+Z / Ctrl+Y : Undo / Redo Perubahan Teks
+  • Tab / Shift+Tab : Indent / Outdent 4 Karakter Spasi
+  • Ctrl+/          : Toggle Komentar Baris Otomatis
+  • Ctrl+S / Ctrl+W : Simpan Buffer / Tutup Tab Aktif
+  • Ctrl+Shift+I    : Format Dokumen Otomatis (via CLI)
+  • Ctrl+M / Alt+M  : Toggle Pratinjau Markdown (Glamour)
+  • Ctrl+A / C / V  : Pilih Semua / Salin / Tempel Teks
+
+Terminal & Shell (PTY):
+  • Ctrl+Shift+\    : Buka Tab Terminal Shell Baru
+  • Ctrl+\          : Alihkan Fokus Terminal / TUI Editor
+  • Ctrl+Shift+W    : Tutup Tab Terminal Shell Aktif
+
+Git Source Control:
+  • Alt+B           : Ganti / Checkout Branch Git
+  • Alt+G           : Buat Pesan Commit Otomatis via AI
+  • d / [x]         : Buang Perubahan File (Discard Changes)
+  • + / -           : Stage / Unstage Perubahan File
+  • Ctrl+Enter      : Lakukan Commit Pesan Git`
+
+	closeBtn := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(ui.CurrentTheme.FgHighlight).
+		Background(ui.CurrentTheme.Accent).
+		Padding(0, 2).
+		MarginTop(1).
+		Render("[ Tutup (Esc / ?) ]")
+
+	body := lipgloss.JoinVertical(
+		lipgloss.Left,
+		renderedTitle,
+		content,
+		closeBtn,
+	)
+
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
 		BorderForeground(ui.CurrentTheme.Accent).
-		Render(content)
+		Background(ui.CurrentTheme.BgTopMenu).
+		Padding(1, 2).
+		Width(60)
+
+	return dialog.NormalizeDialogBackground(boxStyle.Render(body), ui.CurrentTheme.BgTopMenu)
 }
 
 func renderAboutModal() string {
-	content := "┌─ ABOUT tui-workflow ─────────────────────────────┐\n" +
-		"│                                                  │\n" +
-		"│  tui-workflow v0.1.1                             │\n" +
-		"│  Modern TUI Text Editor & Git Workflow           │\n" +
-		"│                                                  │\n" +
-		"│  Tech Stack:                                     │\n" +
-		"│  • Go 1.24+                                      │\n" +
-		"│  • Charmbracelet Bubble Tea & Lipgloss           │\n" +
-		"│  • Chroma Syntax Highlighting                    │\n" +
-		"│  • Glamour Markdown Rendering                    │\n" +
-		"│  • Pure-Go Git (go-git/v5)                       │\n" +
-		"│                                                  │\n" +
-		"│  [Tekan Esc untuk menutup dialog ini]            │\n" +
-		"└──────────────────────────────────────────────────┘"
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(ui.CurrentTheme.FgHighlight).
+		MarginBottom(1)
 
-	return ui.CurrentTheme.WarningBoxStyle.
+	renderedTitle := titleStyle.Render("ℹ TENTANG tui-workflow")
+
+	content := `tui-workflow v0.1.1
+Modern, High-Performance Terminal User Interface Workflow Environment.
+
+Fitur Inti & Teknologi:
+  • Bahasa Pemrograman : Go 1.24+ (Goroutines, Channels)
+  • Terminal Engine    : Charmbracelet Bubble Tea & Lipgloss
+  • Syntax Tokenizer   : Chroma v2 Highlighting Cache
+  • Markdown Renderer  : Glamour ANSI Stylesheet
+  • Git Integration    : In-Memory Pure-Go (go-git/v5)
+  • PTY Terminal       : Embedded Pseudoterminal Subshell
+
+Dirancang dengan standar 60 FPS, zero flickering, modeless text
+editing, dan mouse support penuh di lingkungan terminal.`
+
+	closeBtn := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(ui.CurrentTheme.FgHighlight).
+		Background(ui.CurrentTheme.Accent).
+		Padding(0, 2).
+		MarginTop(1).
+		Render("[ Tutup (Esc) ]")
+
+	body := lipgloss.JoinVertical(
+		lipgloss.Left,
+		renderedTitle,
+		content,
+		closeBtn,
+	)
+
+	boxStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
 		BorderForeground(ui.CurrentTheme.Accent).
-		Render(content)
+		Background(ui.CurrentTheme.BgTopMenu).
+		Padding(1, 2).
+		Width(64)
+
+	return dialog.NormalizeDialogBackground(boxStyle.Render(body), ui.CurrentTheme.BgTopMenu)
 }
 
 func overlayAt(base, overlay string, atX, atY, totalW, totalH int) string {

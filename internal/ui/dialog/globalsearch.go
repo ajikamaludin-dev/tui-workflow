@@ -254,6 +254,67 @@ func (gs *GlobalSearch) Update(msg tea.Msg) (filePath string, line int, col int,
 	return "", 0, 0, false, tiCmd
 }
 
+// HandleMouse processes mouse clicks and scrolling inside or outside Global Search.
+func (gs *GlobalSearch) HandleMouse(relX, relY int, isWheelUp, isWheelDown bool) (relPath string, lineNum, colNum int, closed bool, handled bool) {
+	if !gs.Active {
+		return "", 0, 0, false, false
+	}
+
+	rendered := gs.Render()
+	lines := strings.Split(rendered, "\n")
+	boxH := len(lines)
+	boxW := gs.Width
+
+	// Outside click: dismiss dialog
+	if relX < 0 || relX >= boxW || relY < 0 || relY >= boxH {
+		gs.Close()
+		return "", 0, 0, true, true
+	}
+
+	if isWheelUp {
+		if gs.Selected > 0 {
+			gs.Selected--
+		} else if gs.ScrollTop > 0 {
+			gs.ScrollTop--
+		}
+		gs.adjustScroll()
+		return "", 0, 0, false, true
+	}
+
+	if isWheelDown {
+		if gs.Selected < len(gs.Matches)-1 {
+			gs.Selected++
+		}
+		gs.adjustScroll()
+		return "", 0, 0, false, true
+	}
+
+	// Layout mapping:
+	// Border top: relY = 0
+	// Padding top: relY = 1
+	// Title: relY = 2 (MarginBottom 1 makes relY = 3 blank)
+	// Input: relY = 4
+	// Blank: relY = 5
+	// Matches list: relY = 6 ...
+	if relY == 4 {
+		gs.Filter.Focus()
+		return "", 0, 0, false, true
+	}
+
+	listStartY := 6
+	if relY >= listStartY && relY < listStartY+gs.MaxRows {
+		clickedIdx := gs.ScrollTop + (relY - listStartY)
+		if clickedIdx >= 0 && clickedIdx < len(gs.Matches) {
+			gs.Selected = clickedIdx
+			m := gs.Matches[clickedIdx]
+			gs.Close()
+			return m.RelPath, m.LineNumber, m.ColNumber, true, true
+		}
+	}
+
+	return "", 0, 0, false, true
+}
+
 // Render renders the Global Search dialog.
 func (gs *GlobalSearch) Render() string {
 	if !gs.Active {

@@ -142,6 +142,70 @@ func (b *BranchSwitcher) Update(msg tea.Msg) (selectedBranch string, closed bool
 	return "", false, tiCmd
 }
 
+// HandleMouse processes mouse clicks and scrolling inside or outside Branch Switcher.
+func (b *BranchSwitcher) HandleMouse(relX, relY int, isWheelUp, isWheelDown bool) (targetBranch string, closed bool, handled bool) {
+	if !b.Active {
+		return "", false, false
+	}
+
+	rendered := b.Render()
+	lines := strings.Split(rendered, "\n")
+	boxH := len(lines)
+	boxW := b.Width
+
+	// Outside click: dismiss dialog
+	if relX < 0 || relX >= boxW || relY < 0 || relY >= boxH {
+		b.Close()
+		return "", true, true
+	}
+
+	if isWheelUp {
+		if b.Selected > 0 {
+			b.Selected--
+			if b.Selected < b.ScrollTop {
+				b.ScrollTop = b.Selected
+			}
+		} else if b.ScrollTop > 0 {
+			b.ScrollTop--
+		}
+		return "", false, true
+	}
+
+	if isWheelDown {
+		if b.Selected < len(b.Filtered)-1 {
+			b.Selected++
+			if b.Selected >= b.ScrollTop+b.MaxRows {
+				b.ScrollTop = b.Selected - b.MaxRows + 1
+			}
+		}
+		return "", false, true
+	}
+
+	// Layout mapping:
+	// Border top: relY = 0
+	// Header: relY = 1
+	// SearchBox: relY = 2
+	// Divider ─: relY = 3
+	// Rows list: relY = 4 ...
+	if relY == 2 {
+		b.Filter.Focus()
+		return "", false, true
+	}
+
+	listStartY := 4
+	if relY >= listStartY && relY < listStartY+b.MaxRows {
+		clickedIdx := b.ScrollTop + (relY - listStartY)
+		if clickedIdx >= 0 && clickedIdx < len(b.Filtered) {
+			b.Selected = clickedIdx
+			branch := b.Filtered[clickedIdx]
+			b.Close()
+			return branch, true, true
+		}
+	}
+
+	return "", false, true
+}
+
 // Render renders the branch switcher modal.
 func (b *BranchSwitcher) Render() string {
 	if !b.Active {

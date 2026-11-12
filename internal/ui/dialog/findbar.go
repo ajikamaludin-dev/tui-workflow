@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"tui-workflow/internal/ui"
 )
 
@@ -184,6 +185,78 @@ func (f *FindBar) Update(msg tea.Msg) (action string, closed bool, cmd tea.Cmd) 
 	return "", false, tiCmd
 }
 
+// HandleMouse processes mouse clicks inside the floating FindBar.
+func (f *FindBar) HandleMouse(relX, relY int) (action string, closed bool, handled bool) {
+	if !f.Active {
+		return "", false, false
+	}
+
+	rendered := f.Render()
+	lines := strings.Split(rendered, "\n")
+	boxH := len(lines)
+	boxW := 0
+	for _, l := range lines {
+		w := ansi.StringWidth(l)
+		if w > boxW {
+			boxW = w
+		}
+	}
+
+	// Outside click: dismiss find bar
+	if relX < 0 || relX >= boxW || relY < 0 || relY >= boxH {
+		f.Close()
+		return "close", true, true
+	}
+
+	// Row 1 (relY == 1 inside border): Input field, match info, buttons [↓], [↑], [×]
+	if relY == 1 {
+		// Input field: col 1..26
+		if relX >= 1 && relX <= 26 {
+			f.FocusField = FindFocusInput
+			f.ReplaceInput.Blur()
+			f.Input.Focus()
+			return "", false, true
+		}
+		// Tombol navigasi di sebelah kanan input & match
+		// [↓] button: around col 35..38
+		if relX >= 34 && relX <= 38 {
+			return "next", false, true
+		}
+		// [↑] button: around col 39..43
+		if relX >= 39 && relX <= 43 {
+			return "prev", false, true
+		}
+		// [×] close button: around col 44..48
+		if relX >= 44 {
+			f.Close()
+			return "close", true, true
+		}
+		return "", false, true
+	}
+
+	// Row 2 (relY == 2 inside border, when replace mode is active)
+	if f.IsReplace && relY == 2 {
+		// Replace input field: col 1..26
+		if relX >= 1 && relX <= 26 {
+			f.FocusField = FindFocusReplace
+			f.Input.Blur()
+			f.ReplaceInput.Focus()
+			return "", false, true
+		}
+		// [Ganti] button: around col 28..37
+		if relX >= 27 && relX <= 37 {
+			return "replace_one", false, true
+		}
+		// [Semua] button: around col 38..48
+		if relX >= 38 {
+			return "replace_all", false, true
+		}
+		return "", false, true
+	}
+
+	return "", false, true
+}
+
 // Render renders the floating find bar box.
 func (f *FindBar) Render() string {
 	if !f.Active {
@@ -203,29 +276,40 @@ func (f *FindBar) Render() string {
 		Background(ui.CurrentTheme.BgTopMenu).
 		Foreground(ui.CurrentTheme.FgSecondary)
 
-	navHintStyle := lipgloss.NewStyle().
+	btnStyle := lipgloss.NewStyle().
 		Background(ui.CurrentTheme.BgTopMenu).
-		Foreground(ui.CurrentTheme.FgSecondary)
+		Foreground(ui.CurrentTheme.Accent).
+		Bold(true)
 
-	navHints := " [Enter:↓ Shift+Enter:↑ Esc:×] "
-	if f.IsReplace {
-		navHints = " [Tab:Fokus Enter:↓ Esc:×] "
-	}
+	closeBtnStyle := lipgloss.NewStyle().
+		Background(ui.CurrentTheme.BgTopMenu).
+		Foreground(ui.CurrentTheme.Red).
+		Bold(true)
+
+	// Interactive buttons in row 1: [↓] [↑] [×]
+	btnNext := btnStyle.Render(" [↓] ")
+	btnPrev := btnStyle.Render("[↑] ")
+	btnClose := closeBtnStyle.Render("[×] ")
 
 	row1 := lipgloss.JoinHorizontal(
 		lipgloss.Center,
 		f.Input.View(),
 		matchStyle.Render(matchStr),
-		navHintStyle.Render(navHints),
+		btnNext,
+		btnPrev,
+		btnClose,
 	)
 
 	content := row1
 	if f.IsReplace {
-		repHints := " [Enter:Ganti Alt+Enter:Semua] "
+		btnRepOne := btnStyle.Render(" [Ganti] ")
+		btnRepAll := btnStyle.Render("[Semua] ")
+
 		row2 := lipgloss.JoinHorizontal(
 			lipgloss.Center,
 			f.ReplaceInput.View(),
-			navHintStyle.Render(repHints),
+			btnRepOne,
+			btnRepAll,
 		)
 		content = lipgloss.JoinVertical(lipgloss.Left, row1, row2)
 	}

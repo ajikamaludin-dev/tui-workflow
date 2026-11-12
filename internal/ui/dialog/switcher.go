@@ -131,6 +131,67 @@ func (s *BufferSwitcher) Update(msg tea.Msg) (targetIdx int, closed bool, cmd te
 	return -1, false, tiCmd
 }
 
+// HandleMouse processes mouse clicks and scrolling inside or outside Buffer Switcher.
+func (s *BufferSwitcher) HandleMouse(relX, relY int, isWheelUp, isWheelDown bool) (targetIdx int, closed bool, handled bool) {
+	if !s.Active {
+		return -1, false, false
+	}
+
+	rendered := s.Render()
+	lines := strings.Split(rendered, "\n")
+	boxH := len(lines)
+	boxW := s.Width
+
+	// Outside click: dismiss dialog
+	if relX < 0 || relX >= boxW || relY < 0 || relY >= boxH {
+		s.Close()
+		return -1, true, true
+	}
+
+	if isWheelUp {
+		if s.Selected > 0 {
+			s.Selected--
+		} else if len(s.Filtered) > 0 {
+			s.Selected = len(s.Filtered) - 1
+		}
+		return -1, false, true
+	}
+
+	if isWheelDown {
+		if s.Selected < len(s.Filtered)-1 {
+			s.Selected++
+		} else {
+			s.Selected = 0
+		}
+		return -1, false, true
+	}
+
+	// Layout mapping:
+	// Border top: relY = 0
+	// Padding top: relY = 1
+	// Title: relY = 2 (MarginBottom 1 makes relY = 3 blank)
+	// Input: relY = 4
+	// Blank: relY = 5
+	// List items: relY = 6 ...
+	if relY == 4 {
+		s.Filter.Focus()
+		return -1, false, true
+	}
+
+	listStartY := 6
+	if relY >= listStartY && relY < listStartY+len(s.Filtered) {
+		clickedIdx := relY - listStartY
+		if clickedIdx >= 0 && clickedIdx < len(s.Filtered) {
+			s.Selected = clickedIdx
+			idx := s.Filtered[clickedIdx].Index
+			s.Close()
+			return idx, true, true
+		}
+	}
+
+	return -1, false, true
+}
+
 func (s *BufferSwitcher) Render() string {
 	if !s.Active {
 		return ""

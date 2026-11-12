@@ -2,10 +2,7 @@
 ## Project: `tui-workflow`
 **Version:** 1.1.0  
 **Status:** Approved  
-**Language/Framework:** Go (1.24+), Bubble Tea Ecosystem  
-
----
-
+**Language/Framework:** Go (1.24+), Bubble Tea Ecosystem 
 ## 1. Executive Summary
 `tui-workflow` adalah aplikasi terminal modern (TUI) berbasis Go yang mengadopsi tata letak mirip Visual Studio Code. Aplikasi ditujukan untuk developer yang menginginkan editor teks cepat, ringan, keyboard-driven sekaligus mouse-friendly langsung di dalam terminal tanpa dependensi berat (Electron/GUI), dengan tetap mempertahankan kejelasan visual dari antarmuka multi-kolom, top menu bar, git source control, markdown preview terintegrasi, dan multi-tab editor.
 
@@ -313,3 +310,4 @@ tui-workflow/
 > 1. **Zero-Assumption on Ambiguity:** Jika ditemukan skenario teknis, perubahan kontrak komponen, trade-off arsitektural, atau kebutuhan fitur baru yang belum didefinisikan secara eksplisit di dalam PRD ini, pelaksana **DILARANG KERAS** berasumsi, menebak preferensi, atau memutuskan secara sepihak.
 > 2. **Wajib Memanggil `ask_user`:** Setiap ada pilihan arsitektural, percabangan logika, atau keputusan penting saat koding, Orchestrator **WAJIB** memanggil tool `ask_user` untuk mempresentasikan konteks, opsi, dan meminta keputusan langsung dari user sebelum menulis kode implementasi terkait.
 > 3. **Konfirmasi Eksekusi:** Setiap transisi fase atau pendelegasian tugas ke sub-agent wajib dikonfirmasi terlebih dahulu kepada user.
+

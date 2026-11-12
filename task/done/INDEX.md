@@ -10,3 +10,4 @@
 | 2026-11-12 | [2026-11-12 - Workspace Quick Open, Command Palette, Global Search, and Editor Find](done/2026-11-12%20-%20Workspace%20Quick%20Open%2C%20Command%20Palette%2C%20Global%20Search%2C%20and%20Editor%20Find.md) | done |
 | 2026-11-12 | [2026-11-12 - Editor Ergonomics, Soft-Wrap Toggle, Word Jump, and Mouse Click Precision](done/2026-11-12%20-%20Editor%20Ergonomics%2C%20Soft-Wrap%20Toggle%2C%20Word%20Jump%2C%20and%20Mouse%20Click%20Precision.md) | done |
 | 2026-11-12 | [2026-11-12 - Tab Context Menu, Sidebar Refresh Buttons, and Extended Language Syntax Highlighting](done/2026-11-12%20-%20Tab%20Context%20Menu%2C%20Sidebar%20Refresh%20Buttons%2C%20and%20Extended%20Language%20Syntax%20Highlighting.md) | done |
+| 2026-11-12 | [2026-11-12 - File Watcher, Adjustable Sidebar Width, and Markdown Preview Copy Paste](done/2026-11-12%20-%20File%20Watcher%2C%20Adjustable%20Sidebar%20Width%2C%20and%20Markdown%20Preview%20Copy%20Paste.md) | done |

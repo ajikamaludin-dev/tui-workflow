@@ -215,31 +215,33 @@ func (m Model) renderEditor(width, height int) string {
 func renderHelpModal() string {
 	content := "┌─ BANTUAN & SHORTCUT tui-workflow ────────────────┐\n" +
 		"│                                                  │\n" +
-		"│ Global:                                          │\n" +
-		"│   • Ctrl+Q        : Keluar dari aplikasi         │\n" +
-		"│   • Ctrl+E / F6   : Ganti Fokus Sidebar/Editor   │\n" +
-		"│   • Ctrl+B        : Toggle Sidebar               │\n" +
-		"│   • Alt+F, Alt+R  : Buka Menu File / Search      │\n" +
-		"│   • Alt+T, Alt+A  : Buka Menu Setting / About    │\n" +
-		"│   • Alt+1, Alt+2  : Switch Sidebar (Files/Git)   │\n" +
-		"│   • Alt+S         : Toggle Auto-Save             │\n" +
-		"│   • ?             : Buka/Tutup Bantuan Ini       │\n" +
-		"│   • Esc           : Tutup Dialog / Menu          │\n" +
+		"│ Global & Navigasi:                               │\n" +
+		"│ • Ctrl+Q         : Keluar dari aplikasi          │\n" +
+		"│ • Ctrl+E / F6    : Ganti Fokus Sidebar/Editor    │\n" +
+		"│ • Ctrl+B         : Toggle Sidebar                │\n" +
+		"│ • Alt+[ / Alt+]  : Persempit / Perlebar Sidebar  │\n" +
+		"│ • Alt+1 / Alt+2  : Switch Sidebar (Files / Git)  │\n" +
+		"│ • Alt+F, Alt+R   : Menu File / Search            │\n" +
+		"│ • Alt+T, Alt+A   : Menu Setting / About          │\n" +
+		"│ • Alt+S / Alt+Z  : Toggle Auto-Save / Soft-Wrap  │\n" +
+		"│ • ? / Esc        : Buka Bantuan / Tutup Dialog   │\n" +
 		"│                                                  │\n" +
 		"│ Pencarian & Aksi:                                │\n" +
-		"│   • F1            : Command Palette (Semua Aksi) │\n" +
-		"│   • Ctrl+P        : Quick Open File Workspace    │\n" +
-		"│   • F4            : Global Search di Workspace   │\n" +
-		"│   • Ctrl+F        : Cari Teks di Buffer Aktif    │\n" +
+		"│ • F1             : Command Palette (Semua Aksi)  │\n" +
+		"│ • Ctrl+P         : Quick Open File Workspace     │\n" +
+		"│ • F4             : Global Search di Workspace    │\n" +
+		"│ • Ctrl+F         : Cari Teks di Buffer Aktif     │\n" +
+		"│ • Ctrl+O / Ctrl+K: Buka File / Buka Folder       │\n" +
 		"│                                                  │\n" +
-		"│ Editor (Modeless):                               │\n" +
-		"│   • Ketik langsung: Teks disisipkan ke buffer    │\n" +
-		"│   • Panah/PgUp/Dn : Navigasi Kursor              │\n" +
-		"│   • Ctrl+S        : Simpan Buffer Aktif          │\n" +
-		"│   • Ctrl+W        : Tutup Tab Aktif              │\n" +
-		"│   • Ctrl+N        : Pindah ke Tab Berikutnya     │\n" +
-		"│   • Ctrl+M        : Toggle Markdown Preview      │\n" +
-		"│   • Tab           : Indentasi 4 Spasi            │\n" +
+		"│ Editor & Markdown Preview:                       │\n" +
+		"│ • Ketik langsung : Input teks langsung ke buffer │\n" +
+		"│ • Ctrl+S / Ctrl+W: Simpan / Tutup Tab            │\n" +
+		"│ • Ctrl+M / Alt+M : Toggle Markdown Live Preview  │\n" +
+		"│ • Ctrl+A / Ctrl+C: Pilih Semua / Salin Teks      │\n" +
+		"│ • Ctrl+V         : Tempel Teks dari Clipboard    │\n" +
+		"│ • Tab            : Indentasi 4 Spasi             │\n" +
+		"│ • Drag Mouse     : Seleksi Teks / Resize Sidebar │\n" +
+		"│ • Klik Kanan     : Buka Context Menu Interaktif  │\n" +
 		"│                                                  │\n" +
 		"│ [Tekan Esc atau ? untuk menutup modal ini]       │\n" +
 		"└──────────────────────────────────────────────────┘"

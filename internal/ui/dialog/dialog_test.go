@@ -81,8 +81,31 @@ func TestConfirmDialog(t *testing.T) {
 	d.Open(ConfirmUnsavedChanges, "Simpan?", "Perubahan belum disimpan", "")
 	// Navigate right to Discard (1)
 	d.Selected = 1
-	confirmed, canceled, discard := d.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	var discard bool
+	confirmed, canceled, discard = d.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if confirmed || canceled || !discard {
 		t.Errorf("Expected discard=true, got confirmed=%v, canceled=%v, discard=%v", confirmed, canceled, discard)
+	}
+
+	// Test External Change Conflict
+	d.Open(ConfirmExternalChange, "Konflik File", "File diubah dari luar", "/tmp/conflict.txt")
+	rendered = d.Render()
+	if !strings.Contains(rendered, "Reload") || !strings.Contains(rendered, "Merge (Diff)") || !strings.Contains(rendered, "Batal") {
+		t.Errorf("Rendered view missing external change buttons: %s", rendered)
+	}
+
+	// Select 0: Reload
+	d.Selected = 0
+	confirmed, canceled, discard = d.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if !confirmed || canceled || discard {
+		t.Errorf("Expected confirmed=true for Reload, got confirmed=%v, canceled=%v, discard=%v", confirmed, canceled, discard)
+	}
+
+	// Select 1: Merge
+	d.Open(ConfirmExternalChange, "Konflik File", "File diubah dari luar", "/tmp/conflict.txt")
+	d.Selected = 1
+	confirmed, canceled, discard = d.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if confirmed || canceled || !discard {
+		t.Errorf("Expected discard=true for Merge, got confirmed=%v, canceled=%v, discard=%v", confirmed, canceled, discard)
 	}
 }

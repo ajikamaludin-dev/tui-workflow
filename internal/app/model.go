@@ -415,7 +415,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else if discard {
 				m.handleDiscardConfirmed()
 			} else if canceled {
-				m.StatusBar.ShowToast("Operasi dibatalkan", false, 2*time.Second)
+				if m.ConfirmDialog.Type == dialog.ConfirmExternalChange {
+					m.StatusBar.ShowToast("Perubahan eksternal diabaikan (lokal dipertahankan)", false, 2*time.Second)
+				} else {
+					m.StatusBar.ShowToast("Operasi dibatalkan", false, 2*time.Second)
+				}
 				m.ClosingTabIdx = -1
 			}
 			return m, nil
@@ -444,7 +448,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// 6. Global Shortcuts
 		switch msg.String() {
-		case "ctrl+c", "ctrl+q":
+		case "ctrl+q":
 			if m.hasDirtyTabs() && !m.AutoSave {
 				m.ConfirmDialog.Open(
 					dialog.ConfirmUnsavedChanges,
@@ -738,7 +742,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 
-			case "escape":
+			case "esc", "escape":
 				if tab.MarkdownViewer.HasSelection {
 					tab.MarkdownViewer.ClearSelection()
 					return m, nil
@@ -906,13 +910,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Resizing Sidebar Handling
+		if m.SidebarVisible {
+			isAtBorder := (msg.X == m.SidebarWidth-1 || msg.X == m.SidebarWidth) && msg.Y >= 1 && msg.Y < m.Height-1
+			if isAtBorder {
+				fmt.Print("\x1b]22;col-resize\x1b\\")
+			}
+
+			if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && isAtBorder {
+				m.ResizingSidebar = true
+				return m, nil
+			}
+		}
+
+		if m.ResizingSidebar {
+			if msg.Action == tea.MouseActionMotion {
+				m.setSidebarWidth(msg.X)
+				return m, nil
+			}
+			if msg.Action == tea.MouseActionRelease {
+				m.ResizingSidebar = false
+				return m, nil
+			}
+		}
+
 		editorStartX := 0
 		if m.SidebarVisible {
 			editorStartX = m.SidebarWidth
 		}
 
-		// Update mouse pointer shape: text over editor, default elsewhere
-		if msg.X >= editorStartX && msg.Y >= 2 && msg.Y < m.Height-1 {
+		// Update mouse pointer shape: col-resize at border, text over editor, default elsewhere
+		if m.SidebarVisible && (msg.X == m.SidebarWidth-1 || msg.X == m.SidebarWidth) && msg.Y >= 1 && msg.Y < m.Height-1 {
+			fmt.Print("\x1b]22;col-resize\x1b\\")
+		} else if msg.X >= editorStartX && msg.Y >= 2 && msg.Y < m.Height-1 {
 			fmt.Print("\x1b]22;text\x1b\\")
 		} else {
 			fmt.Print("\x1b]22;default\x1b\\")
@@ -955,8 +985,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.ContextMenuTabIdx = -1
 				m.Focus = FocusEditor
 				hasSelection := false
-				if tab := m.TabManager.ActiveTab(); tab != nil && tab.Buffer != nil {
-					hasSelection = tab.Buffer.HasSelection
+				if tab := m.TabManager.ActiveTab(); tab != nil {
+					if tab.Type == editor.TabMarkdown && tab.MarkdownPreview && tab.MarkdownViewer != nil {
+						hasSelection = tab.MarkdownViewer.HasSelection
+					} else if tab.Buffer != nil {
+						hasSelection = tab.Buffer.HasSelection
+					}
 				}
 				clipText, _ := clipboard.ReadAll()
 				hasClipboard := len(clipText) > 0
@@ -968,7 +1002,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Drag mouse inside editor buffer area to select text
 		if msg.Action == tea.MouseActionMotion && msg.Y >= 2 && msg.Y < m.Height-1 && msg.X >= editorStartX {
 			tab := m.TabManager.ActiveTab()
-			if tab != nil && tab.Buffer != nil {
+			if tab != nil && tab.Type == editor.TabMarkdown && tab.MarkdownPreview && tab.MarkdownViewer != nil {
+				relRow := msg.Y - 2 + tab.MarkdownViewer.ScrollOffset
+				relCol := msg.X - editorStartX
+				if relCol < 0 {
+					relCol = 0
+				}
+				tab.MarkdownViewer.UpdateSelection(relRow, relCol)
+				return m, nil
+			} else if tab != nil && tab.Buffer != nil {
 				relY := msg.Y - 2
 				gutterW := tab.Buffer.GutterWidth()
 				textX := msg.X - editorStartX - gutterW
@@ -988,8 +1030,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Release mouse inside editor area
 		if msg.Action == tea.MouseActionRelease && msg.Button == tea.MouseButtonLeft {
+			if m.ResizingSidebar {
+				m.ResizingSidebar = false
+				return m, nil
+			}
 			tab := m.TabManager.ActiveTab()
-			if tab != nil && tab.Buffer != nil && tab.Buffer.HasSelection {
+			if tab != nil && tab.Type == editor.TabMarkdown && tab.MarkdownPreview && tab.MarkdownViewer != nil {
+				sR, sC, eR, eC := tab.MarkdownViewer.NormalizedSelection()
+				if sR == eR && sC == eC {
+					tab.MarkdownViewer.ClearSelection()
+				}
+			} else if tab != nil && tab.Buffer != nil && tab.Buffer.HasSelection {
 				if tab.Buffer.SelectAnchorRow == tab.Buffer.CursorRow && tab.Buffer.SelectAnchorCol == tab.Buffer.CursorCol {
 					tab.Buffer.ClearSelection()
 					m.syncStatusBarWithActiveTab()
@@ -1141,7 +1192,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else if discard {
 					m.handleDiscardConfirmed()
 				} else if canceled {
-					m.StatusBar.ShowToast("Operasi dibatalkan", false, 2*time.Second)
+					if m.ConfirmDialog.Type == dialog.ConfirmExternalChange {
+						m.StatusBar.ShowToast("Perubahan eksternal diabaikan (lokal dipertahankan)", false, 2*time.Second)
+					} else {
+						m.StatusBar.ShowToast("Operasi dibatalkan", false, 2*time.Second)
+					}
 					m.ClosingTabIdx = -1
 				}
 				if handled {
@@ -1280,7 +1335,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Y >= 2 && msg.Y < m.Height-1 && msg.X >= editorStartX {
 				m.Focus = FocusEditor
 				tab := m.TabManager.ActiveTab()
-				if tab != nil && tab.Buffer != nil {
+				if tab != nil && tab.Type == editor.TabMarkdown && tab.MarkdownPreview && tab.MarkdownViewer != nil {
+					relRow := msg.Y - 2 + tab.MarkdownViewer.ScrollOffset
+					relCol := msg.X - editorStartX
+					if relCol < 0 {
+						relCol = 0
+					}
+					tab.MarkdownViewer.StartSelection(relRow, relCol)
+					return m, nil
+				} else if tab != nil && tab.Buffer != nil {
 					relY := msg.Y - 2
 					gutterW := tab.Buffer.GutterWidth()
 					textX := msg.X - editorStartX - gutterW
@@ -1314,6 +1377,77 @@ func (m *Model) toggleSoftWrap() {
 	if m.Config != nil {
 		m.Config.SoftWrap = m.SoftWrap
 		_ = config.SaveConfig(m.Config)
+	}
+}
+
+func (m *Model) adjustSidebarWidth(delta int) {
+	if !m.SidebarVisible {
+		return
+	}
+	m.setSidebarWidth(m.SidebarWidth + delta)
+}
+
+func (m *Model) setSidebarWidth(width int) {
+	minWidth := 15
+	maxWidth := m.Width - 20
+	if maxWidth < minWidth {
+		maxWidth = minWidth
+	}
+	if width < minWidth {
+		width = minWidth
+	}
+	if width > maxWidth {
+		width = maxWidth
+	}
+	if width != m.SidebarWidth {
+		m.SidebarWidth = width
+		if m.Config != nil {
+			m.Config.SidebarWidth = width
+			_ = config.SaveConfig(m.Config)
+		}
+	}
+}
+
+func (m *Model) checkWatchedFiles() {
+	if m.TabManager == nil {
+		return
+	}
+	for _, tab := range m.TabManager.Tabs {
+		if tab == nil || tab.Path == "" || tab.Type == editor.TabDiff || tab.Buffer == nil {
+			continue
+		}
+		info, err := os.Stat(tab.Path)
+		if err != nil {
+			if os.IsNotExist(err) && !tab.LastModTime.IsZero() {
+				m.StatusBar.ShowToast(fmt.Sprintf("File '%s' telah dihapus dari disk", tab.Name), true, 3*time.Second)
+				tab.LastModTime = time.Time{}
+			}
+			continue
+		}
+
+		if tab.LastModTime.IsZero() {
+			tab.LastModTime = info.ModTime()
+			continue
+		}
+
+		if info.ModTime().After(tab.LastModTime) {
+			tab.LastModTime = info.ModTime()
+			if !tab.Buffer.IsDirty {
+				if err := tab.ReloadFromDisk(); err == nil {
+					m.StatusBar.ShowToast(fmt.Sprintf("File '%s' diperbarui dari disk", tab.Name), false, 2*time.Second)
+				}
+			} else {
+				m.StatusBar.ShowToast(fmt.Sprintf("Peringatan: File '%s' diubah dari luar (ada perubahan lokal)", tab.Name), true, 4*time.Second)
+				if m.ConfirmDialog != nil && !m.ConfirmDialog.Active {
+					m.ConfirmDialog.Open(
+						dialog.ConfirmExternalChange,
+						"Konflik Perubahan Eksternal",
+						fmt.Sprintf("File '%s' telah diubah dari luar, namun terdapat perubahan lokal di editor.\nReload dari disk atau buka Split Diff untuk merge?", tab.Name),
+						tab.Path,
+					)
+				}
+			}
+		}
 	}
 }
 
@@ -1417,6 +1551,8 @@ func (m *Model) openCommandPalette() {
 
 		// View
 		{ID: "setting.sidebar", Title: "Toggle Sidebar", Category: "View", Shortcut: "Ctrl+B"},
+		{ID: "view.sidebar_narrow", Title: "Persempit Sidebar", Category: "View", Shortcut: "Alt+["},
+		{ID: "view.sidebar_widen", Title: "Perlebar Sidebar", Category: "View", Shortcut: "Alt+]"},
 		{ID: "view.soft_wrap", Title: "Toggle Soft Wrap", Category: "View", Shortcut: "Alt+Z"},
 		{ID: "view.focus", Title: "Switch Focus (Sidebar/Editor)", Category: "View", Shortcut: "Ctrl+E / F6"},
 		{ID: "view.files", Title: "Switch to Files Explorer", Category: "View", Shortcut: "Alt+1"},
@@ -1682,6 +1818,20 @@ func (m *Model) handleConfirmConfirmed() {
 			m.syncStatusBarWithActiveTab()
 			m.StatusBar.ShowToast("Disimpan & ditutup", false, 2*time.Second)
 		}
+
+	case dialog.ConfirmExternalChange:
+		targetPath := m.ConfirmDialog.TargetPath
+		for _, tab := range m.TabManager.Tabs {
+			if tab != nil && tab.Path == targetPath && tab.Buffer != nil {
+				if err := tab.ReloadFromDisk(); err == nil {
+					m.StatusBar.ShowToast(fmt.Sprintf("File '%s' berhasil dimuat ulang dari disk", tab.Name), false, 2*time.Second)
+				} else {
+					m.StatusBar.ShowToast("Gagal reload file: "+err.Error(), true, 3*time.Second)
+				}
+				break
+			}
+		}
+		m.syncStatusBarWithActiveTab()
 	}
 }
 
@@ -1694,6 +1844,21 @@ func (m *Model) handleDiscardConfirmed() {
 			m.ClosingTabIdx = -1
 			m.syncStatusBarWithActiveTab()
 			m.StatusBar.ShowToast("Perubahan dibuang", false, 2*time.Second)
+		}
+	} else if m.ConfirmDialog.Type == dialog.ConfirmExternalChange {
+		targetPath := m.ConfirmDialog.TargetPath
+		for _, tab := range m.TabManager.Tabs {
+			if tab != nil && tab.Path == targetPath && tab.Buffer != nil {
+				diskBytes, err := os.ReadFile(targetPath)
+				if err == nil {
+					m.TabManager.OpenDiff(targetPath, string(diskBytes), tab.Buffer.Text())
+					m.syncStatusBarWithActiveTab()
+					m.StatusBar.ShowToast("Split Diff dibuka: Periksa & merge perubahan", false, 3*time.Second)
+				} else {
+					m.StatusBar.ShowToast("Gagal membaca disk: "+err.Error(), true, 3*time.Second)
+				}
+				break
+			}
 		}
 	}
 }
@@ -1800,6 +1965,12 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 
 	case "setting.sidebar":
 		m.SidebarVisible = !m.SidebarVisible
+
+	case "view.sidebar_narrow":
+		m.adjustSidebarWidth(-2)
+
+	case "view.sidebar_widen":
+		m.adjustSidebarWidth(2)
 
 	case "setting.softwrap", "view.soft_wrap":
 		m.toggleSoftWrap()
@@ -2060,7 +2231,35 @@ func (m *Model) handleContextMenuAction(action string) tea.Cmd {
 	}
 
 	tab := m.TabManager.ActiveTab()
-	if tab == nil || tab.Buffer == nil {
+	if tab == nil {
+		return nil
+	}
+
+	if tab.Type == editor.TabMarkdown && tab.MarkdownPreview && tab.MarkdownViewer != nil {
+		switch action {
+		case "copy":
+			text := tab.MarkdownViewer.GetSelectedText()
+			if text == "" {
+				text = tab.MarkdownViewer.GetAllCleanText()
+			}
+			if text != "" {
+				_ = clipboard.WriteAll(text)
+				m.StatusBar.ShowToast("Disalin ke clipboard ("+strconv.Itoa(len(text))+" karakter)", false, 2*time.Second)
+			}
+		case "select_all":
+			tab.MarkdownViewer.SelectAll()
+		case "paste":
+			text, err := clipboard.ReadAll()
+			if err == nil && text != "" && tab.Buffer != nil {
+				tab.Buffer.InsertString(text)
+				m.syncStatusBarWithActiveTab()
+				m.StatusBar.ShowToast("Ditempel ke dokumen markdown", false, 2*time.Second)
+			}
+		}
+		return nil
+	}
+
+	if tab.Buffer == nil {
 		return nil
 	}
 	buf := tab.Buffer

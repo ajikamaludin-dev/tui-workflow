@@ -13,6 +13,7 @@ type ConfirmDialogType int
 const (
 	ConfirmDelete ConfirmDialogType = iota
 	ConfirmUnsavedChanges
+	ConfirmExternalChange
 )
 
 type ConfirmDialog struct {
@@ -39,7 +40,12 @@ func (d *ConfirmDialog) Open(t ConfirmDialogType, title, message, targetPath str
 	d.Title = title
 	d.Message = message
 	d.TargetPath = targetPath
-	d.Selected = 1 // default to Cancel
+	d.Selected = 1 // default to Cancel or Merge
+	if t == ConfirmExternalChange {
+		d.Width = 54
+	} else {
+		d.Width = 48
+	}
 }
 
 func (d *ConfirmDialog) Close() {
@@ -61,7 +67,7 @@ func (d *ConfirmDialog) Update(msg tea.Msg) (confirmed bool, canceled bool, disc
 		case "left", "h":
 			d.Selected--
 			if d.Selected < 0 {
-				if d.Type == ConfirmUnsavedChanges {
+				if d.Type == ConfirmUnsavedChanges || d.Type == ConfirmExternalChange {
 					d.Selected = 2
 				} else {
 					d.Selected = 1
@@ -71,7 +77,7 @@ func (d *ConfirmDialog) Update(msg tea.Msg) (confirmed bool, canceled bool, disc
 
 		case "right", "l", "tab":
 			maxIdx := 1
-			if d.Type == ConfirmUnsavedChanges {
+			if d.Type == ConfirmUnsavedChanges || d.Type == ConfirmExternalChange {
 				maxIdx = 2
 			}
 			d.Selected = (d.Selected + 1) % (maxIdx + 1)
@@ -79,11 +85,11 @@ func (d *ConfirmDialog) Update(msg tea.Msg) (confirmed bool, canceled bool, disc
 
 		case "enter":
 			d.Close()
-			if d.Type == ConfirmUnsavedChanges {
+			if d.Type == ConfirmUnsavedChanges || d.Type == ConfirmExternalChange {
 				if d.Selected == 0 {
-					return true, false, false // Save & close
+					return true, false, false // Save & close OR Reload from disk
 				} else if d.Selected == 1 {
-					return false, false, true // Discard & close
+					return false, false, true // Discard & close OR Merge (Split Diff)
 				} else {
 					return false, true, false // Cancel
 				}
@@ -125,6 +131,14 @@ func (d *ConfirmDialog) HandleMouse(relX, relY int) (confirmed bool, canceled bo
 			} else {
 				return false, true, false, true // Cancel
 			}
+		} else if d.Type == ConfirmExternalChange {
+			if relX >= 2 && relX <= 14 {
+				return true, false, false, true // Reload
+			} else if relX >= 15 && relX <= 33 {
+				return false, false, true, true // Merge (Diff)
+			} else {
+				return false, true, false, true // Cancel / Keep local
+			}
 		} else {
 			if relX >= 2 && relX <= 16 {
 				return true, false, false, true // Delete
@@ -143,7 +157,7 @@ func (d *ConfirmDialog) Render() string {
 	}
 
 	titleColor := ui.CurrentTheme.Red
-	if d.Type == ConfirmUnsavedChanges {
+	if d.Type == ConfirmUnsavedChanges || d.Type == ConfirmExternalChange {
 		titleColor = ui.CurrentTheme.Yellow
 	}
 
@@ -190,6 +204,27 @@ func (d *ConfirmDialog) Render() string {
 			btnDiscard.Render("Discard"),
 			btnSep,
 			btnCancel.Render("Cancel"),
+		)
+	} else if d.Type == ConfirmExternalChange {
+		btnReload := btnStyle
+		btnMerge := btnStyle
+		btnCancel := btnStyle
+
+		if d.Selected == 0 {
+			btnReload = btnReload.Background(ui.CurrentTheme.Accent).Foreground(ui.CurrentTheme.FgHighlight).Bold(true)
+		} else if d.Selected == 1 {
+			btnMerge = btnMerge.Background(ui.CurrentTheme.Green).Foreground(ui.CurrentTheme.FgHighlight).Bold(true)
+		} else if d.Selected == 2 {
+			btnCancel = btnCancel.Background(ui.CurrentTheme.BorderColor).Foreground(ui.CurrentTheme.FgHighlight).Bold(true)
+		}
+
+		buttons = lipgloss.JoinHorizontal(
+			lipgloss.Center,
+			btnReload.Render("Reload"),
+			btnSep,
+			btnMerge.Render("Merge (Diff)"),
+			btnSep,
+			btnCancel.Render("Batal"),
 		)
 	} else {
 		btnConfirm := btnStyle

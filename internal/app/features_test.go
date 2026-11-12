@@ -437,11 +437,12 @@ func TestContextMenuAndSelection(t *testing.T) {
 	}
 
 	// 1. Mouse Drag Selection in Editor
-	// Editor starts at X = 28 (m.SidebarWidth)
-	// Gutter is ~6 columns, so editor text starts around X = 34
+	// Editor starts at X = m.SidebarWidth
+	// Gutter is ~6 columns, so editor text starts around X = m.SidebarWidth + 6
 	// Y = 2 is line 0 of buffer
+	textStartX := m.SidebarWidth + 6
 	newM, _ = m.Update(tea.MouseMsg{
-		X:      34,
+		X:      textStartX,
 		Y:      2,
 		Button: tea.MouseButtonLeft,
 		Action: tea.MouseActionPress,
@@ -449,14 +450,14 @@ func TestContextMenuAndSelection(t *testing.T) {
 	m = newM.(Model)
 
 	newM, _ = m.Update(tea.MouseMsg{
-		X:      39,
+		X:      textStartX + 5,
 		Y:      2,
 		Action: tea.MouseActionMotion,
 	})
 	m = newM.(Model)
 
 	newM, _ = m.Update(tea.MouseMsg{
-		X:      39,
+		X:      textStartX + 5,
 		Y:      2,
 		Button: tea.MouseButtonLeft,
 		Action: tea.MouseActionRelease,
@@ -470,7 +471,7 @@ func TestContextMenuAndSelection(t *testing.T) {
 
 	// 2. Right click to open ContextMenu
 	newM, _ = m.Update(tea.MouseMsg{
-		X:      40,
+		X:      textStartX + 6,
 		Y:      5,
 		Button: tea.MouseButtonRight,
 		Action: tea.MouseActionPress,
@@ -515,6 +516,7 @@ func TestContextMenuAndSelection(t *testing.T) {
 }
 
 func TestSoftWrapToggleAndWordJump(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	tempDir, err := os.MkdirTemp("", "tui-wrap-test-*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)

@@ -19,8 +19,8 @@
 | 17 | [x] | hightlight lang like php, go , js, react,html, flutter by default |
 | 18 | [ ] | integrasi dengan lsp |
 | 19 | [ ] | formater file seperti prettier |
-| 20 | [ ] | auto listen file jika changes file dari luar editor |
-| 21 | [ ] | ijin kan block copy dan paste action di previewe markdown |
+| 20 | [x] | auto listen file jika changes file dari luar editor |
+| 21 | [x] | ijin kan block copy dan paste action di previewe markdown |
 | 22 | [x] | search text in open editor with ctrl+f | 
 | 23 | [ ] | integrasi ai llm model dengan format openai api , user bisa setting provider url, api dan models serta default model , kemudian implementasi pertama digunakan untuk generate commit message dari changes yang dilakukan di project yang open |
-| 24 | [ ] | sidebar sekarng hanya bisa toggle , jika memungkinkan ingin adjustable dengan klik and drag atau kombinasi tombol |
+| 24 | [x] | sidebar sekarng hanya bisa toggle , jika memungkinkan ingin adjustable dengan klik and drag atau kombinasi tombol |

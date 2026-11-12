@@ -2,7 +2,9 @@ package editor
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/charmbracelet/lipgloss"
 	"tui-workflow/internal/syntax"
@@ -22,6 +24,8 @@ type Buffer struct {
 	CursorRow   int
 	CursorCol   int
 	ScrollRow   int
+	ScrollCol   int
+	SoftWrap    bool
 	IsDirty     bool
 	Highlighter *syntax.Highlighter
 	cachedHigh  []string
@@ -44,6 +48,8 @@ func NewBuffer(content string) *Buffer {
 		CursorRow:   0,
 		CursorCol:   0,
 		ScrollRow:   0,
+		ScrollCol:   0,
+		SoftWrap:    true,
 		IsDirty:     false,
 		Highlighter: syntax.NewHighlighter(),
 		cachedDirty: true,
@@ -226,6 +232,93 @@ func (b *Buffer) MoveRight() {
 			b.CursorCol = 0
 		}
 	}
+}
+
+func isWordChar(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
+}
+
+func (b *Buffer) MoveWordLeft() {
+	if b.CursorRow < 0 || b.CursorRow >= len(b.Lines) {
+		return
+	}
+	if b.CursorCol == 0 {
+		if b.CursorRow > 0 {
+			b.CursorRow--
+			b.CursorCol = len(b.Lines[b.CursorRow])
+		}
+		return
+	}
+	line := b.Lines[b.CursorRow]
+	col := b.CursorCol
+	if col > len(line) {
+		col = len(line)
+	}
+
+	// 1. Skip whitespace to the left
+	for col > 0 && unicode.IsSpace(line[col-1]) {
+		col--
+	}
+	if col == 0 {
+		b.CursorCol = 0
+		return
+	}
+
+	// 2. Determine word char vs punctuation
+	if isWordChar(line[col-1]) {
+		for col > 0 && isWordChar(line[col-1]) {
+			col--
+		}
+	} else {
+		for col > 0 && !isWordChar(line[col-1]) && !unicode.IsSpace(line[col-1]) {
+			col--
+		}
+	}
+	b.CursorCol = col
+}
+
+func (b *Buffer) MoveWordRight() {
+	if b.CursorRow < 0 || b.CursorRow >= len(b.Lines) {
+		return
+	}
+	line := b.Lines[b.CursorRow]
+	if b.CursorCol >= len(line) {
+		if b.CursorRow < len(b.Lines)-1 {
+			b.CursorRow++
+			b.CursorCol = 0
+		}
+		return
+	}
+	col := b.CursorCol
+	if col < 0 {
+		col = 0
+	}
+
+	// 1. Skip leading whitespace if cursor is on whitespace
+	for col < len(line) && unicode.IsSpace(line[col]) {
+		col++
+	}
+	if col >= len(line) {
+		b.CursorCol = len(line)
+		return
+	}
+
+	// 2. Skip word or punctuation
+	if isWordChar(line[col]) {
+		for col < len(line) && isWordChar(line[col]) {
+			col++
+		}
+	} else {
+		for col < len(line) && !isWordChar(line[col]) && !unicode.IsSpace(line[col]) {
+			col++
+		}
+	}
+
+	// 3. Skip trailing whitespace to place cursor at start of next word (VS Code style)
+	for col < len(line) && unicode.IsSpace(line[col]) {
+		col++
+	}
+	b.CursorCol = col
 }
 
 func (b *Buffer) MoveUp() {
@@ -464,9 +557,50 @@ func (b *Buffer) DeleteSelection() bool {
 	return true
 }
 
+// GutterDigits returns the number of digits needed for line numbers (minimum 3).
+func (b *Buffer) GutterDigits() int {
+	lineCount := len(b.Lines)
+	digits := len(strconv.Itoa(lineCount))
+	if digits < 3 {
+		digits = 3
+	}
+	return digits
+}
+
+// GutterWidth returns the total gutter column width including margins and separator.
+func (b *Buffer) GutterWidth() int {
+	return b.GutterDigits() + 4
+}
+
 // RowColFromVisual converts a visual row offset (from top of viewport) and visual column
 // offset into the corresponding physical line and column.
 func (b *Buffer) RowColFromVisual(relY, textX, textWidth int) (int, int) {
+	if textX < 0 {
+		textX = 0
+	}
+	if !b.SoftWrap {
+		vIdx := b.ScrollRow + relY
+		if vIdx < 0 {
+			vIdx = 0
+		}
+		if vIdx >= len(b.Lines) {
+			if len(b.Lines) == 0 {
+				return 0, 0
+			}
+			lastRow := len(b.Lines) - 1
+			return lastRow, len(b.Lines[lastRow])
+		}
+		physRow := vIdx
+		physCol := b.ScrollCol + textX
+		if physCol > len(b.Lines[physRow]) {
+			physCol = len(b.Lines[physRow])
+		}
+		if physCol < 0 {
+			physCol = 0
+		}
+		return physRow, physCol
+	}
+
 	vLines := b.ComputeVisualLines(textWidth)
 	vIdx := b.ScrollRow + relY
 	if vIdx < 0 {
@@ -488,18 +622,20 @@ func (b *Buffer) RowColFromVisual(relY, textX, textWidth int) (int, int) {
 			physCol = len(b.Lines[physRow])
 		}
 	}
-	if physCol < 0 {
-		physCol = 0
+	if physCol > vl.EndCol {
+		physCol = vl.EndCol
+	}
+	if physCol < vl.StartCol {
+		physCol = vl.StartCol
 	}
 	return physRow, physCol
 }
 
-// ComputeVisualLines generates soft-wrapped visual lines for the given text width
+// ComputeVisualLines generates visual lines, handling soft-wrap or horizontal window slicing.
 func (b *Buffer) ComputeVisualLines(textWidth int) []VisualLine {
 	if textWidth < 10 {
 		textWidth = 10
 	}
-
 	var vLines []VisualLine
 	for pIdx, pLine := range b.Lines {
 		if len(pLine) == 0 {
@@ -513,13 +649,37 @@ func (b *Buffer) ComputeVisualLines(textWidth int) []VisualLine {
 			continue
 		}
 
+		if !b.SoftWrap {
+			start := b.ScrollCol
+			if start > len(pLine) {
+				start = len(pLine)
+			}
+			end := b.ScrollCol + textWidth
+			if end > len(pLine) {
+				end = len(pLine)
+			}
+			var runes []rune
+			if start < end {
+				runes = pLine[start:end]
+			} else {
+				runes = []rune{}
+			}
+			vLines = append(vLines, VisualLine{
+				PhysicalLineIdx: pIdx,
+				IsContinuation:  false,
+				Runes:           runes,
+				StartCol:        start,
+				EndCol:          end,
+			})
+			continue
+		}
+
 		start := 0
 		for start < len(pLine) {
 			end := start + textWidth
 			if end > len(pLine) {
 				end = len(pLine)
 			}
-
 			vLines = append(vLines, VisualLine{
 				PhysicalLineIdx: pIdx,
 				IsContinuation:  start > 0,
@@ -530,7 +690,6 @@ func (b *Buffer) ComputeVisualLines(textWidth int) []VisualLine {
 			start = end
 		}
 	}
-
 	return vLines
 }
 
@@ -538,29 +697,43 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 	b.clampCursor()
 
 	// 1. Calculate gutter width
-	lineCount := len(b.Lines)
-	gutterDigits := len(fmt.Sprintf("%d", lineCount))
-	if gutterDigits < 3 {
-		gutterDigits = 3
-	}
-	// Gutter format: " %3d │ " -> length is 1 + digits + 3 = digits + 4
-	gutterWidth := gutterDigits + 4
+	gutterDigits := b.GutterDigits()
+	gutterWidth := b.GutterWidth()
 	textWidth := width - gutterWidth
 	if textWidth < 10 {
 		textWidth = 10
 	}
 
-	// 2. Compute visual lines with soft-wrap
+	// 2. Horizontal scroll adjustment when soft-wrap is disabled
+	if !b.SoftWrap {
+		if b.CursorCol < b.ScrollCol {
+			b.ScrollCol = b.CursorCol
+		} else if b.CursorCol >= b.ScrollCol+textWidth {
+			b.ScrollCol = b.CursorCol - textWidth + 1
+		}
+		if b.ScrollCol < 0 {
+			b.ScrollCol = 0
+		}
+	} else {
+		b.ScrollCol = 0
+	}
+
+	// 3. Compute visual lines
 	vLines := b.ComputeVisualLines(textWidth)
 
-	// 3. Find visual cursor index
+	// 4. Find visual cursor index
 	visualCursorRow := 0
 	visualCursorCol := 0
-	for vIdx, vl := range vLines {
-		if vl.PhysicalLineIdx == b.CursorRow && b.CursorCol >= vl.StartCol && b.CursorCol <= vl.EndCol {
-			visualCursorRow = vIdx
-			visualCursorCol = b.CursorCol - vl.StartCol
-			break
+	if !b.SoftWrap {
+		visualCursorRow = b.CursorRow
+		visualCursorCol = b.CursorCol - b.ScrollCol
+	} else {
+		for vIdx, vl := range vLines {
+			if vl.PhysicalLineIdx == b.CursorRow && b.CursorCol >= vl.StartCol && b.CursorCol <= vl.EndCol {
+				visualCursorRow = vIdx
+				visualCursorCol = b.CursorCol - vl.StartCol
+				break
+			}
 		}
 	}
 

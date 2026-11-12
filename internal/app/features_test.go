@@ -514,3 +514,82 @@ func TestContextMenuAndSelection(t *testing.T) {
 	}
 }
 
+func TestSoftWrapToggleAndWordJump(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "tui-wrap-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	filePath := filepath.Join(tempDir, "test.go")
+	_ = os.WriteFile(filePath, []byte("package main\n\nfunc main() {\n\t// comment\n}\n"), 0644)
+
+	m, err := NewModelWithPath(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+	m.Ready = true
+	m.Width = 100
+	m.Height = 30
+	m.openFile(filePath)
+
+	tab := m.TabManager.ActiveTab()
+	if tab == nil || tab.Buffer == nil {
+		t.Fatalf("Expected active tab with buffer")
+	}
+
+	// 1. Initial state: SoftWrap should be true
+	if !m.SoftWrap || !tab.Buffer.SoftWrap {
+		t.Errorf("Expected initial SoftWrap to be true")
+	}
+
+	// 2. Press Alt+Z -> Toggle to false
+	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'z'}, Alt: true})
+	m = newM.(Model)
+	if m.SoftWrap || tab.Buffer.SoftWrap {
+		t.Errorf("Expected SoftWrap to be false after Alt+Z")
+	}
+
+	// 3. Menu action setting.softwrap -> Toggle back to true
+	_ = m.handleMenuAction("setting.softwrap")
+	if !m.SoftWrap || !tab.Buffer.SoftWrap {
+		t.Errorf("Expected SoftWrap to be true after menu action")
+	}
+
+	// 4. Test Word Jump via key messages
+	tab.Buffer.SetCursor(0, 0)
+	// Press ctrl+right
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlRight})
+	m = newM.(Model)
+	if tab.Buffer.CursorCol != 8 { // after "package " -> lands at "main" (col 8)
+		t.Errorf("Expected cursor at col 8 after Ctrl+Right, got %d", tab.Buffer.CursorCol)
+	}
+
+	// Press ctrl+left
+	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlLeft})
+	m = newM.(Model)
+	if tab.Buffer.CursorCol != 0 {
+		t.Errorf("Expected cursor at col 0 after Ctrl+Left, got %d", tab.Buffer.CursorCol)
+	}
+
+	// 5. Test Mouse Click Gutter alignment
+	// Gutter width for 5 lines is 7 (3 digits + 4)
+	if tab.Buffer.GutterWidth() != 7 {
+		t.Errorf("Expected gutter width 7, got %d", tab.Buffer.GutterWidth())
+	}
+	// Click on Row 2 (first editor text row), X = sidebarWidth + gutterWidth + 3
+	editorStartX := 30
+	clickX := editorStartX + tab.Buffer.GutterWidth() + 3
+	newM, _ = m.Update(tea.MouseMsg{
+		X:      clickX,
+		Y:      2,
+		Button: tea.MouseButtonLeft,
+		Action: tea.MouseActionPress,
+	})
+	m = newM.(Model)
+	if tab.Buffer.CursorRow != 0 || tab.Buffer.CursorCol != 3 {
+		t.Errorf("Expected cursor at (0, 3) after precise click, got (%d, %d)", tab.Buffer.CursorRow, tab.Buffer.CursorCol)
+	}
+}
+
+

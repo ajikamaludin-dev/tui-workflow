@@ -8,3 +8,4 @@
 | 2026-11-12 | Cursor I-Beam, Mouse Selection & Context Menu, Modal Visual Fix | done | dev |
 | 2026-11-12 | Git Sidebar & Workflow Fixes | done | dev |
 | 2026-11-12 | Workspace Quick Open, Command Palette, Global Search, and Editor Find | done | dev |
+| 2026-11-12 | Editor Ergonomics: Soft-Wrap Toggle, Word Jump, and Mouse Click Precision | done | dev |

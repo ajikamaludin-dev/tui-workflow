@@ -26,6 +26,7 @@ type TabManager struct {
 	Tabs              []*Tab
 	ActiveIndex       int
 	TabScrollOffset   int
+	DefaultSoftWrap   bool
 	ClickRegions      []TabClickRegion
 	MarkdownBtnStartX int
 	MarkdownBtnEndX   int
@@ -40,6 +41,7 @@ func NewTabManager() *TabManager {
 		Tabs:              make([]*Tab, 0),
 		ActiveIndex:       -1,
 		TabScrollOffset:   0,
+		DefaultSoftWrap:   true,
 		ClickRegions:      make([]TabClickRegion, 0),
 		MarkdownBtnStartX: -1,
 		MarkdownBtnEndX:   -1,
@@ -47,6 +49,16 @@ func NewTabManager() *TabManager {
 		ScrollLeftEndX:    -1,
 		ScrollRightStartX: -1,
 		ScrollRightEndX:   -1,
+	}
+}
+
+// SetSoftWrap updates the default soft-wrap mode and updates all open file tabs.
+func (tm *TabManager) SetSoftWrap(enabled bool) {
+	tm.DefaultSoftWrap = enabled
+	for _, tab := range tm.Tabs {
+		if tab.Buffer != nil {
+			tab.Buffer.SoftWrap = enabled
+		}
 	}
 }
 
@@ -101,6 +113,9 @@ func (tm *TabManager) OpenFile(path string) (*Tab, error) {
 	}
 
 	tab := NewFileTab(path, string(content))
+	if tab.Buffer != nil {
+		tab.Buffer.SoftWrap = tm.DefaultSoftWrap
+	}
 	tm.Tabs = append(tm.Tabs, tab)
 	tm.ActiveIndex = len(tm.Tabs) - 1
 	tm.EnsureActiveTabVisible()

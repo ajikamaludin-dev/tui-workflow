@@ -45,6 +45,7 @@ type Model struct {
 	FindBar        *dialog.FindBar
 	ContextMenu    *ui.ContextMenu
 	AutoSave       bool
+	SoftWrap       bool
 	ShowHelp       bool
 	ShowAbout      bool
 	ClosingTabIdx  int
@@ -113,12 +114,14 @@ func NewModelWithPath(targetPath string) (Model, error) {
 		FindBar:        dialog.NewFindBar(),
 		ContextMenu:    ui.NewContextMenu(),
 		AutoSave:       cfg.AutoSave,
+		SoftWrap:       cfg.SoftWrap,
 		ShowHelp:       false,
 		ShowAbout:      false,
 		ClosingTabIdx:  -1,
 	}
 	m.Explorer.ShowHidden = cfg.ShowHidden
 	m.StatusBar.AutoSave = cfg.AutoSave
+	m.TabManager.SetSoftWrap(cfg.SoftWrap)
 	if repo != nil {
 		if branch, err := repo.GetBranchName(); err == nil {
 			m.StatusBar.Branch = branch
@@ -450,6 +453,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.StatusBar.ShowToast("Auto-Save Dimatikan", true, 2*time.Second)
 			}
 			return m, nil
+		case "alt+z", "alt+Z":
+			m.toggleSoftWrap()
+			return m, nil
 
 		case "alt+1":
 			m.SidebarView = SidebarFiles
@@ -763,9 +769,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
+				case "ctrl+left", "alt+left":
+					buf.ClearSelection()
+					buf.MoveWordLeft()
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+
 				case "right":
 					buf.ClearSelection()
 					buf.MoveRight()
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+
+				case "ctrl+right", "alt+right":
+					buf.ClearSelection()
+					buf.MoveWordRight()
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
@@ -851,11 +869,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			tab := m.TabManager.ActiveTab()
 			if tab != nil && tab.Buffer != nil {
 				relY := msg.Y - 2
-				gutterDigits := len(strconv.Itoa(tab.Buffer.LineCount()))
-				if gutterDigits < 2 {
-					gutterDigits = 2
-				}
-				gutterW := gutterDigits + 4
+				gutterW := tab.Buffer.GutterWidth()
 				textX := msg.X - editorStartX - gutterW
 				if textX < 0 {
 					textX = 0
@@ -1151,11 +1165,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				tab := m.TabManager.ActiveTab()
 				if tab != nil && tab.Buffer != nil {
 					relY := msg.Y - 2
-					gutterDigits := len(strconv.Itoa(tab.Buffer.LineCount()))
-					if gutterDigits < 2 {
-						gutterDigits = 2
-					}
-					gutterW := gutterDigits + 4
+					gutterW := tab.Buffer.GutterWidth()
 					textX := msg.X - editorStartX - gutterW
 					if textX < 0 {
 						textX = 0
@@ -1174,6 +1184,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m *Model) toggleSoftWrap() {
+	m.SoftWrap = !m.SoftWrap
+	m.TabManager.SetSoftWrap(m.SoftWrap)
+	if m.SoftWrap {
+		m.StatusBar.ShowToast("Soft-Wrap Diaktifkan", false, 2*time.Second)
+	} else {
+		m.StatusBar.ShowToast("Soft-Wrap Dimatikan", true, 2*time.Second)
+	}
+	if m.Config != nil {
+		m.Config.SoftWrap = m.SoftWrap
+		_ = config.SaveConfig(m.Config)
+	}
 }
 
 func (m *Model) toggleFocus() {
@@ -1276,6 +1300,7 @@ func (m *Model) openCommandPalette() {
 
 		// View
 		{ID: "setting.sidebar", Title: "Toggle Sidebar", Category: "View", Shortcut: "Ctrl+B"},
+		{ID: "view.soft_wrap", Title: "Toggle Soft Wrap", Category: "View", Shortcut: "Alt+Z"},
 		{ID: "view.focus", Title: "Switch Focus (Sidebar/Editor)", Category: "View", Shortcut: "Ctrl+E / F6"},
 		{ID: "view.files", Title: "Switch to Files Explorer", Category: "View", Shortcut: "Alt+1"},
 		{ID: "view.git", Title: "Switch to Git Sidebar", Category: "View", Shortcut: "Alt+2"},
@@ -1657,6 +1682,9 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 
 	case "setting.sidebar":
 		m.SidebarVisible = !m.SidebarVisible
+
+	case "setting.softwrap", "view.soft_wrap":
+		m.toggleSoftWrap()
 
 	case "setting.hidden":
 		m.Explorer.ToggleHidden()

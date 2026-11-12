@@ -109,3 +109,149 @@ func TestBufferIBeamCursor(t *testing.T) {
 		t.Errorf("Expected I-beam vertical bar at end of line in rendered output")
 	}
 }
+
+func TestBufferWordJump(t *testing.T) {
+	// Text: "hello world.foo_bar  baz"
+	// Indices:
+	// 'h'=0, 'w'=6, '.'=11, 'f'=12, '_'=15, ' '=20, 'b'=21
+	buf := NewBuffer("hello world.foo_bar  baz\nsecond line")
+
+	// Jump right from start
+	buf.SetCursor(0, 0)
+	buf.MoveWordRight() // after "hello " -> should land at "world" (col 6)
+	if buf.CursorCol != 6 {
+		t.Errorf("Expected cursor at col 6 ('world'), got %d", buf.CursorCol)
+	}
+
+	buf.MoveWordRight() // after "world" -> lands at "." (col 11)
+	if buf.CursorCol != 11 {
+		t.Errorf("Expected cursor at col 11 ('.'), got %d", buf.CursorCol)
+	}
+
+	buf.MoveWordRight() // after "." -> lands at "foo_bar" (col 12)
+	if buf.CursorCol != 12 {
+		t.Errorf("Expected cursor at col 12 ('foo_bar'), got %d", buf.CursorCol)
+	}
+
+	buf.MoveWordRight() // after "foo_bar  " -> lands at "baz" (col 21)
+	if buf.CursorCol != 21 {
+		t.Errorf("Expected cursor at col 21 ('baz'), got %d", buf.CursorCol)
+	}
+
+	buf.MoveWordRight() // end of line (col 24)
+	if buf.CursorCol != 24 {
+		t.Errorf("Expected cursor at col 24 (end of line), got %d", buf.CursorCol)
+	}
+
+	buf.MoveWordRight() // wraps to next line start (row 1, col 0)
+	if buf.CursorRow != 1 || buf.CursorCol != 0 {
+		t.Errorf("Expected cursor at (1, 0), got (%d, %d)", buf.CursorRow, buf.CursorCol)
+	}
+
+	// Jump left back
+	buf.MoveWordLeft() // wraps to end of line 0 (row 0, col 24)
+	if buf.CursorRow != 0 || buf.CursorCol != 24 {
+		t.Errorf("Expected cursor at (0, 24), got (%d, %d)", buf.CursorRow, buf.CursorCol)
+	}
+
+	buf.MoveWordLeft() // back before "baz" -> col 21
+	if buf.CursorCol != 21 {
+		t.Errorf("Expected cursor at col 21, got %d", buf.CursorCol)
+	}
+
+	buf.MoveWordLeft() // back before "foo_bar" -> col 12
+	if buf.CursorCol != 12 {
+		t.Errorf("Expected cursor at col 12, got %d", buf.CursorCol)
+	}
+
+	buf.MoveWordLeft() // back before "." -> col 11
+	if buf.CursorCol != 11 {
+		t.Errorf("Expected cursor at col 11, got %d", buf.CursorCol)
+	}
+
+	buf.MoveWordLeft() // back before "world" -> col 6
+	if buf.CursorCol != 6 {
+		t.Errorf("Expected cursor at col 6, got %d", buf.CursorCol)
+	}
+
+	buf.MoveWordLeft() // back before "hello" -> col 0
+	if buf.CursorCol != 0 {
+		t.Errorf("Expected cursor at col 0, got %d", buf.CursorCol)
+	}
+}
+
+func TestBufferGutterWidth(t *testing.T) {
+	buf := NewBuffer("one\ntwo")
+	if buf.GutterDigits() != 3 {
+		t.Errorf("Expected min 3 digits, got %d", buf.GutterDigits())
+	}
+	if buf.GutterWidth() != 7 {
+		t.Errorf("Expected gutter width 7 (3 digits + 4), got %d", buf.GutterWidth())
+	}
+
+	// 1000 lines
+	var sb strings.Builder
+	for i := 0; i < 1000; i++ {
+		sb.WriteString("line\n")
+	}
+	bufBig := NewBuffer(sb.String())
+	if bufBig.GutterDigits() < 4 {
+		t.Errorf("Expected at least 4 digits for 1000 lines, got %d", bufBig.GutterDigits())
+	}
+	if bufBig.GutterWidth() != bufBig.GutterDigits()+4 {
+		t.Errorf("GutterWidth mismatch with digits")
+	}
+}
+
+func TestBufferRowColPrecisionWrappedAndDisabled(t *testing.T) {
+	// Test soft-wrapped precision: click past the end of first visual line
+	// Line is 30 chars, wrap width is 10.
+	// Visual Line 0: cols 0..10
+	// Visual Line 1: cols 10..20
+	// Visual Line 2: cols 20..30
+	buf := NewBuffer("012345678901234567890123456789")
+	buf.SoftWrap = true
+
+	// Click on visual line 0 (relY=0) with textX=25 (far past col 10)
+	row, col := buf.RowColFromVisual(0, 25, 10)
+	if row != 0 {
+		t.Errorf("Expected row 0, got %d", row)
+	}
+	// Must be clamped to EndCol (10), NOT 25!
+	if col != 10 {
+		t.Errorf("Expected clamped col 10 on wrapped line, got %d", col)
+	}
+
+	// Test with SoftWrap = false
+	buf.SoftWrap = false
+	buf.ScrollCol = 5
+	// Click on line 0 with textX=4 -> physCol should be ScrollCol + textX = 5 + 4 = 9
+	row, col = buf.RowColFromVisual(0, 4, 10)
+	if row != 0 || col != 9 {
+		t.Errorf("Expected (0, 9) when SoftWrap is false, got (%d, %d)", row, col)
+	}
+
+	// Click past end of line
+	row, col = buf.RowColFromVisual(0, 50, 10)
+	if col != 30 {
+		t.Errorf("Expected clamped to line length 30, got %d", col)
+	}
+}
+
+func TestBufferDisabledSoftWrapRenderingAndScroll(t *testing.T) {
+	longLine := "abcdefghijklmnopqrstuvwxyz1234567890" // 36 chars
+	buf := NewBuffer(longLine)
+	buf.SoftWrap = false
+
+	// Render with width = 20 (gutter 7, textWidth 13)
+	buf.SetCursor(0, 25)
+	rendered := buf.Render(20, 5, "test.txt", true)
+
+	// Since cursor is at col 25, ScrollCol must have scrolled right so col 25 is visible
+	if buf.ScrollCol == 0 {
+		t.Errorf("Expected ScrollCol > 0 when cursor is at col 25 and width is narrow")
+	}
+	if !strings.Contains(rendered, "│") {
+		t.Errorf("Expected cursor rendered in viewport")
+	}
+}

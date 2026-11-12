@@ -60,6 +60,7 @@ func NewMenuBar() *MenuBar {
 				Shortcut: "Alt+T",
 				Items: []MenuItem{
 					{Label: "Toggle Sidebar", Shortcut: "Ctrl+B", ActionID: "setting.sidebar"},
+					{Label: "Toggle Soft Wrap", Shortcut: "Alt+Z", ActionID: "setting.softwrap"},
 					{Label: "Toggle Auto-Save", Shortcut: "Alt+S", ActionID: "setting.autosave"},
 					{Label: "Toggle Hidden Files", Shortcut: ".", ActionID: "setting.hidden"},
 					{Label: "Keyboard Shortcuts", Shortcut: "?", ActionID: "setting.shortcuts"},

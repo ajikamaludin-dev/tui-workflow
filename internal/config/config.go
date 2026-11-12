@@ -10,6 +10,7 @@ import (
 type Config struct {
 	ShowHidden bool   `json:"show_hidden"`
 	AutoSave   bool   `json:"auto_save"`
+	SoftWrap   bool   `json:"soft_wrap"`
 	LastDir    string `json:"last_dir,omitempty"`
 }
 
@@ -17,6 +18,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		ShowHidden: true,
 		AutoSave:   true,
+		SoftWrap:   true,
 		LastDir:    "",
 	}
 }

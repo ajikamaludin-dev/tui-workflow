@@ -1,5 +1,6 @@
 .unipi/
 /tui-workflow
 /main
+/bin/
 .codebase-memory/
 *.log

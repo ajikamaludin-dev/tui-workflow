@@ -183,6 +183,21 @@ go build -o tui-workflow ./cmd/tui-workflow
 ./tui-workflow
 ```
 
+Atau gunakan `Makefile`:
+
+```bash
+# Kompilasi ke bin/tui-workflow
+make build
+
+# Pasang ke ~/.local/bin (folder home user)
+make install
+
+# Hapus binary hasil build
+make clean
+```
+
+`make install` menaruh binary di `$(HOME)/.local/bin/tui-workflow` (dapat diubah via `make install INSTALL_DIR=/path/lain`). Pastikan direktori tersebut ada di `PATH` agar perintah `tui-workflow` bisa dipanggil dari mana saja. Jalankan `make help` untuk daftar target lengkap (`build`, `install`, `uninstall`, `run`, `test`, `vet`, `clean`).
+
 ---
 
 ## 🧪 Pengujian & Kualitas Kode (Test Suite)

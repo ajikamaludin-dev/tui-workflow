@@ -89,6 +89,9 @@
 | `Alt + A` | Buka Menu Top Bar **About** |
 | `F1` / `Ctrl + Shift + P` | Buka Command Palette (semua perintah dan aksi) |
 | `Ctrl + P` | Quick Open File di Workspace |
+| `Ctrl + O` | Buka File Baru dari Disk (File Picker modal) |
+| `Ctrl + K` | Buka Direktori / Folder Baru di Workspace |
+| `F4` | Cari Teks Global di Seluruh Workspace (Global Search modal) |
 | `Alt + S` | Toggle Auto-Save on Focus Change (ON / OFF) |
 | `Alt + Z` | Toggle Soft-Wrap pada Editor |
 | `Alt + I` | Konfigurasi Model AI (OpenAI API Format: Provider URL, API Key, Model) |
@@ -254,8 +257,10 @@ tui-workflow/
 │   ├── syntax/
 │   │   └── highlighter.go       # Chroma real-time tokenizer & detector
 │   ├── terminal/
-│   │   └── pty.go               # Embedded subshell PTY pseudoterminal manager
+│   │   ├── terminal.go          # Embedded subshell PTY pseudoterminal manager
+│   │   └── terminal_test.go     # Test suite subshell PTY terminal
 │   └── ui/
+│       ├── contextmenu.go       # Interactive pop-up context menu (Editor, Tab, Explorer)
 │       ├── dialog/
 │       │   ├── aisettings.go    # Modal konfigurasi endpoint AI
 │       │   ├── branch.go        # Modal Branch Switcher Git
@@ -263,6 +268,7 @@ tui-workflow/
 │       │   ├── filepicker.go    # Modal navigasi file picker
 │       │   ├── findbar.go       # Floating search & replace bar
 │       │   ├── globalsearch.go  # Modal pencarian teks global workspace
+│       │   ├── help.go          # Modal interaktif bantuan & panduan pintasan keyboard
 │       │   ├── input.go         # Modal input teks (New file, folder, rename)
 │       │   ├── normalize.go     # Normalisasi background ANSI modal dialog
 │       │   ├── palette.go       # Modal Command Palette (F1 / Ctrl+Shift+P)

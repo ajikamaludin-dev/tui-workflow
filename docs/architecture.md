@@ -15,7 +15,8 @@ Antarmuka `tui-workflow` dibagi secara deterministik menjadi 4 zona layout yang 
 │ Col 1: Sidebar (28 cols) │ Col 2: Editor Pane (lebar adaptif)          │
 │ • Header (1 baris)       │ • Tab Bar (1 baris statis)                  │
 │ • Refresh Row (1 baris)  │ • Editor Body / Terminal / Markdown / Diff  │
-│ • Body Viewport          │   (Tinggi = TerminalHeight - 2)             │
+│ • Body Viewport          │   (Tinggi Pane = Height - 2,                │
+│   (Tinggi = Height - 5)  │    Tinggi Body = Height - 3)                │
 │ • Footer Tabs (1 baris)  │                                             │
 ├──────────────────────────┴─────────────────────────────────────────────┤
 │ Row Height-1: Status Bar (1 baris statis)                             │
@@ -23,7 +24,7 @@ Antarmuka `tui-workflow` dibagi secara deterministik menjadi 4 zona layout yang 
 ```
 
 ### Aturan Keras 1 Baris (Single-Line Guarantee)
-- **Top Menu Bar** (`internal/ui/menu.go`), **Tab Bar** (`internal/editor/tab.go`), dan **Status Bar** (`internal/ui/statusbar.go`) wajib dibatasi dengan `MaxHeight(1)` dan dipotong aman dengan `ansi.Truncate(str, width, "")`.
+- **Top Menu Bar** (`internal/ui/menu.go`), **Tab Bar** (`internal/editor/manager.go`), dan **Status Bar** (`internal/ui/statusbar.go`) wajib dibatasi dengan `MaxHeight(1)` dan dipotong aman dengan `ansi.Truncate(str, width, "")`.
 - Pelanggaran batas tinggi 1 baris akan memicu terminal auto-scroll, menyebabkan Baris 0 terdorong ke atas dan menghilang dari layar (*layout corruption*).
 
 ---
@@ -79,8 +80,9 @@ Antarmuka `tui-workflow` dibagi secara deterministik menjadi 4 zona layout yang 
 - `view.go`: Menggabungkan 4 zona layout dan merender overlay modal dengan helper `overlayCenter` dan `overlayTopCenter` berbasis ANSI trimming.
 
 ### `internal/editor` (Text Buffer & Tab Engine)
-- `buffer.go`: Modeless line-based buffer (`[][]rune`) dengan cursor clamping, soft-wrap virtual line mapping, gutter width adaptif, word jump, selection range, dan undo/redo snapshots.
-- `tab.go`: Tab Manager yang mendukung multi-tab (`TabFile`, `TabTerminal`, `TabMarkdown`, `TabGitDiff`), scrolling horizontal, penutupan batch, dan konfirmasi dirty buffer.
+- `buffer.go`: Modeless line-based buffer (`[][]rune`) dengan cursor clamping, soft-wrap virtual line mapping, gutter width adaptif, word jump, selection range, caching teks (`cachedText`), dan undo/redo snapshots.
+- `manager.go`: Tab Manager yang mendukung multi-tab (`TabFile`, `TabTerminal`, `TabMarkdown`, `TabGitDiff`), scrolling horizontal, penutupan batch, dan konfirmasi dirty buffer.
+- `tab.go`: Struktur data tab dan enum tipe tab (`TabType`).
 
 ### `internal/syntax` (Chroma v2 Engine)
 - `highlighter.go`: Tokenisasi Chroma v2 dengan format ANSI styling.
@@ -92,12 +94,13 @@ Antarmuka `tui-workflow` dibagi secara deterministik menjadi 4 zona layout yang 
 - `view.go`: Sidebar Source Control view dengan commit box dan AI commit message generator.
 
 ### `internal/terminal` (Embedded Subshell PTY)
-- `pty.go`: Pengelola pseudoterminal (`creack/pty`) untuk mengeksekusi shell lokal (`/bin/bash` atau `$SHELL`) langsung di dalam tab editor.
+- `terminal.go`: Pengelola pseudoterminal (`creack/pty`) untuk mengeksekusi shell lokal (`/bin/bash` atau `$SHELL`) langsung di dalam tab editor.
 
 ### `internal/ui` & `internal/ui/dialog` (Design System & Modals)
 - `theme.go`: Skema warna VS Code Dark (Background `#1e1e1e`, Accent `#007acc`, Foreground `#d4d4d4`).
+- `contextmenu.go`: Pop-up context menu interaktif untuk aksi klik kanan pada Tab, Editor, dan File Explorer.
 - `normalize.go`: Menghilangkan celah background ANSI bocor pada modal dialog (`NormalizeDialogBackground`).
-- `dialog/`: Komponen modal interaktif (`palette.go`, `quickopen.go`, `globalsearch.go`, `branch.go`, `aisettings.go`, `findbar.go`, `filepicker.go`, `input.go`, `confirm.go`, `switcher.go`).
+- `dialog/`: Komponen modal interaktif (`palette.go`, `quickopen.go`, `globalsearch.go`, `branch.go`, `aisettings.go`, `findbar.go`, `filepicker.go`, `input.go`, `confirm.go`, `switcher.go`, `help.go`).
 
 ---
 

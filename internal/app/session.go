@@ -114,6 +114,27 @@ func (m *Model) captureWorkspaceSession() *config.WorkspaceSession {
 	return sess
 }
 
+
+
+func (m *Model) scheduleSessionPersist() tea.Cmd {
+	if m == nil {
+		return nil
+	}
+	return m.requestSessionPersist()
+}
+
+func (m *Model) persistSessionNow() {
+	if m == nil {
+		return
+	}
+	sess := m.captureWorkspaceSession()
+	root := m.canonicalRootDir()
+	if sess == nil || root == "" {
+		return
+	}
+	_ = config.SaveWorkspaceSession(root, sess)
+}
+
 func (m *Model) persistWorkspaceSessionCmd() tea.Cmd {
 	if m == nil {
 		return nil
@@ -228,13 +249,21 @@ func (m *Model) restoreWorkspaceSession(sess *config.WorkspaceSession) (int, []s
 		if st.Path == "" {
 			continue
 		}
-		if err := isSessionRestorableFile(st.Path); err != nil {
-			skipped = append(skipped, filepath.Base(st.Path))
+		candidate := st.Path
+		if !filepath.IsAbs(candidate) {
+			candidate = filepath.Join(m.canonicalRootDir(), candidate)
+		}
+		candidate = filepath.Clean(candidate)
+		if resolved, err := filepath.EvalSymlinks(candidate); err == nil {
+			candidate = filepath.Clean(resolved)
+		}
+		if err := isSessionRestorableFile(candidate); err != nil {
+			skipped = append(skipped, filepath.Base(candidate))
 			continue
 		}
-		tab, err := m.TabManager.OpenFile(st.Path)
+		tab, err := m.TabManager.OpenFile(candidate)
 		if err != nil || tab == nil || tab.Buffer == nil {
-			skipped = append(skipped, filepath.Base(st.Path))
+			skipped = append(skipped, filepath.Base(candidate))
 			continue
 		}
 		// apply cursor/scroll/preview (metadata only)
@@ -271,12 +300,30 @@ func (m *Model) restoreWorkspaceSession(sess *config.WorkspaceSession) (int, []s
 		if tab.Type == editor.TabMarkdown {
 			tab.MarkdownPreview = st.MarkdownPreview
 		}
-		pathToIdx[st.Path] = len(m.TabManager.Tabs) - 1
+		key := candidate
+		if resolved, err := filepath.EvalSymlinks(tab.Path); err == nil {
+			key = filepath.Clean(resolved)
+		} else if tab.Path != "" {
+			key = filepath.Clean(tab.Path)
+		}
+		pathToIdx[key] = m.TabManager.ActiveIndex
+		pathToIdx[st.Path] = m.TabManager.ActiveIndex
 		restored++
 	}
 
 	if sess.ActiveTab != "" {
-		if idx, ok := pathToIdx[sess.ActiveTab]; ok {
+		act := sess.ActiveTab
+		if !filepath.IsAbs(act) {
+			act = filepath.Join(m.canonicalRootDir(), act)
+		}
+		act = filepath.Clean(act)
+		if resolved, err := filepath.EvalSymlinks(act); err == nil {
+			act = filepath.Clean(resolved)
+		}
+		if idx, ok := pathToIdx[act]; ok {
+			m.TabManager.ActiveIndex = idx
+			m.TabManager.EnsureActiveTabVisible()
+		} else if idx, ok := pathToIdx[sess.ActiveTab]; ok {
 			m.TabManager.ActiveIndex = idx
 			m.TabManager.EnsureActiveTabVisible()
 		}

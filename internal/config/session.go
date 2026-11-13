@@ -111,25 +111,69 @@ func LoadWorkspaceSession(root string) (*WorkspaceSession, error) {
 	}
 	idx := ensureSessionIndex(cfg.SessionIndex)
 	entry, ok := idx.Workspaces[root]
-	var path string
 	dir, _ := GetConfigDir()
+
+	tryPaths := make([]string, 0, 3)
 	if ok && entry.File != "" && dir != "" {
-		path = filepath.Join(dir, filepath.Base(entry.File))
+		tryPaths = append(tryPaths, filepath.Join(dir, filepath.Base(entry.File)))
 	}
-	if path == "" {
-		p, _, err := sessionFilePathForRoot(root)
-		if err != nil {
-			return nil, err
+	if p, _, err := sessionFilePathForRoot(root); err == nil && p != "" {
+		dup := false
+		for _, existing := range tryPaths {
+			if filepath.Clean(existing) == filepath.Clean(p) {
+				dup = true
+				break
+			}
 		}
-		path = p
+		if !dup {
+			tryPaths = append(tryPaths, p)
+		}
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
+	// fallback: scan config dir for session-*-<hash>.json matching root hash
+	if dir != "" {
+		if _, name, err := sessionFilePathForRoot(root); err == nil && name != "" {
+			p := filepath.Join(dir, name)
+			dup := false
+			for _, existing := range tryPaths {
+				if filepath.Clean(existing) == filepath.Clean(p) {
+					dup = true
+					break
+				}
+			}
+			if !dup {
+				tryPaths = append(tryPaths, p)
+			}
+		}
+	}
+
+	var data []byte
+	var readErr error
+	foundPath := ""
+	for _, p := range tryPaths {
+		if p == "" {
+			continue
+		}
+		b, e := os.ReadFile(p)
+		if e == nil {
+			data = b
+			readErr = nil
+			foundPath = p
+			break
+		}
+		readErr = e
+		if errors.Is(e, os.ErrNotExist) {
+			continue
+		}
+		// try next candidate on transient/read errors
+		continue
+	}
+	if data == nil {
+		if readErr == nil || errors.Is(readErr, os.ErrNotExist) {
 			return nil, nil
 		}
-		return nil, err
+		return nil, readErr
 	}
+
 	var sess WorkspaceSession
 	if err := json.Unmarshal(data, &sess); err != nil {
 		return nil, err
@@ -139,6 +183,24 @@ func LoadWorkspaceSession(root string) (*WorkspaceSession, error) {
 	}
 	if sess.RootDir == "" {
 		sess.RootDir = root
+	} else {
+		sess.RootDir = canonicalRoot(sess.RootDir)
+	}
+	// self-heal index if file found via fallback path
+	if dir != "" && foundPath != "" {
+		_ = os.MkdirAll(dir, 0o755)
+		if cfg.SessionIndex == nil {
+			cfg.SessionIndex = &SessionIndex{Version: SessionSchemaVersion, Workspaces: map[string]SessionIndexEntry{}}
+		}
+		cfg.SessionIndex = ensureSessionIndex(cfg.SessionIndex)
+		cfg.SessionIndex.Workspaces[root] = SessionIndexEntry{
+			File:    filepath.Base(foundPath),
+			RootDir: root,
+			SavedAt: sess.SavedAt,
+			Version: sess.Version,
+		}
+		pruneSessionIndex(cfg.SessionIndex, dir)
+		_ = SaveConfig(cfg)
 	}
 	return &sess, nil
 }

@@ -18,3 +18,4 @@
 | 2026-11-12 | Formatter Engine & Smart Fallback Chain | done | dev |
 | 2026-11-12 | Integrated PTY Terminal Tab | done | dev |
 | 2026-11-13 | Comprehensive UI-UX Refinement, Mouse Ergonomics, Resource Optimization and Documentation Sync | done | dev |
+| 2026-11-13 | P0 - Workspace/Session Persistence & Git Hunk-Level Diff Actions | done | dev |

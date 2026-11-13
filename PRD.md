@@ -123,7 +123,9 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
 2. **Aksi & Shortcut Git:**
    - `+` atau klik ikon `+`: Stage file (`git add`).
    - `-` atau klik ikon `-`: Unstage file (`git reset`).
-   - `d` atau klik ikon `[x]`: Buang semua perubahan lokal file terpilih (`git checkout -- <file>` / discard untracked) dengan konfirmasi.
+   - `+` / `-`: Stage / unstage seluruh perubahan file terpilih (file-level).
+   - `[` / `]`: Navigasi hunk aktif; `s` stage hunk, `u` unstage hunk, `x` discard hunk (unstaged, konfirmasi).
+   - `Enter`: Buka Side-by-Side Diff Tab file terpilih.
    - `Alt+b` atau klik header branch: Buka modal dialog pemilihan dan perpindahan branch Git lokal.
    - `Alt+g` atau klik tombol `[✨ AI]`: Hasilkan pesan commit otomatis menggunakan LLM (OpenAI API format) dari staged changes.
    - `Alt+i` (atau menu Setting > AI Configuration): Konfigurasi endpoint OpenAI API, API Key, daftar model, dan model default.
@@ -250,6 +252,22 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
    - **Tolak File Biner:** Cek null bytes (`0x00`) pada 512 byte pertama file. Jika terdeteksi biner, batalkan pembukaan dan munculkan toast error: *"File biner tidak didukung"*.
    - **Batas Ukuran File:** Maksimal `10 MB`. Jika file lebih dari 10 MB, tolak pembukaan dengan toast: *"Ukuran file melebihi batas 10MB"*.
    - **Terminal Size Guard:** Jika dimensi terminal `< 80 x 24`, render **Overlay Warning Screen** penuh dengan teks *"Ukuran terminal terlalu kecil (Min: 80x24, Saat ini: WxH). Silakan perbesar jendela terminal."*
+
+
+
+### 4.6. Workspace/Session Persistence (P0, Metadata-only)
+1. **Storage (D1):** `~/.config/tui-workflow/config.json` sebagai index config/session (mapping root kanonik workspace → entry). Setiap workspace memiliki file session terpisah `~/.config/tui-workflow/session-<id>.json` (versioned, atomic write, deterministic, backward-compatible).
+2. **Data (D2):** Hanya metadata UI/workspace: tab file/markdown path-backed valid, active tab, cursor/scroll, status preview markdown, visibilitas/lebar/view sidebar, dan focus. Tidak menyimpan isi buffer dirty, PTY terminal, atau diff transien.
+3. **Startup Priority (D3):** Jika argumen CLI path eksplisit diberikan → restore session diutamakan. Tanpa argumen → restore session workspace terakhir; fallback ke perilaku default sebelumnya (termasuk auto-open `PRD.md` bila relevan) secara deterministik dan tanpa regresi.
+4. **Keamanan/Validasi:** File yang tidak ada, biner, atau >10MB dilewati saat restore dengan fallback non-blocking. Persist dilakukan saat event relevan (switch/close tab, resize/sidebar/focus, save, exit) dengan debounce.
+
+### 4.7. Git Hunk-Level Diff Actions (P0)
+1. **Scope (D4):** `stage-hunk`, `unstage-hunk`, dan `discard-hunk` berbasis unified hunk terpilih. Fallback aman ke aksi file-level untuk kasus ambigu/tidak terjamin (partial apply gagal, adjacent/context mismatch, CRLF sensitif, file untracked/delete/rename/conflict, binary/oversize). Tidak ada korupsi index/worktree.
+2. **UX (D5):** Navigasi/seleksi hunk aktif tersedia di **Diff Tab** dan **Git Sidebar**.
+   - **Sidebar Git:** `[`/`]` navigasi hunk, `s` stage hunk (Changes), `u` unstage hunk (Staged), `x` discard hunk (Changes, konfirmasi), `Enter` buka diff, `+`/`-` aksi file-level.
+   - **Diff Tab:** `n`/`]` next hunk, `N`/`[` prev hunk, `s`/`+` stage hunk, `u`/`-` unstage hunk, `x` discard hunk (unstaged, konfirmasi), indikator hunk aktif & status.
+3. **Integritas:** `discard-hunk` selalu memerlukan modal konfirmasi. Setelah aksi, status Git dan tampilan diff direfresh konsisten. Shortcut/menu/command palette/help/docs disinkronkan (Rule 11).
+
 
 ---
 

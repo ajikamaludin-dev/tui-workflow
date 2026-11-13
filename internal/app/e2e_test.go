@@ -20,7 +20,7 @@ func TestNewModelWithPath(t *testing.T) {
 	_ = os.WriteFile(testFilePath, []byte("hello world"), 0644)
 
 	// 1. Directory path
-	mDir, err := NewModelWithPath(tempDir)
+	mDir, err := NewModelWithPath(tempDir, false)
 	if err != nil {
 		t.Fatalf("Failed to open dir: %v", err)
 	}
@@ -29,7 +29,7 @@ func TestNewModelWithPath(t *testing.T) {
 	}
 
 	// 2. Specific file path
-	mFile, err := NewModelWithPath(testFilePath)
+	mFile, err := NewModelWithPath(testFilePath, false)
 	if err != nil {
 		t.Fatalf("Failed to open file: %v", err)
 	}
@@ -38,7 +38,7 @@ func TestNewModelWithPath(t *testing.T) {
 	}
 
 	// 3. Non-existent path
-	_, err = NewModelWithPath(filepath.Join(tempDir, "does_not_exist"))
+	_, err = NewModelWithPath(filepath.Join(tempDir, "does_not_exist"), false)
 	if err == nil {
 		t.Errorf("Expected error for non-existent path")
 	}

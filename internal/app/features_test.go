@@ -57,7 +57,7 @@ func TestBranchInStatusBarAndUntrackedOpen(t *testing.T) {
 	repoDir, _ := setupTestGitRepoWithBranch(t)
 	defer os.RemoveAll(repoDir)
 
-	m, err := NewModelWithPath(repoDir)
+	m, err := NewModelWithPath(repoDir, false)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestOpenFileAndFolderDialogs(t *testing.T) {
 	fileA := filepath.Join(tempDir, "fileA.txt")
 	_ = os.WriteFile(fileA, []byte("content A"), 0644)
 
-	m, err := NewModelWithPath(tempDir)
+	m, err := NewModelWithPath(tempDir, false)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -204,7 +204,7 @@ func TestModalMouseClicks(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	m, err := NewModelWithPath(tempDir)
+	m, err := NewModelWithPath(tempDir, false)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -263,7 +263,7 @@ func TestSettingsPersistence(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	m, err := NewModelWithPath(tempDir)
+	m, err := NewModelWithPath(tempDir, false)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -293,7 +293,7 @@ func TestGitCommitAndPushButtonInteraction(t *testing.T) {
 	repoDir, _ := setupTestGitRepoWithBranch(t)
 	defer os.RemoveAll(repoDir)
 
-	m, err := NewModelWithPath(repoDir)
+	m, err := NewModelWithPath(repoDir, false)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -424,7 +424,7 @@ func TestContextMenuAndSelection(t *testing.T) {
 	filePath := filepath.Join(tmpDir, "test.txt")
 	_ = os.WriteFile(filePath, []byte("Hello World!\nSecond Line Here"), 0644)
 
-	m, err := NewModelWithPath(tmpDir)
+	m, err := NewModelWithPath(tmpDir, false)
 	if err != nil {
 		t.Fatalf("failed to create model: %v", err)
 	}
@@ -528,7 +528,7 @@ func TestSoftWrapToggleAndWordJump(t *testing.T) {
 	filePath := filepath.Join(tempDir, "test.go")
 	_ = os.WriteFile(filePath, []byte("package main\n\nfunc main() {\n\t// comment\n}\n"), 0644)
 
-	m, err := NewModelWithPath(tempDir)
+	m, err := NewModelWithPath(tempDir, false)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}

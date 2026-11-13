@@ -124,17 +124,28 @@ func (tm *TabManager) OpenFile(path string) (*Tab, error) {
 	return tab, nil
 }
 
-func (tm *TabManager) OpenDiff(path, original, modified string) *Tab {
-	diffID := "diff:" + path
+func (tm *TabManager) OpenDiff(path, original, modified string, staged bool, title string) *Tab {
 	for i, t := range tm.Tabs {
-		if t.ID == diffID {
+		if t.Type == TabDiff && t.Path == path && t.DiffStaged == staged {
 			t.DiffView = git.NewDiffView(path, original, modified)
+			if title != "" {
+				t.Name = title
+			}
+			t.DiffHunkPath = path
 			tm.ActiveIndex = i
+			tm.EnsureActiveTabVisible()
 			return t
 		}
 	}
-
 	tab := NewDiffTab(path, original, modified)
+	tab.DiffStaged = staged
+	tab.DiffHunkPath = path
+	if title != "" {
+		tab.Name = title
+		tab.ID = fmt.Sprintf("diff:%s:%t", path, staged)
+	} else {
+		tab.ID = fmt.Sprintf("diff:%s:%t", path, staged)
+	}
 	tm.Tabs = append(tm.Tabs, tab)
 	tm.ActiveIndex = len(tm.Tabs) - 1
 	tm.EnsureActiveTabVisible()
@@ -289,6 +300,41 @@ func (tm *TabManager) CloseAllTabs() {
 	tm.ActiveIndex = 0
 	tm.TabScrollOffset = 0
 }
+
+func (tm *TabManager) SetActiveIndex(idx int) bool {
+	if idx < 0 || idx >= len(tm.Tabs) {
+		return false
+	}
+	tm.ActiveIndex = idx
+	tm.EnsureActiveTabVisible()
+	return true
+}
+
+
+func (tm *TabManager) FindTabByDiffFile(path string, staged bool) int {
+	for i, t := range tm.Tabs {
+		if t.Type == TabDiff && t.Path == path && t.DiffStaged == staged {
+			return i
+		}
+	}
+	return -1
+}
+
+func (tm *TabManager) OpenFileAt(path string, line, col int) (*Tab, error) {
+	tab, err := tm.OpenFile(path)
+	if err != nil || tab == nil || tab.Buffer == nil {
+		return tab, err
+	}
+	if line > 0 {
+		tab.Buffer.CursorRow = line - 1
+	}
+	if col > 0 {
+		tab.Buffer.CursorCol = col - 1
+	}
+	tab.Buffer.ClampCursor()
+	return tab, nil
+}
+
 
 // FindTabAt returns tab index at clickX, or -1 if not on any tab.
 func (tm *TabManager) FindTabAt(clickX int) int {

@@ -72,6 +72,21 @@ func NewMenuBar() *MenuBar {
 				},
 			},
 			{
+				Title:    "Git",
+				Shortcut: "Alt+Gm",
+				Items: []MenuItem{
+					{Label: "Stage All Changes", Shortcut: "", ActionID: "git.stage_all"},
+					{Label: "Unstage All Changes", Shortcut: "", ActionID: "git.unstage_all"},
+					{Label: "Next Hunk", Shortcut: "n/]", ActionID: "git.hunk_next"},
+					{Label: "Previous Hunk", Shortcut: "N/[", ActionID: "git.hunk_prev"},
+					{Label: "Stage Hunk", Shortcut: "s", ActionID: "git.hunk_stage"},
+					{Label: "Unstage Hunk", Shortcut: "u", ActionID: "git.hunk_unstage"},
+					{Label: "Discard Hunk", Shortcut: "x", ActionID: "git.hunk_discard"},
+					{Label: "Switch Branch...", Shortcut: "Alt+B", ActionID: "git.branch_switcher"},
+					{Label: "AI Commit Message", Shortcut: "Alt+G", ActionID: "git.ai_commit"},
+				},
+			},
+			{
 				Title:    "Setting",
 				Shortcut: "Alt+T",
 				Items: []MenuItem{

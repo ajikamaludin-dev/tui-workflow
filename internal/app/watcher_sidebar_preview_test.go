@@ -23,7 +23,7 @@ func TestFileWatcherAutoReloadAndConflictGuard(t *testing.T) {
 	filePath := filepath.Join(tempDir, "watched.txt")
 	_ = os.WriteFile(filePath, []byte("versi awal"), 0644)
 
-	m, err := NewModelWithPath(tempDir)
+	m, err := NewModelWithPath(tempDir, false)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestAdjustableSidebarWidth(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	m, err := NewModelWithPath(tempDir)
+	m, err := NewModelWithPath(tempDir, false)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -199,7 +199,7 @@ func TestMarkdownPreviewCopyAndPaste(t *testing.T) {
 	mdContent := "# Judul Preview\n\nParagraf pertama disini.\n\n```go\nfunc Hello() {}\n```\n"
 	_ = os.WriteFile(mdPath, []byte(mdContent), 0644)
 
-	m, err := NewModelWithPath(tempDir)
+	m, err := NewModelWithPath(tempDir, false)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -311,7 +311,7 @@ func TestExternalChangeConflictDialogOptions(t *testing.T) {
 
 	// Subtest 1: User selects Merge (Split Diff)
 	{
-		m, err := NewModelWithPath(tempDir)
+		m, err := NewModelWithPath(tempDir, false)
 		if err != nil {
 			t.Fatalf("Failed to create model: %v", err)
 		}
@@ -346,7 +346,7 @@ func TestExternalChangeConflictDialogOptions(t *testing.T) {
 
 	// Subtest 2: User selects Reload
 	{
-		m, err := NewModelWithPath(tempDir)
+		m, err := NewModelWithPath(tempDir, false)
 		if err != nil {
 			t.Fatalf("Failed to create model: %v", err)
 		}
@@ -384,7 +384,7 @@ func TestExternalChangeConflictDialogOptions(t *testing.T) {
 
 	// Subtest 3: User cancels (Keep Local)
 	{
-		m, err := NewModelWithPath(tempDir)
+		m, err := NewModelWithPath(tempDir, false)
 		if err != nil {
 			t.Fatalf("Failed to create model: %v", err)
 		}

@@ -16,7 +16,7 @@ func TestTabContextMenu(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	m, err := NewModelWithPath(tempDir)
+	m, err := NewModelWithPath(tempDir, false)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestSidebarRefreshButton(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	m, err := NewModelWithPath(tempDir)
+	m, err := NewModelWithPath(tempDir, false)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestEditorQuestionMarkTyping(t *testing.T) {
 	filePath := filepath.Join(tempDir, "test.txt")
 	_ = os.WriteFile(filePath, []byte("Hello"), 0644)
 
-	m, err := NewModelWithPath(tempDir)
+	m, err := NewModelWithPath(tempDir, false)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}

@@ -10,7 +10,7 @@ import (
 )
 
 func TestTerminalTabIntegration(t *testing.T) {
-	m, _ := NewModelWithPath(t.TempDir())
+	m, _ := NewModelWithPath(t.TempDir(), false)
 	m.Width = 100
 	m.Height = 30
 	m.Ready = true
@@ -85,7 +85,7 @@ func TestTerminalTabIntegration(t *testing.T) {
 }
 
 func TestTerminalMenuAndCommandPalette(t *testing.T) {
-	m, _ := NewModelWithPath(t.TempDir())
+	m, _ := NewModelWithPath(t.TempDir(), false)
 	m.Width = 100
 	m.Height = 30
 	m.Ready = true

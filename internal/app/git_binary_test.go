@@ -28,7 +28,7 @@ func TestGitClickStageButtonAndBinaryGuard(t *testing.T) {
 
 	// 1. Test binary guard in openDiff
 	initTabCount := m.TabManager.Count()
-	m.openDiff(binPath)
+	m.openDiff(binPath, false)
 
 	if m.TabManager.Count() != initTabCount {
 		t.Errorf("Binary file should NOT be opened in TabManager diff view")

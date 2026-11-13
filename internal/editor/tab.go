@@ -32,6 +32,10 @@ type Tab struct {
 	MarkdownPreview bool
 	IsDiff          bool
 	LastModTime     time.Time
+
+	// Diff metadata for staged/unstaged and hunk actions
+	DiffStaged   bool
+	DiffHunkPath string
 }
 
 func NewFileTab(path, content string) *Tab {
@@ -60,15 +64,17 @@ func NewFileTab(path, content string) *Tab {
 }
 
 func NewDiffTab(path, original, modified string) *Tab {
-	name := "[Diff] " + filepath.Base(path)
+	name := "Δ " + filepath.Base(path)
 	return &Tab{
-		ID:              "diff:" + path,
+		ID:              "diff:" + path + ":false",
 		Path:            path,
 		Name:            name,
 		Type:            TabDiff,
 		DiffView:        git.NewDiffView(path, original, modified),
 		MarkdownPreview: false,
 		IsDiff:          true,
+		DiffStaged:      false,
+		DiffHunkPath:    path,
 	}
 }
 

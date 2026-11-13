@@ -21,7 +21,7 @@ func TestSidebarMouseWheelScroll(t *testing.T) {
 		_ = os.WriteFile(p, []byte("test"), 0644)
 	}
 
-	m, err := NewModelWithPath(tempDir)
+	m, err := NewModelWithPath(tempDir, false)
 	if err != nil {
 		t.Fatalf("Failed to create model: %v", err)
 	}

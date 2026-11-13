@@ -440,6 +440,184 @@ func (r *Repo) CheckoutBranch(branchName string) error {
 	})
 }
 
+func (r *Repo) GetIndexFileContent(relPath string) (string, error) {
+	if r == nil || r.r == nil {
+		return "", fmt.Errorf("repositori tidak valid")
+	}
+	idx, err := r.r.Storer.Index()
+	if err != nil || idx == nil {
+		return "", nil
+	}
+	for _, entry := range idx.Entries {
+		if entry.Name != relPath {
+			continue
+		}
+		blob, err := r.r.BlobObject(entry.Hash)
+		if err != nil {
+			return "", err
+		}
+		reader, err := blob.Reader()
+		if err != nil {
+			return "", err
+		}
+		data, err := io.ReadAll(reader)
+		_ = reader.Close()
+		if err != nil {
+			return "", err
+		}
+		return string(data), nil
+	}
+	return r.GetFileContentAtHEAD(relPath)
+}
+
+func (r *Repo) SetIndexFileContent(relPath string, content string) error {
+	if r == nil || r.worktree == nil {
+		return fmt.Errorf("repositori tidak valid")
+	}
+	fullPath := filepath.Join(r.RootPath, relPath)
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+		return err
+	}
+	mode := os.FileMode(0644)
+	if st, err := os.Stat(fullPath); err == nil {
+		mode = st.Mode().Perm()
+	}
+	if err := os.WriteFile(fullPath, []byte(content), mode); err != nil {
+		return err
+	}
+	if _, err := r.worktree.Add(relPath); err != nil {
+		return fmt.Errorf("gagal memperbarui index untuk '%s': %w", relPath, err)
+	}
+	return nil
+}
+
+func (r *Repo) GetWorktreeFileContent(relPath string) (string, error) {
+	if r == nil || r.worktree == nil {
+		return "", fmt.Errorf("worktree tidak valid")
+	}
+	fullPath := filepath.Join(r.RootPath, relPath)
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	return string(data), nil
+}
+
+func (r *Repo) GetDiffHunks(relPath string, staged bool, contextLines int) ([]DiffHunk, SplitDiffResult, string, string, error) {
+	if r == nil || r.worktree == nil || r.r == nil {
+		return nil, SplitDiffResult{}, "", "", fmt.Errorf("repositori tidak valid")
+	}
+	headContent, err := r.GetFileContentAtHEAD(relPath)
+	if err != nil {
+		headContent = ""
+	}
+	if staged {
+		indexContent, err := r.GetIndexFileContent(relPath)
+		if err != nil {
+			return nil, SplitDiffResult{}, "", "", err
+		}
+		res := ComputeSplitDiff(relPath, headContent, indexContent)
+		return SplitDiffHunks(res, contextLines), res, headContent, indexContent, nil
+	}
+	indexContent, err := r.GetIndexFileContent(relPath)
+	if err != nil {
+		indexContent = headContent
+	}
+	workContent, err := r.GetWorktreeFileContent(relPath)
+	if err != nil {
+		return nil, SplitDiffResult{}, "", "", err
+	}
+	res := ComputeSplitDiff(relPath, indexContent, workContent)
+	return SplitDiffHunks(res, contextLines), res, indexContent, workContent, nil
+}
+
+func invertUnifiedLines(lines []string) []string {
+	out := make([]string, 0, len(lines))
+	for _, l := range lines {
+		if l == "" {
+			out = append(out, l)
+			continue
+		}
+		switch l[0] {
+		case '+':
+			out = append(out, "-"+l[1:])
+		case '-':
+			out = append(out, "+"+l[1:])
+		default:
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
+func (r *Repo) StageHunk(relPath string, hunkIndex int) error {
+	if r == nil || r.worktree == nil {
+		return fmt.Errorf("repositori tidak valid")
+	}
+	hunks, _, indexContent, _, err := r.GetDiffHunks(relPath, false, 3)
+	if err != nil {
+		return err
+	}
+	if hunkIndex < 0 || hunkIndex >= len(hunks) {
+		return fmt.Errorf("hunk tidak ditemukan")
+	}
+	newIndex, err := ApplyUnifiedHunkToText(indexContent, hunks[hunkIndex], "orig")
+	if err != nil {
+		return fmt.Errorf("gagal stage hunk: %w", err)
+	}
+	return r.SetIndexFileContent(relPath, newIndex)
+}
+
+func (r *Repo) UnstageHunk(relPath string, hunkIndex int) error {
+	if r == nil || r.worktree == nil {
+		return fmt.Errorf("repositori tidak valid")
+	}
+	hunks, _, _, indexContent, err := r.GetDiffHunks(relPath, true, 3)
+	if err != nil {
+		return err
+	}
+	if hunkIndex < 0 || hunkIndex >= len(hunks) {
+		return fmt.Errorf("hunk tidak ditemukan")
+	}
+	inv := hunks[hunkIndex]
+	inv.Lines = invertUnifiedLines(inv.Lines)
+	newIndex, err := ApplyUnifiedHunkToText(indexContent, inv, "mod")
+	if err != nil {
+		return fmt.Errorf("gagal unstage hunk: %w", err)
+	}
+	return r.SetIndexFileContent(relPath, newIndex)
+}
+
+func (r *Repo) DiscardHunk(relPath string, hunkIndex int) error {
+	if r == nil || r.worktree == nil {
+		return fmt.Errorf("repositori tidak valid")
+	}
+	hunks, _, _, workContent, err := r.GetDiffHunks(relPath, false, 3)
+	if err != nil {
+		return err
+	}
+	if hunkIndex < 0 || hunkIndex >= len(hunks) {
+		return fmt.Errorf("hunk tidak ditemukan")
+	}
+	inv := hunks[hunkIndex]
+	inv.Lines = invertUnifiedLines(inv.Lines)
+	newWork, err := ApplyUnifiedHunkToText(workContent, inv, "mod")
+	if err != nil {
+		return fmt.Errorf("gagal discard hunk: %w", err)
+	}
+	fullPath := filepath.Join(r.RootPath, relPath)
+	mode := os.FileMode(0644)
+	if st, err := os.Stat(fullPath); err == nil {
+		mode = st.Mode().Perm()
+	}
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(fullPath, []byte(newWork), mode)
+}
 // GetStagedDiff returns unified diff text of all staged files against HEAD.
 func (r *Repo) GetStagedDiff() (string, error) {
 	if r == nil || r.worktree == nil {

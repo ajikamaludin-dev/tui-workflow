@@ -29,9 +29,11 @@ type GitView struct {
 	History  []CommitInfo
 
 	FocusArea    GitFocusArea
-	StagedIdx    int
-	ChangesIdx   int
-	HistoryIdx   int
+	StagedIdx      int
+	ChangesIdx     int
+	HistoryIdx     int
+	StagedHunkIdx  int
+	ChangesHunkIdx int
 
 	StagedFolded  bool
 	ChangesFolded bool
@@ -177,6 +179,97 @@ func (gv *GitView) SelectedChangesFile() *GitFileStatus {
 		return &gv.Changes[gv.ChangesIdx]
 	}
 	return nil
+}
+
+func (gv *GitView) selectedHunkIdx(staged bool) int {
+	if staged {
+		return gv.StagedHunkIdx
+	}
+	return gv.ChangesHunkIdx
+}
+
+func (gv *GitView) setSelectedHunkIdx(staged bool, v int) {
+	if staged {
+		gv.StagedHunkIdx = v
+	} else {
+		gv.ChangesHunkIdx = v
+	}
+}
+
+func (gv *GitView) SelectedHunks(staged bool) []DiffHunk {
+	files := gv.Changes
+	idx := gv.ChangesIdx
+	if staged {
+		files = gv.Staged
+		idx = gv.StagedIdx
+	}
+	if idx < 0 || idx >= len(files) || gv.Repo == nil {
+		return nil
+	}
+	f := files[idx]
+	base, mod := "", ""
+	var errB, errM error
+	if staged {
+		base, errB = gv.Repo.GetFileContentAtHEAD(f.Path)
+		mod, errM = gv.Repo.GetIndexFileContent(f.Path)
+	} else {
+		base, errB = gv.Repo.GetIndexFileContent(f.Path)
+		mod, errM = gv.Repo.GetWorktreeFileContent(f.Path)
+	}
+	if errB != nil || errM != nil {
+		return nil
+	}
+	res := ComputeSplitDiff(f.Path, base, mod)
+	return SplitDiffHunks(res, 3)
+}
+
+func (gv *GitView) ClampSelectedHunk(staged bool) {
+	hunks := gv.SelectedHunks(staged)
+	cur := gv.selectedHunkIdx(staged)
+	if len(hunks) == 0 {
+		gv.setSelectedHunkIdx(staged, 0)
+		return
+	}
+	if cur < 0 {
+		cur = 0
+	}
+	if cur >= len(hunks) {
+		cur = len(hunks) - 1
+	}
+	gv.setSelectedHunkIdx(staged, cur)
+}
+
+func (gv *GitView) ActiveHunksForSelectedChange(staged bool) []DiffHunk {
+	return gv.SelectedHunks(staged)
+}
+
+func (gv *GitView) NextSelectedHunk(staged bool) {
+	hunks := gv.SelectedHunks(staged)
+	if len(hunks) == 0 {
+		return
+	}
+	gv.setSelectedHunkIdx(staged, (gv.selectedHunkIdx(staged)+1)%len(hunks))
+}
+
+func (gv *GitView) PrevSelectedHunk(staged bool) {
+	hunks := gv.SelectedHunks(staged)
+	if len(hunks) == 0 {
+		return
+	}
+	cur := gv.selectedHunkIdx(staged) - 1
+	if cur < 0 {
+		cur = len(hunks) - 1
+	}
+	gv.setSelectedHunkIdx(staged, cur)
+}
+
+func (gv *GitView) SelectedHunkIndex(staged bool) (int, bool) {
+	hunks := gv.SelectedHunks(staged)
+	if len(hunks) == 0 {
+		return -1, false
+	}
+	gv.ClampSelectedHunk(staged)
+	return gv.selectedHunkIdx(staged), true
 }
 
 func (gv *GitView) StageSelected() error {
@@ -353,6 +446,7 @@ func (gv *GitView) Update(msg tea.Msg) (tea.Cmd, *GitFileStatus) {
 			} else if gv.FocusArea == GitFocusStaged {
 				if gv.StagedIdx > 0 {
 					gv.StagedIdx--
+					gv.ClampSelectedHunk(true)
 				} else {
 					gv.FocusArea = GitFocusCommitInput
 					gv.CommitInput.Focus()
@@ -360,14 +454,17 @@ func (gv *GitView) Update(msg tea.Msg) (tea.Cmd, *GitFileStatus) {
 			} else if gv.FocusArea == GitFocusChanges {
 				if gv.ChangesIdx > 0 {
 					gv.ChangesIdx--
+					gv.ClampSelectedHunk(false)
 				} else {
 					gv.FocusArea = GitFocusStaged
+					gv.ClampSelectedHunk(true)
 				}
 			} else if gv.FocusArea == GitFocusHistory {
 				if gv.HistoryIdx > 0 {
 					gv.HistoryIdx--
 				} else {
 					gv.FocusArea = GitFocusChanges
+					gv.ClampSelectedHunk(false)
 				}
 			}
 
@@ -379,6 +476,7 @@ func (gv *GitView) Update(msg tea.Msg) (tea.Cmd, *GitFileStatus) {
 				if isLastLine && isLastRow {
 					gv.FocusArea = GitFocusStaged
 					gv.CommitInput.Blur()
+					gv.ClampSelectedHunk(true)
 				} else {
 					var cmd tea.Cmd
 					gv.CommitInput, cmd = gv.CommitInput.Update(msg)
@@ -387,12 +485,15 @@ func (gv *GitView) Update(msg tea.Msg) (tea.Cmd, *GitFileStatus) {
 			} else if gv.FocusArea == GitFocusStaged {
 				if gv.StagedIdx < len(gv.Staged)-1 {
 					gv.StagedIdx++
+					gv.ClampSelectedHunk(true)
 				} else {
 					gv.FocusArea = GitFocusChanges
+					gv.ClampSelectedHunk(false)
 				}
 			} else if gv.FocusArea == GitFocusChanges {
 				if gv.ChangesIdx < len(gv.Changes)-1 {
 					gv.ChangesIdx++
+					gv.ClampSelectedHunk(false)
 				} else {
 					gv.FocusArea = GitFocusHistory
 				}
@@ -425,15 +526,43 @@ func (gv *GitView) Update(msg tea.Msg) (tea.Cmd, *GitFileStatus) {
 				// vim up
 				if gv.FocusArea == GitFocusStaged && gv.StagedIdx > 0 {
 					gv.StagedIdx--
+					gv.ClampSelectedHunk(true)
 				} else if gv.FocusArea == GitFocusChanges && gv.ChangesIdx > 0 {
 					gv.ChangesIdx--
+					gv.ClampSelectedHunk(false)
 				}
 			} else if str == "j" {
 				// vim down
 				if gv.FocusArea == GitFocusStaged && gv.StagedIdx < len(gv.Staged)-1 {
 					gv.StagedIdx++
+					gv.ClampSelectedHunk(true)
 				} else if gv.FocusArea == GitFocusChanges && gv.ChangesIdx < len(gv.Changes)-1 {
 					gv.ChangesIdx++
+					gv.ClampSelectedHunk(false)
+				}
+			} else if str == "]" {
+				if gv.FocusArea == GitFocusStaged {
+					gv.NextSelectedHunk(true)
+				} else if gv.FocusArea == GitFocusChanges {
+					gv.NextSelectedHunk(false)
+				}
+			} else if str == "[" {
+				if gv.FocusArea == GitFocusStaged {
+					gv.PrevSelectedHunk(true)
+				} else if gv.FocusArea == GitFocusChanges {
+					gv.PrevSelectedHunk(false)
+				}
+			} else if str == "u" {
+				if gv.FocusArea == GitFocusStaged {
+					return nil, &GitFileStatus{Path: "__hunk_unstage__", IsStaged: true}
+				}
+			} else if str == "s" {
+				if gv.FocusArea == GitFocusChanges {
+					return nil, &GitFileStatus{Path: "__hunk_stage__", IsStaged: false}
+				}
+			} else if str == "x" {
+				if gv.FocusArea == GitFocusChanges {
+					return nil, &GitFileStatus{Path: "__hunk_discard__", IsStaged: false}
 				}
 			}
 		}
@@ -728,6 +857,19 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 					Path:  item.Path,
 				}
 				currentY++
+
+				if isSelected {
+					hunks := gv.ActiveHunksForSelectedChange(true)
+					gv.ClampSelectedHunk(true)
+					info := "   (no hunks)"
+					if len(hunks) > 0 {
+						info = fmt.Sprintf("   Hunk %d/%d  [u]nstage  [ [ / ] ]", gv.selectedHunkIdx(true)+1, len(hunks))
+					}
+					hintStyle := lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgSecondary)
+					lines = append(lines, hintStyle.Render(truncateOrPad(info, width-1)))
+					gv.ItemClickMap[currentY] = GitClickTarget{Type: ClickNone}
+					currentY++
+				}
 			}
 		}
 	}
@@ -784,6 +926,19 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 					Path:  item.Path,
 				}
 				currentY++
+
+				if isSelected {
+					hunks := gv.ActiveHunksForSelectedChange(false)
+					gv.ClampSelectedHunk(false)
+					info := "   (no hunks)"
+					if len(hunks) > 0 {
+						info = fmt.Sprintf("   Hunk %d/%d  [s]tage  [x]discard  [ [ / ] ]", gv.selectedHunkIdx(false)+1, len(hunks))
+					}
+					hintStyle := lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgSecondary)
+					lines = append(lines, hintStyle.Render(truncateOrPad(info, width-1)))
+					gv.ItemClickMap[currentY] = GitClickTarget{Type: ClickNone}
+					currentY++
+				}
 			}
 		}
 	}

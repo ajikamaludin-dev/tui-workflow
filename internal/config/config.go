@@ -23,6 +23,7 @@ type Config struct {
 	LastDir      string              `json:"last_dir,omitempty"`
 	AI           AIConfig            `json:"ai"`
 	Formatters   map[string][]string `json:"formatters,omitempty"`
+	SessionIndex *SessionIndex       `json:"session_index,omitempty"`
 }
 
 func DefaultConfig() *Config {
@@ -39,7 +40,8 @@ func DefaultConfig() *Config {
 			Models:       []string{"gpt-4o-mini", "gpt-4o"},
 			DefaultModel: "gpt-4o-mini",
 		},
-		Formatters: make(map[string][]string),
+		Formatters:   make(map[string][]string),
+		SessionIndex: &SessionIndex{Version: SessionSchemaVersion, Workspaces: map[string]SessionIndexEntry{}},
 	}
 }
 
@@ -91,6 +93,10 @@ func LoadConfig() (*Config, error) {
 	if cfg.AI.DefaultModel == "" {
 		cfg.AI.DefaultModel = "gpt-4o-mini"
 	}
+	if cfg.Formatters == nil {
+		cfg.Formatters = make(map[string][]string)
+	}
+	cfg.SessionIndex = ensureSessionIndex(cfg.SessionIndex)
 	return cfg, nil
 }
 
@@ -113,5 +119,5 @@ func SaveConfig(cfg *Config) error {
 		return err
 	}
 
-	return os.WriteFile(cfgPath, data, 0644)
+	return atomicWriteFile(cfgPath, data, 0644)
 }

@@ -11,6 +11,7 @@ import (
 
 func main() {
 	targetPath := "."
+	explicitArg := false
 	debugMode := os.Getenv("DEBUG") == "1" || os.Getenv("TUI_DEBUG") == "1"
 
 	for _, arg := range os.Args[1:] {
@@ -18,6 +19,7 @@ func main() {
 			debugMode = true
 		} else if targetPath == "." {
 			targetPath = arg
+			explicitArg = true
 		}
 	}
 
@@ -30,7 +32,7 @@ func main() {
 		}
 	}
 
-	model, err := app.NewModelWithPath(targetPath)
+	model, err := app.NewModelWithPath(targetPath, explicitArg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error path %q: %v\n", targetPath, err)
 		os.Exit(1)

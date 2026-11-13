@@ -63,9 +63,16 @@ type Model struct {
 	ContextMenuTabIdx int
 	ResizingSidebar   bool
 	lastPointerShape  string
+
+	SessionExplicitArg bool
+
+	// Pending git hunk discard confirmation
+	pendingGitHunkPath  string
+	pendingGitHunkIndex int
+	SessionDirtySave   bool
 }
 
-func NewModelWithPath(targetPath string) (Model, error) {
+func NewModelWithPath(targetPath string, explicitArg bool) (Model, error) {
 	if targetPath == "" {
 		targetPath = "."
 	}
@@ -80,12 +87,17 @@ func NewModelWithPath(targetPath string) (Model, error) {
 
 	var rootDir string
 	var initialFile string
+	openPRDByDefault := false
 
 	if fi.IsDir() {
 		rootDir = cleanPath
 		prdPath := filepath.Join(rootDir, "PRD.md")
 		if _, err := os.Stat(prdPath); err == nil {
-			initialFile = prdPath
+			if explicitArg {
+				initialFile = prdPath
+			} else {
+				openPRDByDefault = true
+			}
 		}
 	} else {
 		rootDir = filepath.Dir(cleanPath)
@@ -146,6 +158,7 @@ func NewModelWithPath(targetPath string) (Model, error) {
 		ShowAbout:         false,
 		ClosingTabIdx:     -1,
 		ContextMenuTabIdx: -1,
+		SessionExplicitArg: explicitArg,
 	}
 	m.Explorer.ShowHidden = cfg.ShowHidden
 	m.StatusBar.AutoSave = cfg.AutoSave
@@ -156,11 +169,38 @@ func NewModelWithPath(targetPath string) (Model, error) {
 		}
 	}
 	m.syncStatusBarWithActiveTab()
+
+	if !explicitArg {
+		if sess, err := config.LoadWorkspaceSession(m.canonicalRootDir()); err == nil && sess != nil && len(sess.OpenTabs) > 0 {
+			restored, skipped := m.restoreWorkspaceSession(sess)
+			if restored > 0 {
+				msg := fmt.Sprintf("Session dipulihkan (%d tab)", restored)
+				if len(skipped) > 0 {
+					msg += fmt.Sprintf(", %d dilewati", len(skipped))
+				}
+				m.StatusBar.ShowToast(msg, false, 3*time.Second)
+				m.syncStatusBarWithActiveTab()
+			} else if openPRDByDefault {
+				prdPath := filepath.Join(rootDir, "PRD.md")
+				if _, err := os.Stat(prdPath); err == nil {
+					_, _ = tm.OpenFile(prdPath)
+					m.syncStatusBarWithActiveTab()
+				}
+			}
+		} else if openPRDByDefault {
+			prdPath := filepath.Join(rootDir, "PRD.md")
+			if _, err := os.Stat(prdPath); err == nil {
+				_, _ = tm.OpenFile(prdPath)
+				m.syncStatusBarWithActiveTab()
+			}
+		}
+	}
+
 	return m, nil
 }
 
 func NewModel() Model {
-	m, _ := NewModelWithPath(".")
+	m, _ := NewModelWithPath(".", false)
 	return m
 }
 
@@ -370,6 +410,9 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case sessionPersistMsg:
+		// best-effort persistence; avoid noisy errors
+		return m, nil
 	case FileWatchTickMsg:
 		m.checkWatchedFiles()
 		return m, fileWatchTickCmd()
@@ -758,7 +801,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case "ctrl+n":
 					m.TabManager.NextTab()
 					m.syncStatusBarWithActiveTab()
-					return m, nil
+					return m, m.requestSessionPersist()
 				case "ctrl+shift+p", "ctrl+P", "f1":
 					m.openCommandPalette()
 					return m, nil
@@ -956,12 +999,62 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				cmd, fileToOpen := m.GitView.Update(msg)
 				if fileToOpen != nil {
-					if fileToOpen.Status == "?" || fileToOpen.Status == "U" {
-						fullPath := filepath.Join(m.RootDir, fileToOpen.Path)
-						m.openFile(fullPath)
-						m.Focus = FocusEditor
-					} else {
-						m.openDiff(fileToOpen.Path)
+					switch fileToOpen.Path {
+					case "__hunk_stage__":
+						if f := m.GitView.SelectedChangesFile(); f != nil {
+							if hIdx, ok := m.GitView.SelectedHunkIndex(false); ok {
+								if err := m.GitRepo.StageHunk(f.Path, hIdx); err != nil {
+									m.StatusBar.ShowToast("Gagal stage hunk (fallback file-level): "+err.Error(), true, 3*time.Second)
+								} else {
+									m.StatusBar.ShowToast(fmt.Sprintf("Hunk %d di-stage (%s)", hIdx+1, filepath.Base(f.Path)), false, 2*time.Second)
+								}
+								if m.GitView != nil {
+									m.GitView.Refresh()
+								}
+								m.refreshDiffTabsForPath(f.Path)
+							} else {
+								m.StatusBar.ShowToast("Tidak ada hunk aktif", true, 2*time.Second)
+							}
+						}
+					case "__hunk_unstage__":
+						if f := m.GitView.SelectedStagedFile(); f != nil {
+							if hIdx, ok := m.GitView.SelectedHunkIndex(true); ok {
+								if err := m.GitRepo.UnstageHunk(f.Path, hIdx); err != nil {
+									m.StatusBar.ShowToast("Gagal unstage hunk (fallback file-level): "+err.Error(), true, 3*time.Second)
+								} else {
+									m.StatusBar.ShowToast(fmt.Sprintf("Hunk %d di-unstage (%s)", hIdx+1, filepath.Base(f.Path)), false, 2*time.Second)
+								}
+								if m.GitView != nil {
+									m.GitView.Refresh()
+								}
+								m.refreshDiffTabsForPath(f.Path)
+							} else {
+								m.StatusBar.ShowToast("Tidak ada hunk aktif", true, 2*time.Second)
+							}
+						}
+					case "__hunk_discard__":
+						if f := m.GitView.SelectedChangesFile(); f != nil {
+							if hIdx, ok := m.GitView.SelectedHunkIndex(false); ok {
+								m.pendingGitHunkPath = f.Path
+								m.pendingGitHunkIndex = hIdx
+								m.ConfirmDialog.Open(
+									dialog.ConfirmDiscardGitHunk,
+									"Buang Hunk?",
+									fmt.Sprintf("Buang hunk #%d pada '%s'?\nPerubahan worktree untuk hunk ini akan hilang permanen.", hIdx+1, f.Path),
+									f.Path,
+								)
+								return m, cmd
+							}
+							m.StatusBar.ShowToast("Tidak ada hunk aktif", true, 2*time.Second)
+						}
+					default:
+						if fileToOpen.Status == "?" || fileToOpen.Status == "U" {
+							fullPath := filepath.Join(m.RootDir, fileToOpen.Path)
+							m.openFile(fullPath)
+							m.Focus = FocusEditor
+						} else {
+							m.openDiff(fileToOpen.Path, fileToOpen.IsStaged)
+						}
 					}
 				}
 				return m, cmd
@@ -1063,7 +1156,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case "ctrl+n":
 					m.TabManager.NextTab()
 					m.syncStatusBarWithActiveTab()
-					return m, nil
+					return m, m.requestSessionPersist()
 				case "up", "k":
 					tab.DiffView.ScrollUp(1)
 					m.syncStatusBarWithActiveTab()
@@ -1084,6 +1177,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					tab.DiffView.ScrollOffset = 0
 					m.syncStatusBarWithActiveTab()
 					return m, nil
+				case "n", "]":
+					tab.DiffView.NextHunk(m.Height-3)
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+				case "N", "[":
+					tab.DiffView.PrevHunk(m.Height-3)
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+				case "s", "+":
+					return m, m.applyDiffHunkAction(tab, "stage")
+				case "u", "-":
+					return m, m.applyDiffHunkAction(tab, "unstage")
+				case "x":
+					return m, m.applyDiffHunkAction(tab, "discard")
 				}
 			} else if tab != nil && tab.Type == editor.TabMarkdown && tab.MarkdownPreview && tab.MarkdownViewer != nil {
 				switch msg.String() {
@@ -1093,7 +1200,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case "ctrl+n":
 					m.TabManager.NextTab()
 					m.syncStatusBarWithActiveTab()
-					return m, nil
+					return m, m.requestSessionPersist()
 				case "up", "k":
 					tab.MarkdownViewer.ScrollUp(1)
 					m.syncStatusBarWithActiveTab()
@@ -1183,7 +1290,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					m.TabManager.NextTab()
 					m.syncStatusBarWithActiveTab()
-					return m, nil
+					return m, m.requestSessionPersist()
 
 				case "ctrl+c":
 					text := buf.GetSelectedText()
@@ -2122,7 +2229,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.openFile(fullPath)
 							m.Focus = FocusEditor
 						} else {
-							m.openDiff(targetFile.Path)
+							m.openDiff(targetFile.Path, targetFile.IsStaged)
 						}
 					}
 				} else if m.SidebarView == SidebarSearch && m.SearchView != nil {
@@ -2438,6 +2545,11 @@ func (m *Model) openCommandPalette() {
 		{ID: "git.branch_switcher", Title: "Git: Switch Branch", Category: "Git", Shortcut: "Alt+B"},
 		{ID: "git.ai_commit", Title: "Git: Generate Commit Message with AI", Category: "Git", Shortcut: "Alt+G"},
 		{ID: "git.refresh", Title: "Git: Refresh Worktree Status", Category: "Git", Shortcut: ""},
+		{ID: "git.hunk_next", Title: "Git: Next Hunk (Diff/Sidebar)", Category: "Git", Shortcut: "n/]"},
+		{ID: "git.hunk_prev", Title: "Git: Previous Hunk (Diff/Sidebar)", Category: "Git", Shortcut: "N/["},
+		{ID: "git.hunk_stage", Title: "Git: Stage Active Hunk", Category: "Git", Shortcut: "s"},
+		{ID: "git.hunk_unstage", Title: "Git: Unstage Active Hunk", Category: "Git", Shortcut: "u"},
+		{ID: "git.hunk_discard", Title: "Git: Discard Active Hunk (Unstaged)", Category: "Git", Shortcut: "x"},
 		{ID: "files.refresh", Title: "Files: Refresh File Explorer", Category: "Files", Shortcut: ""},
 	}
 	m.CommandPalette.Open(commands)
@@ -2756,6 +2868,7 @@ func (m *Model) handleConfirmConfirmed() tea.Cmd {
 	case dialog.ConfirmUnsavedChanges:
 		if m.ConfirmDialog.TargetPath == "app.exit" {
 			_, _ = editor.TriggerAutoSave(m.TabManager)
+			_ = config.SaveWorkspaceSession(m.canonicalRootDir(), m.captureWorkspaceSession())
 			fmt.Print("\x1b]22;default\x1b\\")
 			return tea.Quit
 		} else if m.ClosingTabIdx >= 0 {
@@ -2797,6 +2910,28 @@ func (m *Model) handleConfirmConfirmed() tea.Cmd {
 				m.StatusBar.ShowToast("Perubahan dibuang: "+filepath.Base(m.ConfirmDialog.TargetPath), false, 2*time.Second)
 			}
 		}
+
+	case dialog.ConfirmDiscardGitHunk:
+		if m.GitRepo != nil && m.pendingGitHunkPath != "" {
+			if err := m.GitRepo.DiscardHunk(m.pendingGitHunkPath, m.pendingGitHunkIndex); err != nil {
+				m.StatusBar.ShowToast("Gagal discard hunk: "+err.Error(), true, 3*time.Second)
+			} else {
+				m.StatusBar.ShowToast(fmt.Sprintf("Hunk %d dibuang", m.pendingGitHunkIndex+1), false, 2*time.Second)
+				if m.GitView != nil {
+					m.GitView.Refresh()
+				}
+				m.refreshDiffTabsForPath(m.pendingGitHunkPath)
+				// reload any open editor tab of that file
+				for _, tab := range m.TabManager.Tabs {
+					if tab != nil && tab.Buffer != nil && filepath.ToSlash(filepath.Clean(tab.Path)) == filepath.ToSlash(filepath.Clean(filepath.Join(m.GitRepo.RootPath, m.pendingGitHunkPath))) {
+						_ = tab.ReloadFromDisk()
+					}
+				}
+				m.syncStatusBarWithActiveTab()
+			}
+		}
+		m.pendingGitHunkPath = ""
+		m.pendingGitHunkIndex = 0
 	}
 	return nil
 }
@@ -2804,6 +2939,7 @@ func (m *Model) handleConfirmConfirmed() tea.Cmd {
 func (m *Model) handleDiscardConfirmed() tea.Cmd {
 	if m.ConfirmDialog.Type == dialog.ConfirmUnsavedChanges {
 		if m.ConfirmDialog.TargetPath == "app.exit" {
+			_ = config.SaveWorkspaceSession(m.canonicalRootDir(), m.captureWorkspaceSession())
 			fmt.Print("\x1b]22;default\x1b\\")
 			return tea.Quit
 		} else if m.ClosingTabIdx >= 0 {
@@ -2818,7 +2954,7 @@ func (m *Model) handleDiscardConfirmed() tea.Cmd {
 			if tab != nil && tab.Path == targetPath && tab.Buffer != nil {
 				diskBytes, err := os.ReadFile(targetPath)
 				if err == nil {
-					m.TabManager.OpenDiff(targetPath, string(diskBytes), tab.Buffer.Text())
+					m.TabManager.OpenDiff(targetPath, string(diskBytes), tab.Buffer.Text(), false, "Δ "+filepath.Base(targetPath)+" (External)")
 					m.syncStatusBarWithActiveTab()
 					m.StatusBar.ShowToast("Split Diff dibuka: Periksa & merge perubahan", false, 3*time.Second)
 				} else {
@@ -2840,6 +2976,7 @@ func (m *Model) openFile(path string) {
 
 	m.syncStatusBarWithActiveTab()
 	m.StatusBar.ShowToast("Dibuka: "+tab.Name, false, 1500*time.Millisecond)
+	_ = config.SaveWorkspaceSession(m.canonicalRootDir(), m.captureWorkspaceSession())
 }
 
 func isBinaryBytes(data []byte) bool {
@@ -2850,32 +2987,140 @@ func isBinaryBytes(data []byte) bool {
 	return bytes.IndexByte(data[:limit], 0x00) != -1
 }
 
-func (m *Model) openDiff(relPath string) {
+
+func (m *Model) isUnsafeForHunkAction(relPath string) bool {
+	if m == nil || m.GitRepo == nil || relPath == "" {
+		return true
+	}
+	abs := filepath.Join(m.GitRepo.RootPath, relPath)
+	info, err := os.Stat(abs)
+	if err != nil {
+		// untracked/delete/rename-conflict-like ambiguity: keep safe fallback
+		return false
+	}
+	if info.Size() > editor.MaxFileSize {
+		return true
+	}
+	data, err := os.ReadFile(abs)
+	if err == nil && isBinaryBytes(data) {
+		return true
+	}
+	// also guard staged/base blobs by diff content size indirectly via openDiff checks elsewhere
+	return false
+}
+
+func (m *Model) applyDiffHunkAction(tab *editor.Tab, action string) tea.Cmd {
+	if m == nil || tab == nil || tab.DiffView == nil || m.GitRepo == nil {
+		return nil
+	}
+	h, ok := tab.DiffView.ActiveHunkData()
+	if !ok {
+		m.StatusBar.ShowToast("Tidak ada hunk aktif", true, 2*time.Second)
+		return nil
+	}
+	relPath := tab.Path
+	if relPath == "" {
+		m.StatusBar.ShowToast("Path diff tidak valid", true, 2*time.Second)
+		return nil
+	}
+	if m.isUnsafeForHunkAction(relPath) {
+		m.StatusBar.ShowToast("File binary/terlalu besar/ambiguous: gunakan aksi file-level", true, 3*time.Second)
+		return nil
+	}
+	switch action {
+	case "stage":
+		if tab.DiffStaged {
+			m.StatusBar.ShowToast("Gunakan unstage pada diff staged", true, 2*time.Second)
+			return nil
+		}
+		if err := m.GitRepo.StageHunk(relPath, h.Index); err != nil {
+			m.StatusBar.ShowToast("Gagal stage hunk (fallback file-level): "+err.Error(), true, 3*time.Second)
+			return nil
+		}
+		m.StatusBar.ShowToast(fmt.Sprintf("Hunk %d di-stage", h.Index+1), false, 2*time.Second)
+	case "unstage":
+		if !tab.DiffStaged {
+			m.StatusBar.ShowToast("Gunakan stage/discard pada diff unstaged", true, 2*time.Second)
+			return nil
+		}
+		if err := m.GitRepo.UnstageHunk(relPath, h.Index); err != nil {
+			m.StatusBar.ShowToast("Gagal unstage hunk (fallback file-level): "+err.Error(), true, 3*time.Second)
+			return nil
+		}
+		m.StatusBar.ShowToast(fmt.Sprintf("Hunk %d di-unstage", h.Index+1), false, 2*time.Second)
+	case "discard":
+		if tab.DiffStaged {
+			m.StatusBar.ShowToast("Discard hunk hanya untuk perubahan unstaged", true, 2*time.Second)
+			return nil
+		}
+		m.pendingGitHunkPath = relPath
+		m.pendingGitHunkIndex = h.Index
+		m.ConfirmDialog.Open(
+			dialog.ConfirmDiscardGitHunk,
+			"Buang Hunk?",
+			fmt.Sprintf("Buang hunk #%d pada '%s'?\nPerubahan worktree untuk hunk ini akan hilang permanen.", h.Index+1, relPath),
+			relPath,
+		)
+		return nil
+	default:
+		return nil
+	}
+	if m.GitView != nil {
+		m.GitView.Refresh()
+	}
+	m.refreshDiffTabsForPath(relPath)
+	m.syncStatusBarWithActiveTab()
+	return m.requestSessionPersist()
+}
+
+func (m *Model) refreshDiffTabsForPath(relPath string) {
+	if m == nil || m.GitRepo == nil || relPath == "" {
+		return
+	}
+	for _, t := range m.TabManager.Tabs {
+		if t == nil || t.Type != editor.TabDiff || t.DiffView == nil || t.Path != relPath {
+			continue
+		}
+		if t.DiffStaged {
+			base, _ := m.GitRepo.GetFileContentAtHEAD(relPath)
+			mod, _ := m.GitRepo.GetIndexFileContent(relPath)
+			t.DiffView.Result = git.ComputeSplitDiff(relPath, base, mod)
+		} else {
+			base, _ := m.GitRepo.GetIndexFileContent(relPath)
+			mod, _ := m.GitRepo.GetWorktreeFileContent(relPath)
+			t.DiffView.Result = git.ComputeSplitDiff(relPath, base, mod)
+		}
+		t.DiffView.RecomputeHunks()
+	}
+}
+
+func (m *Model) openDiff(relPath string, staged bool) {
 	if m.GitRepo == nil {
 		return
 	}
 	fullPath := filepath.Join(m.GitRepo.RootPath, relPath)
-	info, err := os.Stat(fullPath)
-	if err == nil {
+	if info, err := os.Stat(fullPath); err == nil {
 		if info.Size() > editor.MaxFileSize {
 			m.StatusBar.ShowToast(fmt.Sprintf("File terlalu besar (%d MB > 10MB)", info.Size()/(1024*1024)), true, 3*time.Second)
 			return
 		}
 	}
-
-	modBytes, _ := os.ReadFile(fullPath)
-	if isBinaryBytes(modBytes) {
+	label := "Unstaged"
+	base, mod := "", ""
+	if staged {
+		label = "Staged"
+		base, _ = m.GitRepo.GetFileContentAtHEAD(relPath)
+		mod, _ = m.GitRepo.GetIndexFileContent(relPath)
+	} else {
+		base, _ = m.GitRepo.GetIndexFileContent(relPath)
+		mod, _ = m.GitRepo.GetWorktreeFileContent(relPath)
+	}
+	if isBinaryBytes([]byte(base)) || isBinaryBytes([]byte(mod)) {
 		m.StatusBar.ShowToast("Diff file biner tidak didukung", true, 3*time.Second)
 		return
 	}
-
-	orig, _ := m.GitRepo.GetFileContentAtHEAD(relPath)
-	if isBinaryBytes([]byte(orig)) {
-		m.StatusBar.ShowToast("Diff file biner tidak didukung", true, 3*time.Second)
-		return
-	}
-
-	m.TabManager.OpenDiff(relPath, orig, string(modBytes))
+	title := "Δ " + filepath.Base(relPath) + " (" + label + ")"
+	m.TabManager.OpenDiff(relPath, base, mod, staged, title)
 	m.Focus = FocusEditor
 	m.syncStatusBarWithActiveTab()
 }
@@ -2895,6 +3140,7 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 		if m.AutoSave {
 			_, _ = editor.TriggerAutoSave(m.TabManager)
 		}
+		_ = config.SaveWorkspaceSession(m.canonicalRootDir(), m.captureWorkspaceSession())
 		fmt.Print("\x1b]22;default\x1b\\")
 		return tea.Quit
 
@@ -3110,6 +3356,85 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 			m.Explorer.Refresh()
 		}
 		m.StatusBar.ShowToast("Status explorer & git diperbarui", false, 2*time.Second)
+
+	case "git.hunk_next":
+		if tab := m.TabManager.ActiveTab(); tab != nil && tab.IsDiff && tab.DiffView != nil {
+			tab.DiffView.NextHunk(m.Height - 3)
+			m.syncStatusBarWithActiveTab()
+		} else if m.GitView != nil && m.SidebarView == SidebarGit {
+			if m.GitView.FocusArea == git.GitFocusStaged {
+				m.GitView.NextSelectedHunk(true)
+			} else {
+				m.GitView.NextSelectedHunk(false)
+			}
+		}
+
+	case "git.hunk_prev":
+		if tab := m.TabManager.ActiveTab(); tab != nil && tab.IsDiff && tab.DiffView != nil {
+			tab.DiffView.PrevHunk(m.Height - 3)
+			m.syncStatusBarWithActiveTab()
+		} else if m.GitView != nil && m.SidebarView == SidebarGit {
+			if m.GitView.FocusArea == git.GitFocusStaged {
+				m.GitView.PrevSelectedHunk(true)
+			} else {
+				m.GitView.PrevSelectedHunk(false)
+			}
+		}
+
+	case "git.hunk_stage":
+		if tab := m.TabManager.ActiveTab(); tab != nil && tab.IsDiff && tab.DiffView != nil {
+			return m.applyDiffHunkAction(tab, "stage")
+		}
+		if m.GitView != nil && m.GitRepo != nil && m.GitView.FocusArea == git.GitFocusChanges {
+			if f := m.GitView.SelectedChangesFile(); f != nil {
+				if hIdx, ok := m.GitView.SelectedHunkIndex(false); ok {
+					if err := m.GitRepo.StageHunk(f.Path, hIdx); err != nil {
+						m.StatusBar.ShowToast("Gagal stage hunk (fallback file-level): "+err.Error(), true, 3*time.Second)
+					} else {
+						m.StatusBar.ShowToast(fmt.Sprintf("Hunk %d di-stage (%s)", hIdx+1, filepath.Base(f.Path)), false, 2*time.Second)
+					}
+					m.GitView.Refresh()
+					m.refreshDiffTabsForPath(f.Path)
+				}
+			}
+		}
+
+	case "git.hunk_unstage":
+		if tab := m.TabManager.ActiveTab(); tab != nil && tab.IsDiff && tab.DiffView != nil {
+			return m.applyDiffHunkAction(tab, "unstage")
+		}
+		if m.GitView != nil && m.GitRepo != nil && m.GitView.FocusArea == git.GitFocusStaged {
+			if f := m.GitView.SelectedStagedFile(); f != nil {
+				if hIdx, ok := m.GitView.SelectedHunkIndex(true); ok {
+					if err := m.GitRepo.UnstageHunk(f.Path, hIdx); err != nil {
+						m.StatusBar.ShowToast("Gagal unstage hunk (fallback file-level): "+err.Error(), true, 3*time.Second)
+					} else {
+						m.StatusBar.ShowToast(fmt.Sprintf("Hunk %d di-unstage (%s)", hIdx+1, filepath.Base(f.Path)), false, 2*time.Second)
+					}
+					m.GitView.Refresh()
+					m.refreshDiffTabsForPath(f.Path)
+				}
+			}
+		}
+
+	case "git.hunk_discard":
+		if tab := m.TabManager.ActiveTab(); tab != nil && tab.IsDiff && tab.DiffView != nil {
+			return m.applyDiffHunkAction(tab, "discard")
+		}
+		if m.GitView != nil && m.GitRepo != nil && m.GitView.FocusArea == git.GitFocusChanges {
+			if f := m.GitView.SelectedChangesFile(); f != nil {
+				if hIdx, ok := m.GitView.SelectedHunkIndex(false); ok {
+					m.pendingGitHunkPath = f.Path
+					m.pendingGitHunkIndex = hIdx
+					m.ConfirmDialog.Open(
+						dialog.ConfirmDiscardGitHunk,
+						"Buang Hunk?",
+						fmt.Sprintf("Buang hunk #%d pada '%s'?\nPerubahan worktree untuk hunk ini akan hilang permanen.", hIdx+1, f.Path),
+						f.Path,
+					)
+				}
+			}
+		}
 
 	case "files.refresh":
 		if m.Explorer != nil {

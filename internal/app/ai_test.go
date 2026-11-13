@@ -19,7 +19,7 @@ func TestAI_SettingsDialogWorkflow(t *testing.T) {
 	os.Setenv("HOME", tempDir)
 	defer os.Setenv("HOME", origHome)
 
-	m, err := NewModelWithPath(tempDir)
+	m, err := NewModelWithPath(tempDir, false)
 	if err != nil {
 		t.Fatalf("failed to create model: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestAI_CommitGeneratorWorkflow(t *testing.T) {
 	}))
 	defer mockServer.Close()
 
-	m, err := NewModelWithPath(tempDir)
+	m, err := NewModelWithPath(tempDir, false)
 	if err != nil {
 		t.Fatalf("failed to create model: %v", err)
 	}

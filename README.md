@@ -41,12 +41,19 @@
 - **Smart Caching:** SHA-256 hash + terminal width caching untuk performa rendering kilat tanpa re-parsing dokumen yang tidak berubah.
 - **Viewport Scrolling:** Navigasi scrolling preview via keyboard maupun mouse wheel.
 
+### 4. 💾 Workspace/Session Persistence (P0)
+- **Session per Workspace:** Menyimpan dan memulihkan sesi kerja per root workspace secara deterministik (index di `~/.config/tui-workflow/config.json`, state per-workspace di `~/.config/tui-workflow/sessions/*.json`).
+- **State Dipulihkan:** Tab file/markdown path-backed valid, tab aktif, posisi kursor/scroll, mode preview markdown, visibilitas/lebar/view sidebar, dan fokus. Buffer dirty tidak diserialisasi.
+- **Prioritas Startup (CLI):** Argumen path eksplisit diprioritaskan; tanpa argumen, sesi workspace terakhir dipulihkan dengan fallback perilaku lama secara aman (skip file non-valid >10MB/biner/hilang tanpa crash).
+
 ### 5. 🌿 Git Source Control & Side-by-Side Split Diff
 - **Native go-git/v5 Engine:** Integrasi langsung membaca status repositori tanpa dependensi binary git eksternal.
 - **Sidebar Git View:** Menampilkan collapsible sections *Staged Changes*, *Working Tree Changes*, dan riwayat commit (*Commit History*).
 - **Interactive Staging:** Tombol `[+]` untuk stage (`git add`) dan `[-]` untuk unstage file via klik mouse atau tombol keyboard.
 - **Commit Box:** Input commit message dengan tombol shortcut `Ctrl+Enter` untuk melakukan commit langsung.
 - **Side-by-Side Split Diff Tab:** Tab diff khusus di editor yang membandingkan versi HEAD vs Working Tree secara berdampingan dengan sinkronisasi scroll baris dan pewarnaan diff jelas (merah/hijau).
+
+- **Hunk-Level Actions (P0):** Stage, unstage, dan discard perubahan per hunk terpilih langsung dari Sidebar Git maupun Diff Tab, dengan konfirmasi aman untuk discard dan fallback file-level untuk kasus ambigu/tidak terjamin (tanpa korupsi index/worktree).
 
 ### 6. 🛡️ File Safety Guards
 - **Binary File Rejection:** Pengecekan null byte (`0x00`) pada 512 byte pertama untuk menolak file biner (ELF, gambar, database) agar terminal tidak rusak/crash.
@@ -131,16 +138,29 @@
 | `/` | Filter daftar file secara instan (real-time tree filter) |
 | `.` | Toggle tampilkan / sembunyikan hidden files (dotfiles) |
 
-### Git Source Control
+### Git Source Control (Sidebar)
 | Pintasan | Aksi |
 |---|---|
-| `Up` / `Down` | Navigasi daftar file atau riwayat commit |
-| `Enter` / `Space` | Stage / Unstage file yang sedang dipilih (`+` / `-`) |
-| `d` / klik `[x]` | Buang semua perubahan lokal pada file terpilih (Discard Changes) |
+| `Up` / `Down` / `j` / `k` | Navigasi daftar file, section, atau riwayat commit |
+| `Tab` | Pindah fokus antar section (Staged / Changes / History / Commit Box) |
+| `+` / `-` | Stage / Unstage semua perubahan pada file terpilih |
+| `[` / `]` | Navigasi hunk aktif pada file terpilih |
+| `s` / `u` | Stage / Unstage hunk aktif (Changes / Staged) |
+| `x` | Discard hunk aktif pada file unstaged (dengan konfirmasi) |
+| `Enter` | Buka Side-by-Side Diff Tab untuk file terpilih |
 | `Alt + B` | Buka pemilih branch Git lokal (Branch Switcher modal) |
-| `Tab` | Pindah fokus ke kotak input pesan commit |
 | `Alt + G` / klik `[✨ AI]` | Hasilkan pesan commit otomatis menggunakan AI dari perubahan staged |
 | `Ctrl + Enter` | Lakukan Commit dengan pesan yang diketik |
+
+### Diff Tab (Side-by-Side, Git Hunk)
+| Pintasan | Aksi |
+|---|---|
+| `n` / `]` / `N` / `[` | Lompat ke hunk berikutnya / sebelumnya |
+| `s` / `+` | Stage hunk aktif (pada Diff Unstaged) |
+| `u` / `-` | Unstage hunk aktif (pada Diff Staged) |
+| `x` | Discard hunk aktif (pada Diff Unstaged, dengan konfirmasi) |
+| `↑` / `↓` / `j` / `k` / `PgUp` / `PgDn` | Scroll tampilan diff |
+| `Ctrl + W` | Tutup tab Diff |
 
 ### Terminal Tab (PTY)
 | Pintasan | Aksi |

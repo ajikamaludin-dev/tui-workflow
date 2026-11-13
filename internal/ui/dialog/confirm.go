@@ -15,6 +15,7 @@ const (
 	ConfirmUnsavedChanges
 	ConfirmExternalChange
 	ConfirmDiscardGit
+	ConfirmDiscardGitHunk
 )
 
 type ConfirmDialog struct {
@@ -94,6 +95,11 @@ func (d *ConfirmDialog) Update(msg tea.Msg) (confirmed bool, canceled bool, disc
 				} else {
 					return false, true, false // Cancel
 				}
+			} else if d.Type == ConfirmDiscardGitHunk {
+				if d.Selected == 0 {
+					return true, false, false // Discard hunk
+				}
+				return false, true, false
 			} else {
 				if d.Selected == 0 {
 					return true, false, false // Confirm delete
@@ -140,6 +146,12 @@ func (d *ConfirmDialog) HandleMouse(relX, relY int) (confirmed bool, canceled bo
 			} else {
 				return false, true, false, true // Cancel / Keep local
 			}
+		} else if d.Type == ConfirmDiscardGitHunk {
+			if relX >= 2 && relX <= 20 {
+				return true, false, false, true // Discard hunk
+			} else {
+				return false, true, false, true // Cancel
+			}
 		} else {
 			if relX >= 2 && relX <= 16 {
 				return true, false, false, true // Delete
@@ -185,7 +197,16 @@ func (d *ConfirmDialog) Render() string {
 	btnSep := lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Render(" ")
 
 	var buttons string
-	if d.Type == ConfirmUnsavedChanges {
+	if d.Type == ConfirmDiscardGitHunk {
+		btnDiscard := btnStyle
+		btnCancel := btnStyle
+		if d.Selected == 0 {
+			btnDiscard = btnDiscard.Background(ui.CurrentTheme.Red).Foreground(ui.CurrentTheme.FgHighlight).Bold(true)
+		} else {
+			btnCancel = btnCancel.Background(ui.CurrentTheme.BorderColor).Foreground(ui.CurrentTheme.FgHighlight).Bold(true)
+		}
+		buttons = lipgloss.JoinHorizontal(lipgloss.Center, btnDiscard.Render("Discard Hunk"), btnSep, btnCancel.Render("Cancel"))
+	} else if d.Type == ConfirmUnsavedChanges {
 		btnSave := btnStyle
 		btnDiscard := btnStyle
 		btnCancel := btnStyle

@@ -14,7 +14,7 @@ func TestModalMouseInteractivity(t *testing.T) {
 	sampleFile := filepath.Join(tmpDir, "sample.txt")
 	_ = os.WriteFile(sampleFile, []byte("line 1\nline 2\nline 3\n"), 0644)
 
-	m, err := NewModelWithPath(tmpDir)
+	m, err := NewModelWithPath(tmpDir, false)
 	if err != nil {
 		t.Fatalf("Failed to initialize model: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestModalMouseInteractivity(t *testing.T) {
 
 func TestStatusBarMouseInteraction(t *testing.T) {
 	tmpDir := t.TempDir()
-	m, err := NewModelWithPath(tmpDir)
+	m, err := NewModelWithPath(tmpDir, false)
 	if err != nil {
 		t.Fatalf("Failed to initialize model: %v", err)
 	}

@@ -17,7 +17,7 @@ func TestSearchFeaturesIntegration(t *testing.T) {
 	_ = os.WriteFile(fileA, []byte("package main\n\nfunc Alpha() string {\n\treturn \"find_me_token\"\n}\n"), 0644)
 	_ = os.WriteFile(fileB, []byte("package main\n\nfunc Beta() {\n\t// find_me_token here too\n}\n"), 0644)
 
-	m, err := NewModelWithPath(tmpDir)
+	m, err := NewModelWithPath(tmpDir, false)
 	if err != nil {
 		t.Fatalf("failed to create model: %v", err)
 	}

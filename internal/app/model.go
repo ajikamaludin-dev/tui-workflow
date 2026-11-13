@@ -51,6 +51,7 @@ type Model struct {
 	FindBar           *dialog.FindBar
 	BranchSwitcher    *dialog.BranchSwitcher
 	AISettingsDialog  *dialog.AISettingsDialog
+	HelpDialog        *dialog.HelpDialog
 	AIClient          *ai.Client
 	SearchView        *search.SearchView
 	ContextMenu       *ui.ContextMenu
@@ -61,6 +62,7 @@ type Model struct {
 	ClosingTabIdx     int
 	ContextMenuTabIdx int
 	ResizingSidebar   bool
+	lastPointerShape  string
 }
 
 func NewModelWithPath(targetPath string) (Model, error) {
@@ -134,6 +136,7 @@ func NewModelWithPath(targetPath string) (Model, error) {
 		FindBar:           dialog.NewFindBar(),
 		BranchSwitcher:    dialog.NewBranchSwitcher(),
 		AISettingsDialog:  dialog.NewAISettingsDialog(),
+		HelpDialog:        dialog.NewHelpDialog(),
 		AIClient:          ai.NewClient(),
 		SearchView:        search.NewSearchView(rootDir),
 		ContextMenu:       ui.NewContextMenu(),
@@ -686,9 +689,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.ConfirmDialog.Active {
 			confirmed, canceled, discard := m.ConfirmDialog.Update(msg)
 			if confirmed {
-				m.handleConfirmConfirmed()
+				cmd := m.handleConfirmConfirmed()
+				if cmd != nil {
+					return m, cmd
+				}
 			} else if discard {
-				m.handleDiscardConfirmed()
+				cmd := m.handleDiscardConfirmed()
+				if cmd != nil {
+					return m, cmd
+				}
 			} else if canceled {
 				if m.ConfirmDialog.Type == dialog.ConfirmExternalChange {
 					m.StatusBar.ShowToast("Perubahan eksternal diabaikan (lokal dipertahankan)", false, 2*time.Second)
@@ -710,6 +719,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// 5. Modal escape
+		if m.ShowHelp && m.HelpDialog != nil && m.HelpDialog.Active {
+			closed := m.HelpDialog.Update(msg)
+			if closed {
+				m.ShowHelp = false
+			}
+			return m, nil
+		}
 		if msg.String() == "esc" {
 			if m.ShowHelp {
 				m.ShowHelp = false
@@ -778,6 +794,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.AutoSave {
 				_, _ = editor.TriggerAutoSave(m.TabManager)
 			}
+			// Reset cursor shape before exiting
+			fmt.Print("\x1b]22;default\x1b\\")
 			return m, tea.Quit
 
 		case "ctrl+b":
@@ -913,6 +931,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			m.ShowHelp = !m.ShowHelp
+			if m.ShowHelp && m.HelpDialog != nil {
+				m.HelpDialog.Open(m.Height)
+			}
 			return m, nil
 		}
 
@@ -1394,8 +1415,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.CommandPalette != nil && m.CommandPalette.Active {
-			modalW := m.CommandPalette.Width
-			modalH := strings.Count(m.CommandPalette.Render(), "\n") + 1
+			modalStr := m.CommandPalette.Render()
+			modalW := lipgloss.Width(modalStr)
+			modalH := lipgloss.Height(modalStr)
 			startX := (m.Width - modalW) / 2
 			startY := (m.Height - modalH) / 3
 			if startY < 1 {
@@ -1419,8 +1441,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.QuickOpen != nil && m.QuickOpen.Active {
-			modalW := m.QuickOpen.Width
-			modalH := strings.Count(m.QuickOpen.Render(), "\n") + 1
+			modalStr := m.QuickOpen.Render()
+			modalW := lipgloss.Width(modalStr)
+			modalH := lipgloss.Height(modalStr)
 			startX := (m.Width - modalW) / 2
 			startY := (m.Height - modalH) / 3
 			if startY < 1 {
@@ -1450,8 +1473,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.GlobalSearch != nil && m.GlobalSearch.Active {
-			modalW := m.GlobalSearch.Width
-			modalH := strings.Count(m.GlobalSearch.Render(), "\n") + 1
+			modalStr := m.GlobalSearch.Render()
+			modalW := lipgloss.Width(modalStr)
+			modalH := lipgloss.Height(modalStr)
 			startX := (m.Width - modalW) / 2
 			startY := (m.Height - modalH) / 3
 			if startY < 1 {
@@ -1475,8 +1499,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.BranchSwitcher != nil && m.BranchSwitcher.Active {
-			modalW := m.BranchSwitcher.Width
-			modalH := strings.Count(m.BranchSwitcher.Render(), "\n") + 1
+			modalStr := m.BranchSwitcher.Render()
+			modalW := lipgloss.Width(modalStr)
+			modalH := lipgloss.Height(modalStr)
 			startX := (m.Width - modalW) / 2
 			startY := (m.Height - modalH) / 3
 			if startY < 1 {
@@ -1507,8 +1532,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.AISettingsDialog != nil && m.AISettingsDialog.Active {
-			modalW := m.AISettingsDialog.Width
-			modalH := strings.Count(m.AISettingsDialog.Render(), "\n") + 1
+			modalStr := m.AISettingsDialog.Render()
+			modalW := lipgloss.Width(modalStr)
+			modalH := lipgloss.Height(modalStr)
 			startX := (m.Width - modalW) / 2
 			startY := (m.Height - modalH) / 2
 			if startY < 1 {
@@ -1533,8 +1559,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.FilePicker != nil && m.FilePicker.Active {
-			modalW := m.FilePicker.Width
-			modalH := m.FilePicker.Height
+			modalStr := m.FilePicker.Render()
+			modalW := lipgloss.Width(modalStr)
+			modalH := lipgloss.Height(modalStr)
 			startX := (m.Width - modalW) / 2
 			startY := (m.Height - modalH) / 2
 			relX := msg.X - startX
@@ -1557,8 +1584,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if m.InputDialog.Active {
 			if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-				modalW := m.InputDialog.Width
-				modalH := strings.Count(m.InputDialog.Render(), "\n") + 1
+				modalStr := m.InputDialog.Render()
+				modalW := lipgloss.Width(modalStr)
+				modalH := lipgloss.Height(modalStr)
 				startX := (m.Width - modalW) / 2
 				startY := (m.Height - modalH) / 2
 				relX := msg.X - startX
@@ -1578,17 +1606,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		if m.ConfirmDialog.Active {
 			if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-				modalW := m.ConfirmDialog.Width
-				modalH := strings.Count(m.ConfirmDialog.Render(), "\n") + 1
+				modalStr := m.ConfirmDialog.Render()
+				modalW := lipgloss.Width(modalStr)
+				modalH := lipgloss.Height(modalStr)
 				startX := (m.Width - modalW) / 2
 				startY := (m.Height - modalH) / 2
 				relX := msg.X - startX
 				relY := msg.Y - startY
 				confirmed, canceled, discard, handled := m.ConfirmDialog.HandleMouse(relX, relY)
 				if confirmed {
-					m.handleConfirmConfirmed()
+					return m, m.handleConfirmConfirmed()
 				} else if discard {
-					m.handleDiscardConfirmed()
+					return m, m.handleDiscardConfirmed()
 				} else if canceled {
 					if m.ConfirmDialog.Type == dialog.ConfirmExternalChange {
 						m.StatusBar.ShowToast("Perubahan eksternal diabaikan (lokal dipertahankan)", false, 2*time.Second)
@@ -1605,8 +1634,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		if m.Switcher.Active {
-			modalW := m.Switcher.Width
-			modalH := strings.Count(m.Switcher.Render(), "\n") + 1
+			modalStr := m.Switcher.Render()
+			modalW := lipgloss.Width(modalStr)
+			modalH := lipgloss.Height(modalStr)
 			startX := (m.Width - modalW) / 2
 			startY := (m.Height - modalH) / 3
 			if startY < 1 {
@@ -1634,7 +1664,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.SidebarVisible {
 			isAtBorder := (msg.X == m.SidebarWidth-1 || msg.X == m.SidebarWidth) && msg.Y >= 1 && msg.Y < m.Height-1
 			if isAtBorder {
-				fmt.Print("\x1b]22;col-resize\x1b\\")
+				m.setMousePointer("col-resize")
 			}
 
 			if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft && isAtBorder {
@@ -1661,11 +1691,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Update mouse pointer shape: col-resize at border, text over editor, default elsewhere
 		if m.SidebarVisible && (msg.X == m.SidebarWidth-1 || msg.X == m.SidebarWidth) && msg.Y >= 1 && msg.Y < m.Height-1 {
-			fmt.Print("\x1b]22;col-resize\x1b\\")
+			m.setMousePointer("col-resize")
 		} else if msg.X >= editorStartX && msg.Y >= 2 && msg.Y < m.Height-1 {
-			fmt.Print("\x1b]22;text\x1b\\")
+			m.setMousePointer("text")
 		} else {
-			fmt.Print("\x1b]22;default\x1b\\")
+			m.setMousePointer("default")
 		}
 
 		// Right-click handling
@@ -1698,6 +1728,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.ContextMenu.OpenCustom(msg.X, msg.Y+1, items, m.Width, m.Height)
 					return m, nil
 				}
+			}
+
+			// Right-click inside File Explorer sidebar
+			if m.SidebarVisible && msg.X < m.SidebarWidth && msg.Y >= 3 && msg.Y < m.Height-2 && m.SidebarView == SidebarFiles {
+				m.Focus = FocusSidebar
+				filterActive := m.Explorer.FilterQuery != ""
+				nodeBodyY := msg.Y
+				if filterActive {
+					nodeBodyY = msg.Y - 1
+				}
+				if filterActive && msg.Y == 3 {
+					// Right-click on filter banner: treat as clear-filter shortcut via context menu with single entry
+					items := []ui.ContextMenuItem{{ID: "explorer_clear_filter", Label: "Clear Filter", Shortcut: "Esc"}}
+					m.ContextMenu.OpenCustom(msg.X, msg.Y+1, items, m.Width, m.Height)
+					return m, nil
+				}
+				if nodeBodyY >= 3 {
+					relLine := nodeBodyY - 3
+					targetIdx := m.Explorer.ScrollOffset + relLine
+					if targetIdx >= 0 && targetIdx < len(m.Explorer.FlatNodes) {
+						m.Explorer.SelectedIndex = targetIdx
+					}
+				}
+				m.ContextMenuTabIdx = -1
+				m.openExplorerContextMenu(msg.X, msg.Y+1)
+				return m, nil
 			}
 
 			// Right-click inside editor area -> Open Editor Context Menu
@@ -1848,6 +1904,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.syncStatusBarWithActiveTab()
 						return m, nil
 					}
+				} else if tab.Type == editor.TabTerminal && tab.TerminalView != nil {
+					if msg.Button == tea.MouseButtonWheelUp {
+						tab.TerminalView.ScrollUp(3)
+						return m, nil
+					} else if msg.Button == tea.MouseButtonWheelDown {
+						tab.TerminalView.ScrollDown(3)
+						return m, nil
+					}
 				} else if tab.Buffer != nil {
 					buf := tab.Buffer
 					if msg.Button == tea.MouseButtonWheelUp {
@@ -1863,6 +1927,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// ShowHelp / ShowAbout mouse handling
+		if m.ShowHelp && m.HelpDialog != nil && m.HelpDialog.Active {
+			modalStr := m.HelpDialog.Render(m.Height)
+			modalW := lipgloss.Width(modalStr)
+			modalH := lipgloss.Height(modalStr)
+			startX := (m.Width - modalW) / 2
+			startY := (m.Height - modalH) / 2
+			if startX < 0 {
+				startX = 0
+			}
+			if startY < 1 {
+				startY = 1
+			}
+			relX := msg.X - startX
+			relY := msg.Y - startY
+			isWheelUp := msg.Button == tea.MouseButtonWheelUp
+			isWheelDown := msg.Button == tea.MouseButtonWheelDown
+			closed, _ := m.HelpDialog.HandleMouse(relX, relY, isWheelUp, isWheelDown)
+			if closed {
+				m.ShowHelp = false
+			}
+			return m, nil
+		}
 		if m.ShowHelp || m.ShowAbout {
 			if msg.Action == tea.MouseActionPress {
 				m.ShowHelp = false
@@ -1885,6 +1972,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Row 1: Tab Bar click (Editor columns)
 			if msg.Y == 1 && msg.X >= editorStartX {
 				relX := msg.X - editorStartX
+				// Middle-click closes the tab under the cursor (no activate/toggle side effects)
+				if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonMiddle {
+					idx := m.TabManager.FindTabAt(relX)
+					if idx >= 0 {
+						m.attemptCloseTab(idx)
+						return m, nil
+					}
+					return m, nil
+				}
 				action, clickedTabIdx := m.TabManager.HandleTabClick(relX)
 				if action == "scroll_left" {
 					m.TabManager.ScrollTabsLeft()
@@ -1913,8 +2009,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-			// Row 2: Sidebar refresh button row click
-			if msg.Y == 2 && m.SidebarVisible && msg.X < m.SidebarWidth && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			// Row 2: Sidebar refresh button row click (limited to the [⟳ Refresh] hit area)
+			if msg.Y == 2 && m.SidebarVisible && msg.X >= 0 && msg.X < 15 && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
 				m.Focus = FocusSidebar
 				if m.SidebarView == SidebarFiles {
 					m.Explorer.Refresh()
@@ -1932,14 +2028,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Row Height-2: Sidebar bottom tabs click (📁 Files | 🌿 Git | 🔍 Search)
 			if msg.Y == m.Height-2 && m.SidebarVisible && msg.X < m.SidebarWidth && msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
 				m.Focus = FocusSidebar
-				if msg.X >= 0 && msg.X < 9 {
+				filesTabW := lipgloss.Width(" 1:Files ")
+				gitTabW := lipgloss.Width(" 2:Git ")
+				searchTabW := lipgloss.Width(" 3:Search ")
+				if msg.X >= 0 && msg.X < filesTabW {
 					m.SidebarView = SidebarFiles
-				} else if msg.X >= 9 && msg.X < 17 {
+				} else if msg.X >= filesTabW && msg.X < filesTabW+gitTabW {
 					m.SidebarView = SidebarGit
 					if m.GitView != nil {
 						m.GitView.Refresh()
 					}
-				} else {
+				} else if msg.X >= filesTabW+gitTabW && msg.X < filesTabW+gitTabW+searchTabW {
 					m.SidebarView = SidebarSearch
 					if m.SearchView != nil {
 						m.SearchView.DoSearch()
@@ -1955,7 +2054,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.Focus = FocusSidebar
 				if m.SidebarView == SidebarFiles {
+					if m.Explorer == nil {
+						return m, nil
+					}
+					filterActive := m.Explorer.FilterQuery != ""
+					// Filter banner occupies row Y==3; node rows start at Y==4
+					if filterActive && msg.Y == 3 {
+						m.InputDialog.Open(dialog.InputFilterExplorer, "Filter File Explorer", "Masukkan nama atau ekstensi file (kosong = bersihkan):", m.Explorer.FilterQuery)
+						return m, nil
+					}
 					relLine := msg.Y - 3
+					if filterActive {
+						relLine = msg.Y - 4
+					}
+					if relLine < 0 {
+						return m, nil
+					}
 					action, node := m.Explorer.HandleClick(relLine)
 					if action == "open" && node != nil {
 						m.openFile(node.Path)
@@ -2084,6 +2198,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				case "help":
 					m.ShowHelp = true
+					if m.HelpDialog != nil {
+						m.HelpDialog.Open(m.Height)
+					}
 					return m, nil
 				}
 				return m, nil
@@ -2133,6 +2250,13 @@ func (m *Model) setSidebarWidth(width int) {
 			m.Config.SidebarWidth = width
 			_ = config.SaveConfig(m.Config)
 		}
+	}
+}
+
+func (m *Model) setMousePointer(shape string) {
+	if m.lastPointerShape != shape {
+		m.lastPointerShape = shape
+		fmt.Print("\x1b]22;" + shape + "\x1b\\")
 	}
 }
 
@@ -2618,7 +2742,7 @@ func (m *Model) handleInputConfirmed() {
 	}
 }
 
-func (m *Model) handleConfirmConfirmed() {
+func (m *Model) handleConfirmConfirmed() tea.Cmd {
 	switch m.ConfirmDialog.Type {
 	case dialog.ConfirmDelete:
 		err := explorer.DeletePath(m.ConfirmDialog.TargetPath)
@@ -2632,7 +2756,8 @@ func (m *Model) handleConfirmConfirmed() {
 	case dialog.ConfirmUnsavedChanges:
 		if m.ConfirmDialog.TargetPath == "app.exit" {
 			_, _ = editor.TriggerAutoSave(m.TabManager)
-			os.Exit(0)
+			fmt.Print("\x1b]22;default\x1b\\")
+			return tea.Quit
 		} else if m.ClosingTabIdx >= 0 {
 			_ = m.TabManager.SaveTab(m.ClosingTabIdx)
 			m.TabManager.CloseTab(m.ClosingTabIdx)
@@ -2673,12 +2798,14 @@ func (m *Model) handleConfirmConfirmed() {
 			}
 		}
 	}
+	return nil
 }
 
-func (m *Model) handleDiscardConfirmed() {
+func (m *Model) handleDiscardConfirmed() tea.Cmd {
 	if m.ConfirmDialog.Type == dialog.ConfirmUnsavedChanges {
 		if m.ConfirmDialog.TargetPath == "app.exit" {
-			os.Exit(0)
+			fmt.Print("\x1b]22;default\x1b\\")
+			return tea.Quit
 		} else if m.ClosingTabIdx >= 0 {
 			m.TabManager.CloseTab(m.ClosingTabIdx)
 			m.ClosingTabIdx = -1
@@ -2701,6 +2828,7 @@ func (m *Model) handleDiscardConfirmed() {
 			}
 		}
 	}
+	return nil
 }
 
 func (m *Model) openFile(path string) {
@@ -2767,6 +2895,7 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 		if m.AutoSave {
 			_, _ = editor.TriggerAutoSave(m.TabManager)
 		}
+		fmt.Print("\x1b]22;default\x1b\\")
 		return tea.Quit
 
 	case "file.new":
@@ -2856,6 +2985,9 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 
 	case "setting.shortcuts":
 		m.ShowHelp = true
+		if m.HelpDialog != nil {
+			m.HelpDialog.Open(m.Height)
+		}
 
 	case "setting.ai":
 		m.openAISettings()
@@ -3027,6 +3159,22 @@ func (m *Model) handleFilePickerConfirmed(selectedPath string) {
 	}
 }
 
+func (m *Model) openExplorerContextMenu(absX, absY int) {
+	items := []ui.ContextMenuItem{
+		{ID: "explorer_new_file", Label: "New File", Shortcut: "a"},
+		{ID: "explorer_new_folder", Label: "New Folder", Shortcut: "A"},
+		{ID: "explorer_rename", Label: "Rename", Shortcut: "F2"},
+		{ID: "explorer_delete", Label: "Delete", Shortcut: "d"},
+		{ID: "explorer_copy_path", Label: "Copy Relative Path"},
+	}
+	if node := m.Explorer.SelectedNode(); node == nil {
+		items[2].Disabled = true
+		items[3].Disabled = true
+		items[4].Disabled = true
+	}
+	m.ContextMenu.OpenCustom(absX, absY, items, m.Width, m.Height)
+}
+
 func (m *Model) handleContextMenuAction(action string) tea.Cmd {
 	switch action {
 	case "tab_close_this":
@@ -3154,6 +3302,47 @@ func (m *Model) handleContextMenuAction(action string) tea.Cmd {
 			}
 		}
 		return nil
+	case "explorer_new_file":
+		parentDir := m.getSelectedParentDir()
+		m.InputDialog.Open(dialog.InputNewFile, "Buat File Baru", parentDir, "")
+		return nil
+
+	case "explorer_new_folder":
+		parentDir := m.getSelectedParentDir()
+		m.InputDialog.Open(dialog.InputNewFolder, "Buat Folder Baru", parentDir, "")
+		return nil
+
+	case "explorer_rename":
+		if node := m.Explorer.SelectedNode(); node != nil {
+			m.InputDialog.Open(dialog.InputRename, "Ubah Nama: "+node.Name, node.Path, node.Name)
+		}
+		return nil
+
+	case "explorer_delete":
+		if node := m.Explorer.SelectedNode(); node != nil {
+			m.ConfirmDialog.Open(
+				dialog.ConfirmDelete,
+				"Konfirmasi Hapus",
+				"Apakah Anda yakin ingin menghapus:\n"+node.Path+"?",
+				node.Path,
+			)
+		}
+		return nil
+
+	case "explorer_copy_path":
+		if node := m.Explorer.SelectedNode(); node != nil {
+			if rel, err := filepath.Rel(m.RootDir, node.Path); err == nil {
+				_ = clipboard.WriteAll(rel)
+				m.StatusBar.ShowToast("Path disalin: "+rel, false, 2*time.Second)
+			}
+		}
+		return nil
+
+	case "explorer_clear_filter":
+		m.Explorer.SetFilter("")
+		m.StatusBar.ShowToast("Filter file dibersihkan", false, 2*time.Second)
+		return nil
+
 	}
 
 	tab := m.TabManager.ActiveTab()

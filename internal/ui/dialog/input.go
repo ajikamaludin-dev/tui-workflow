@@ -95,7 +95,7 @@ func (d *InputDialog) Update(msg tea.Msg) (confirmed bool, canceled bool, cmd te
 				return false, true, nil
 			}
 			val := d.Value()
-			if val != "" {
+			if val != "" || d.Type == InputFilterExplorer {
 				d.Close()
 				return true, false, nil
 			}
@@ -140,7 +140,7 @@ func (d *InputDialog) HandleMouse(relX, relY int) (confirmed bool, canceled bool
 		// OK Button: col 3..18
 		if relX >= 3 && relX <= 18 {
 			val := d.Value()
-			if val != "" {
+			if val != "" || d.Type == InputFilterExplorer {
 				d.Close()
 				return true, false, true
 			}

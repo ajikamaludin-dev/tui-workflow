@@ -3,6 +3,7 @@ package dialog
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -85,7 +86,8 @@ func TestFilePickerOperations(t *testing.T) {
 	}
 
 	// 7. Mouse click on Cancel button
-	boxH := picker.Height
+	rendered = picker.Render()
+	boxH := strings.Count(rendered, "\n") + 1
 	confirmed, canceled, _, handled = picker.HandleMouse(40, boxH-3, false, false)
 	if !handled || !canceled || confirmed {
 		t.Errorf("Expected click on cancel button to cancel")

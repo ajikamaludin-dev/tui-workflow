@@ -209,6 +209,20 @@ func (t *TerminalView) IsExited() bool {
 	return t.exited
 }
 
+// ScrollUp sends Up arrow escape sequences to the PTY.
+func (t *TerminalView) ScrollUp(lines int) {
+	for i := 0; i < lines; i++ {
+		_, _ = t.Write([]byte("\x1b[A"))
+	}
+}
+
+// ScrollDown sends Down arrow escape sequences to the PTY.
+func (t *TerminalView) ScrollDown(lines int) {
+	for i := 0; i < lines; i++ {
+		_, _ = t.Write([]byte("\x1b[B"))
+	}
+}
+
 // Render formats the VT10X terminal screen buffer into an ANSI-formatted string.
 // Exactly height lines are returned, and each line is clamped to width characters.
 func (t *TerminalView) Render(width, height int, focused bool) string {

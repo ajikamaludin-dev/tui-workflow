@@ -106,8 +106,10 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
 2. **Operasi File & Folder (CRUD):**
    - `a`: Buat file baru ➔ Membuka **Modal Dialog Input** di tengah layar untuk nama file relatif terhadap folder aktif.
    - `A`: Buat folder baru ➔ Membuka **Modal Dialog Input** untuk nama folder.
-   - `r` (pada node): Rename file/folder ➔ Membuka **Modal Dialog Input** berisi nama lama untuk diubah.
+   - `F2` (atau `r` pada toolbar): Ubah nama (Rename) file/folder ➔ Membuka **Modal Dialog Input** berisi nama lama untuk diubah.
    - `d`: Hapus file/folder ➔ Membuka **Modal Konfirmasi Hapus** `[Delete] [Cancel]`.
+   - `/`: Filter realtime pohon file (tekan Enter pada input kosong untuk membersihkan filter).
+   - Klik Kanan pada node file/folder: Membuka Context Menu Explorer (New File, New Folder, Rename, Delete, Copy Relative Path).
 3. **Interaksi Mouse:**
    - Klik pada folder: Toggle expand / collapse.
    - Klik pada file: Buka file ke Editor Tab.
@@ -127,6 +129,7 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
    - `Alt+i` (atau menu Setting > AI Configuration): Konfigurasi endpoint OpenAI API, API Key, daftar model, dan model default.
    - `Enter` atau klik file pada daftar Git: Buka **Git Side-by-Side Split Diff Tab** di Kolom 2.
    - `Ctrl+Enter`: Jalankan commit jika pesan tidak kosong dan ada staged changes.
+   - Klik tombol `[Push]`: Mengirim commit lokal ke remote repository (dengan loading indicator di status bar).
 
 ### 4.3. Column 2: Multi-Tab File Editor & Viewers
 
@@ -311,8 +314,18 @@ tui-workflow/
 │   ├── formatter/
 │   │   ├── formatter.go         # Smart fallback CLI formatters (Prettier, Biome, Pint, Gofmt)
 │   │   └── formatter_test.go    # Unit testing & pipe verification
-│   └── markdown/
-│       └── preview.go           # Glamour rendered preview viewport & toggle
+│   ├── markdown/
+│   │   └── preview.go           # Glamour rendered preview viewport & toggle
+│   ├── ai/
+│   │   └── client.go            # OpenAI-compatible API client for AI commit message
+│   ├── config/
+│   │   └── config.go            # User configuration loader & persistence (~/.config/tui-workflow/config.json)
+│   ├── logger/
+│   │   └── logger.go            # Debug logging facility
+│   ├── search/
+│   │   └── search.go            # Global workspace text search & replace view
+│   └── terminal/
+│       └── terminal.go          # Embedded PTY terminal subshell runner
 ├── docs/
 │   └── architecture.md
 ├── PRD.md

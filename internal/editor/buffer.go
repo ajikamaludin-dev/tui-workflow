@@ -40,6 +40,8 @@ type Buffer struct {
 	cachedRawLines []string
 	cachedPath   string
 	cachedDirty  bool
+	cachedText   string
+	cachedTextDirty bool
 
 	// Selection state
 	HasSelection    bool
@@ -70,6 +72,7 @@ func NewBuffer(content string) *Buffer {
 		IsDirty:      false,
 		Highlighter:  syntax.NewHighlighter(),
 		cachedDirty:  true,
+		cachedTextDirty: true,
 		maxUndoStack: 100,
 	}
 
@@ -88,7 +91,15 @@ func NewBuffer(content string) *Buffer {
 	return b
 }
 
+func (b *Buffer) markContentChanged() {
+	b.cachedDirty = true
+	b.cachedTextDirty = true
+}
+
 func (b *Buffer) Text() string {
+	if !b.cachedTextDirty && b.cachedText != "" && len(b.Lines) > 0 {
+		return b.cachedText
+	}
 	var sb strings.Builder
 	for i, l := range b.Lines {
 		sb.WriteString(string(l))
@@ -96,7 +107,9 @@ func (b *Buffer) Text() string {
 			sb.WriteByte('\n')
 		}
 	}
-	return sb.String()
+	b.cachedText = sb.String()
+	b.cachedTextDirty = false
+	return b.cachedText
 }
 
 // SetText replaces the buffer content with a new string.
@@ -112,7 +125,7 @@ func (b *Buffer) SetText(content string) {
 		b.Lines = append(b.Lines, []rune{})
 	}
 	b.clampCursor()
-	b.cachedDirty = true
+	b.markContentChanged()
 	b.cachedHigh = nil
 	b.cachedStyles = nil
 	b.cachedRawLines = nil
@@ -139,7 +152,7 @@ func (b *Buffer) ReplaceContentWithUndo(content string) {
 	}
 
 	b.clampCursor()
-	b.cachedDirty = true
+	b.markContentChanged()
 	b.cachedHigh = nil
 	b.cachedStyles = nil
 	b.cachedRawLines = nil
@@ -216,7 +229,7 @@ func (b *Buffer) Undo() bool {
 	b.clampCursor()
 	b.ClearSelection()
 	b.IsDirty = true
-	b.cachedDirty = true
+	b.markContentChanged()
 	b.inUndoRedo = false
 	return true
 }
@@ -247,7 +260,7 @@ func (b *Buffer) Redo() bool {
 	b.clampCursor()
 	b.ClearSelection()
 	b.IsDirty = true
-	b.cachedDirty = true
+	b.markContentChanged()
 	b.inUndoRedo = false
 	return true
 }
@@ -270,7 +283,7 @@ func (b *Buffer) insertRuneInternal(r rune) {
 	b.Lines[b.CursorRow] = newLine
 	b.CursorCol++
 	b.IsDirty = true
-	b.cachedDirty = true
+	b.markContentChanged()
 }
 
 func (b *Buffer) InsertRune(r rune) {
@@ -308,7 +321,7 @@ func (b *Buffer) insertNewlineInternal() {
 	b.CursorRow++
 	b.CursorCol = 0
 	b.IsDirty = true
-	b.cachedDirty = true
+	b.markContentChanged()
 }
 
 func (b *Buffer) InsertString(s string) {
@@ -353,7 +366,7 @@ func (b *Buffer) Backspace() {
 		b.Lines[b.CursorRow] = newLine
 		b.CursorCol--
 		b.IsDirty = true
-		b.cachedDirty = true
+		b.markContentChanged()
 		return
 	}
 
@@ -371,7 +384,7 @@ func (b *Buffer) Backspace() {
 		b.CursorRow--
 		b.CursorCol = prevLen
 		b.IsDirty = true
-		b.cachedDirty = true
+		b.markContentChanged()
 	}
 }
 
@@ -392,7 +405,7 @@ func (b *Buffer) Delete() {
 
 		b.Lines[b.CursorRow] = newLine
 		b.IsDirty = true
-		b.cachedDirty = true
+		b.markContentChanged()
 		return
 	}
 
@@ -403,7 +416,7 @@ func (b *Buffer) Delete() {
 		b.Lines[b.CursorRow] = merged
 		b.Lines = append(b.Lines[:b.CursorRow+1], b.Lines[b.CursorRow+2:]...)
 		b.IsDirty = true
-		b.cachedDirty = true
+		b.markContentChanged()
 	}
 }
 
@@ -762,7 +775,7 @@ func (b *Buffer) deleteSelectionInternal() bool {
 	b.CursorCol = sCol
 	b.HasSelection = false
 	b.IsDirty = true
-	b.cachedDirty = true
+	b.markContentChanged()
 	b.clampCursor()
 	return true
 }
@@ -1172,7 +1185,7 @@ func (b *Buffer) IndentCurrentLine() {
 	b.Lines[b.CursorRow] = newLine
 	b.CursorCol += 4
 	b.IsDirty = true
-	b.cachedDirty = true
+	b.markContentChanged()
 	b.clampCursor()
 }
 
@@ -1198,7 +1211,7 @@ func (b *Buffer) IndentSelection() {
 	b.SelectAnchorCol += 4
 	b.CursorCol += 4
 	b.IsDirty = true
-	b.cachedDirty = true
+	b.markContentChanged()
 	b.clampCursor()
 }
 
@@ -1233,7 +1246,7 @@ func (b *Buffer) OutdentSelection() {
 		b.CursorCol = 0
 	}
 	b.IsDirty = true
-	b.cachedDirty = true
+	b.markContentChanged()
 	b.clampCursor()
 }
 
@@ -1254,7 +1267,7 @@ func (b *Buffer) OutdentCurrentLine() {
 			b.CursorCol = 0
 		}
 		b.IsDirty = true
-		b.cachedDirty = true
+		b.markContentChanged()
 		b.clampCursor()
 	}
 }
@@ -1322,6 +1335,6 @@ func (b *Buffer) ToggleLineComment(prefix string) {
 	}
 
 	b.IsDirty = true
-	b.cachedDirty = true
+	b.markContentChanged()
 	b.clampCursor()
 }

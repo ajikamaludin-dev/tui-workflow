@@ -85,7 +85,12 @@ func (m Model) View() string {
 		modal := m.AISettingsDialog.Render()
 		baseView = overlayCenter(baseView, modal, m.Width, m.Height)
 	} else if m.ShowHelp {
-		modal := renderHelpModal()
+		modal := ""
+		if m.HelpDialog != nil {
+			modal = m.HelpDialog.Render(m.Height)
+		} else {
+			modal = renderHelpModal()
+		}
 		baseView = overlayCenter(baseView, modal, m.Width, m.Height)
 	} else if m.ShowAbout {
 		modal := renderAboutModal()
@@ -137,7 +142,7 @@ func (m Model) renderSidebar(width, height int) string {
 		}
 		title = " 🌿 SOURCE CONTROL (" + branchName + ")"
 	case SidebarSearch:
-		title = " 🔍 CARI & GANTI"
+		title = " 🔍 SEARCH & REPLACE"
 	}
 	titleLen := lipgloss.Width(title)
 	if titleLen < width-1 {
@@ -163,19 +168,19 @@ func (m Model) renderSidebar(width, height int) string {
 
 	var tabFiles, tabGit, tabSearch string
 	if m.SidebarView == SidebarFiles {
-		tabFiles = tabActive.Render(" 📁 Files")
+		tabFiles = tabActive.Render(" 1:Files ")
 	} else {
-		tabFiles = tabInactive.Render(" 📁 Files")
+		tabFiles = tabInactive.Render(" 1:Files ")
 	}
 	if m.SidebarView == SidebarGit {
-		tabGit = tabActive.Render(" 🌿 Git")
+		tabGit = tabActive.Render(" 2:Git ")
 	} else {
-		tabGit = tabInactive.Render(" 🌿 Git")
+		tabGit = tabInactive.Render(" 2:Git ")
 	}
 	if m.SidebarView == SidebarSearch {
-		tabSearch = tabActive.Render(" 🔍 Search ")
+		tabSearch = tabActive.Render(" 3:Search ")
 	} else {
-		tabSearch = tabInactive.Render(" 🔍 Search ")
+		tabSearch = tabInactive.Render(" 3:Search ")
 	}
 
 	footerTabs := tabFiles + tabGit + tabSearch

@@ -292,9 +292,10 @@ func (p *FilePicker) HandleMouse(relX, relY int, isWheelUp, isWheelDown bool) (c
 		return false, false, "", false
 	}
 
-	// Modal dimensions
-	boxW := p.Width
-	boxH := p.Height
+	// Modal dimensions (measured from the rendered output, which includes border + padding)
+	rendered := p.Render()
+	boxW := lipgloss.Width(rendered)
+	boxH := lipgloss.Height(rendered)
 
 	if relX < 0 || relX >= boxW || relY < 0 || relY >= boxH {
 		// Click outside modal

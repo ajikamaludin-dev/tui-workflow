@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"github.com/charmbracelet/lipgloss"
 	"testing"
 	"time"
 
@@ -169,8 +170,9 @@ func TestOpenFileAndFolderDialogs(t *testing.T) {
 	// Navigate into subdir and confirm folder
 	m.FilePicker.CurrentDir = subDir
 	// Simulate click on "Buka Folder Ini" button (mouse test)
-	modalW := m.FilePicker.Width
-	modalH := m.FilePicker.Height
+	fpStr := m.FilePicker.Render()
+	modalW := lipgloss.Width(fpStr)
+	modalH := lipgloss.Height(fpStr)
 	startX := (m.Width - modalW) / 2
 	startY := (m.Height - modalH) / 2
 	btnY := startY + modalH - 3

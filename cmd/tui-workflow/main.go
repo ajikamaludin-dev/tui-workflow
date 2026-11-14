@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"tui-workflow/internal/app"
+	"tui-workflow/internal/buildinfo"
 	"tui-workflow/internal/logger"
 )
 
@@ -15,7 +16,10 @@ func main() {
 	debugMode := os.Getenv("DEBUG") == "1" || os.Getenv("TUI_DEBUG") == "1"
 
 	for _, arg := range os.Args[1:] {
-		if arg == "--debug" || arg == "-d" {
+		if arg == "--version" || arg == "-v" {
+			fmt.Printf("tui-workflow v%s\n", buildinfo.Version)
+			os.Exit(0)
+		} else if arg == "--debug" || arg == "-d" {
 			debugMode = true
 		} else if targetPath == "." {
 			targetPath = arg

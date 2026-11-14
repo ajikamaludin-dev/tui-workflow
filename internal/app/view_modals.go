@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"path/filepath"
 	"strings"
+	"tui-workflow/internal/buildinfo"
 	"tui-workflow/internal/ui"
 	"tui-workflow/internal/ui/dialog"
 )
@@ -112,7 +113,7 @@ func renderAboutModal() string {
 
 	renderedTitle := titleStyle.Render("ℹ ABOUT tui-workflow")
 
-	content := `tui-workflow v0.2.0
+	content := fmt.Sprintf(`tui-workflow v%s
 Modern, High-Performance Terminal Workflow Environment.
 
 Core Features & Technologies:
@@ -127,7 +128,7 @@ Author: Aji Kamaludin — Creator & Maintainer
     aji19kamaludin@gmail.com · github.com/ajikamaludin-dev
 Contributors: contributions are welcome.
 
-Engineered for 60 FPS, modeless, zero flicker.`
+Engineered for 60 FPS, modeless, zero flicker.`, buildinfo.Version)
 
 	closeBtn := lipgloss.NewStyle().
 		Bold(true).

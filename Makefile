@@ -9,6 +9,11 @@ INSTALL_DIR ?= $(HOME)/.local/bin
 
 GO          ?= go
 LDFLAGS     ?= -s -w
+VERSION     ?= $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
+ifeq ($(VERSION),)
+VERSION     := 0.2.0
+endif
+LDFLAGS     += -X tui-workflow/internal/buildinfo.Version=$(VERSION)
 PKG         := ./cmd/tui-workflow
 
 .PHONY: all build install uninstall run test vet clean help

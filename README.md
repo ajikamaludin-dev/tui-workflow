@@ -4,7 +4,7 @@
 > Dibangun dengan **Go 1.24+** dan ekosistem **Charmbracelet (Bubble Tea, Lipgloss, Bubbles, Glamour, Chroma, go-git/v5)**.
 
 [![Go Version](https://img.shields.io/badge/Go-1.24%2B-00ADD8?style=flat&logo=go)](https://golang.org)
-[![PRD Version](https://img.shields.io/badge/PRD-v0.2.0-blueviolet)](PRD.md)
+[![Latest Release](https://img.shields.io/github/v/release/ajikamaludin-dev/tui-workflow)](https://github.com/ajikamaludin-dev/tui-workflow/releases)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](https://github.com)
 
@@ -219,7 +219,7 @@
 
 ### 1. Clone Repositori
 ```bash
-git clone https://github.com/your-username/tui-workflow.git
+git clone https://github.com/ajikamaludin-dev/tui-workflow.git
 cd tui-workflow
 ```
 
@@ -237,26 +237,34 @@ go run ./cmd/tui-workflow
 go run ./cmd/tui-workflow /path/to/project
 ```
 
-### 4. Kompilasi Binary Mandiri (Build)
+### 4. Install Cepat (Linux)
+
 ```bash
-go build -o tui-workflow ./cmd/tui-workflow
-./tui-workflow
+wget -qO- https://raw.githubusercontent.com/ajikamaludin-dev/tui-workflow/main/install.sh | sh
+```
+
+Script mendeteksi arsitektur (`amd64`/`arm64`), mengunduh tarball dari [GitHub Releases](https://github.com/ajikamaludin-dev/tui-workflow/releases), memverifikasi SHA-256 dari `checksums.txt`, lalu memasang binary sebagai `~/.local/bin/workflow`. Install versi tertentu: `wget -qO- ... | sh -s v0.3.0`. Verifikasi: `workflow --version`. Pastikan `~/.local/bin` ada di `PATH`.
+
+### 5. Kompilasi Binary Mandiri (Build)
+```bash
+go build -o workflow ./cmd/tui-workflow
+./workflow
 ```
 
 Atau gunakan `Makefile`:
 
 ```bash
-# Kompilasi ke bin/tui-workflow
+# Kompilasi ke bin/workflow
 make build
 
-# Pasang ke ~/.local/bin (folder home user)
+# Pasang binary 'workflow' ke ~/.local/bin (folder home user)
 make install
 
 # Hapus binary hasil build
 make clean
 ```
 
-`make install` menaruh binary di `$(HOME)/.local/bin/tui-workflow` (dapat diubah via `make install INSTALL_DIR=/path/lain`). Pastikan direktori tersebut ada di `PATH` agar perintah `tui-workflow` bisa dipanggil dari mana saja. Jalankan `make help` untuk daftar target lengkap (`build`, `install`, `uninstall`, `run`, `test`, `vet`, `clean`).
+`make install` menaruh binary di `$(HOME)/.local/bin/workflow` (dapat diubah via `make install INSTALL_DIR=/path/lain`). Pastikan direktori tersebut ada di `PATH` agar perintah `workflow` bisa dipanggil dari mana saja. Jalankan `make help` untuk daftar target lengkap (`build`, `install`, `uninstall`, `run`, `test`, `vet`, `clean`).
 
 ---
 

@@ -15,6 +15,15 @@ import (
 	"github.com/hinshun/vt10x"
 )
 
+const (
+	vtAttrReverse   = 1 << 0 // 1
+	vtAttrUnderline = 1 << 1 // 2
+	vtAttrBold      = 1 << 2 // 4
+	vtAttrGfx       = 1 << 3 // 8
+	vtAttrItalic    = 1 << 4 // 16
+	vtAttrBlink     = 1 << 5 // 32
+)
+
 // TerminalView wraps an OS pseudo-terminal (PTY) and a VT100/Xterm virtual terminal emulator.
 type TerminalView struct {
 	ID         string
@@ -254,6 +263,7 @@ func (t *TerminalView) Render(width, height int, focused bool) string {
 		lastInverse := false
 		lastUnderline := false
 		lastBold := false
+		lastItalic := false
 
 		for x := 0; x < width; x++ {
 			var attr vt10x.Glyph
@@ -264,12 +274,14 @@ func (t *TerminalView) Render(width, height int, focused bool) string {
 			}
 
 			isCursor := focused && curVis && (x == cur.X && y == cur.Y)
-			isInverse := isCursor || ((attr.Mode & 1) != 0) // attrReverse = 1
-			isUnderline := (attr.Mode & 2) != 0             // attrUnderline = 2
-			isBold := (attr.Mode & 4) != 0                  // attrBold = 4
+			isInverse := isCursor || ((attr.Mode & vtAttrReverse) != 0)
+			isUnderline := (attr.Mode & vtAttrUnderline) != 0
+			isBold := (attr.Mode & vtAttrBold) != 0
+			isItalic := (attr.Mode & vtAttrItalic) != 0
 
 			styleChanged := (attr.FG != lastFG) || (attr.BG != lastBG) ||
-				(isInverse != lastInverse) || (isUnderline != lastUnderline) || (isBold != lastBold)
+				(isInverse != lastInverse) || (isUnderline != lastUnderline) ||
+				(isBold != lastBold) || (isItalic != lastItalic)
 
 			if styleChanged {
 				// Reset then apply attributes
@@ -277,17 +289,38 @@ func (t *TerminalView) Render(width, height int, focused bool) string {
 				if isBold {
 					sb.WriteString("\x1b[1m")
 				}
+				if isItalic {
+					sb.WriteString("\x1b[3m")
+				}
 				if isUnderline {
 					sb.WriteString("\x1b[4m")
 				}
 				if isInverse {
 					sb.WriteString("\x1b[7m")
 				}
-				if attr.FG != vt10x.DefaultFG && attr.FG < 256 {
-					sb.WriteString(fmt.Sprintf("\x1b[38;5;%dm", attr.FG))
+
+				// Foreground color: 256-color or 24-bit TrueColor (RGB)
+				if attr.FG != vt10x.DefaultFG {
+					if attr.FG < 256 {
+						sb.WriteString(fmt.Sprintf("\x1b[38;5;%dm", attr.FG))
+					} else if attr.FG < vt10x.DefaultFG {
+						r := (attr.FG >> 16) & 0xFF
+						g := (attr.FG >> 8) & 0xFF
+						b := attr.FG & 0xFF
+						sb.WriteString(fmt.Sprintf("\x1b[38;2;%d;%d;%dm", r, g, b))
+					}
 				}
-				if attr.BG != vt10x.DefaultBG && attr.BG < 256 {
-					sb.WriteString(fmt.Sprintf("\x1b[48;5;%dm", attr.BG))
+
+				// Background color: 256-color or 24-bit TrueColor (RGB)
+				if attr.BG != vt10x.DefaultBG {
+					if attr.BG < 256 {
+						sb.WriteString(fmt.Sprintf("\x1b[48;5;%dm", attr.BG))
+					} else if attr.BG < vt10x.DefaultFG {
+						r := (attr.BG >> 16) & 0xFF
+						g := (attr.BG >> 8) & 0xFF
+						b := attr.BG & 0xFF
+						sb.WriteString(fmt.Sprintf("\x1b[48;2;%d;%d;%dm", r, g, b))
+					}
 				}
 
 				lastFG = attr.FG
@@ -295,6 +328,7 @@ func (t *TerminalView) Render(width, height int, focused bool) string {
 				lastInverse = isInverse
 				lastUnderline = isUnderline
 				lastBold = isBold
+				lastItalic = isItalic
 			}
 
 			ch := attr.Char

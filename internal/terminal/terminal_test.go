@@ -171,3 +171,46 @@ func TestTerminalChurnMemory(t *testing.T) {
 		t.Errorf("Memory leak in terminal churn: Alloc %d bytes exceeds limit (%d)", mAfter.Alloc, maxAllowedBytes)
 	}
 }
+
+func TestTerminalTrueColorAnd256ColorRender(t *testing.T) {
+	term, err := NewTerminalView("term:color-test", 80, 10, "/bin/sh", "")
+	if err != nil {
+		t.Fatalf("failed to create terminal view: %v", err)
+	}
+	defer term.Close()
+
+	// Feed 24-bit TrueColor, 256-color, and italic text directly to virtual terminal
+	seq := []byte("\x1b[38;2;255;128;64m\x1b[48;2;10;20;30mTrueColor\x1b[0m " +
+		"\x1b[38;5;196m256Color\x1b[0m " +
+		"\x1b[3mItalicText\x1b[0m")
+
+	term.mu.Lock()
+	if term.vt != nil {
+		_, _ = term.vt.Write(seq)
+	}
+	term.mu.Unlock()
+
+	rendered := term.Render(80, 10, false)
+
+	if !strings.Contains(rendered, "\x1b[38;2;255;128;64m") {
+		t.Errorf("expected TrueColor foreground \\x1b[38;2;255;128;64m in rendered output, got: %q", rendered)
+	}
+	if !strings.Contains(rendered, "\x1b[48;2;10;20;30m") {
+		t.Errorf("expected TrueColor background \\x1b[48;2;10;20;30m in rendered output, got: %q", rendered)
+	}
+	if !strings.Contains(rendered, "\x1b[38;5;196m") {
+		t.Errorf("expected 256-color foreground \\x1b[38;5;196m in rendered output, got: %q", rendered)
+	}
+	if !strings.Contains(rendered, "\x1b[3m") {
+		t.Errorf("expected italic sequence \\x1b[3m in rendered output, got: %q", rendered)
+	}
+
+	// Verify all lines visual width <= 80
+	for i, line := range strings.Split(rendered, "\n") {
+		w := ansi.StringWidth(line)
+		if w > 80 {
+			t.Errorf("line %d visual width %d exceeds max 80", i, w)
+		}
+	}
+}
+

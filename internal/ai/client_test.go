@@ -147,7 +147,7 @@ func TestGenerateCommitMessage_InvalidJSONError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "respon: \"default backend - 404\"") {
+	if !strings.Contains(err.Error(), "response: \"default backend - 404\"") && !strings.Contains(err.Error(), "respon: \"default backend - 404\"") {
 		t.Errorf("expected error to include raw body snippet, got: %v", err)
 	}
 }

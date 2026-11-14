@@ -356,14 +356,14 @@ func (d *AISettingsDialog) Render() string {
 		Background(ui.CurrentTheme.BgSidebar).
 		Padding(0, 1)
 
-	renderedTitle := titleStyle.Render("⚙ Konfigurasi Model AI (OpenAI API Format)")
+	renderedTitle := titleStyle.Render("⚙ AI Model Configuration (OpenAI API Format)")
 	lblProvider := labelStyle.Render("Provider URL:")
 	viewProvider := inputBoxStyle.Render(d.ProviderInput.View())
 
 	lblKey := labelStyle.Render("API Key:")
 	viewKey := inputBoxStyle.Render(d.APIKeyInput.View())
 
-	lblModels := labelStyle.Render("Available Models (pisahkan koma):")
+	lblModels := labelStyle.Render("Available Models (comma-separated):")
 	viewModels := inputBoxStyle.Render(d.ModelsInput.View())
 
 	lblDefault := labelStyle.Render("Default Model:")
@@ -389,9 +389,9 @@ func (d *AISettingsDialog) Render() string {
 	btnSep := "  "
 	buttons := lipgloss.JoinHorizontal(
 		lipgloss.Center,
-		btnSaveStyle.Render("Simpan (Enter / Ctrl+S)"),
+		btnSaveStyle.Render("Save (Enter / Ctrl+S)"),
 		btnSep,
-		btnCancelStyle.Render("Batal (Esc)"),
+		btnCancelStyle.Render("Cancel (Esc)"),
 	)
 
 	body := lipgloss.JoinVertical(

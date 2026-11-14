@@ -14,7 +14,7 @@ import (
 
 func (m Model) View() string {
 	if !m.Ready {
-		return "Memuat tui-workflow..."
+		return "Loading tui-workflow..."
 	}
 
 	if IsTooSmall(m.Width, m.Height) {
@@ -218,7 +218,7 @@ func (m Model) renderSidebar(width, height int) string {
 				Background(ui.CurrentTheme.BgTopMenu).
 				Width(width - 1).
 				MaxHeight(1).
-				Render(ansi.Truncate(" 🔍 "+m.Explorer.FilterQuery+" (Esc:Batal)", width-1, ""))
+				Render(ansi.Truncate(" 🔍 "+m.Explorer.FilterQuery+" (Esc:Cancel)", width-1, ""))
 			bodyH := bodyHeight - 1
 			if bodyH < 1 {
 				bodyH = 1
@@ -232,13 +232,13 @@ func (m Model) renderSidebar(width, height int) string {
 		if m.GitView != nil {
 			body = m.GitView.Render(width-1, bodyHeight, m.Focus == FocusSidebar)
 		} else {
-			body = "  Bukan repositori Git"
+			body = "  Not a Git repository"
 		}
 	} else if m.SidebarView == SidebarSearch {
 		if m.SearchView != nil {
 			body = m.SearchView.Render(width-1, bodyHeight, m.Focus == FocusSidebar)
 		} else {
-			body = "  Search view belum siap"
+			body = "  Search view not ready"
 		}
 	}
 
@@ -286,13 +286,12 @@ func (m Model) renderEditor(width, height int) string {
 			body = activeTab.Buffer.Render(width, bodyHeight, activeTab.Path, m.Focus == FocusEditor)
 		}
 	} else {
-		bodyContent := "\n  Selamat Datang di tui-workflow (v0.1.1)\n\n" +
-			"  Tidak ada file yang sedang dibuka.\n\n" +
-			"  • Buka file dari File Explorer di sebelah kiri (Enter atau Klik)\n" +
-			"  • Buat file baru dengan tombol 'a' di Explorer\n" +
-			"  • Buka buffer switcher cepat via Ctrl+P\n" +
-			"  • Tekan ? untuk panduan shortcut lengkap\n"
-
+		bodyContent := "\n  Welcome to tui-workflow (v0.1.1)\n\n" +
+			"  No file is currently open.\n\n" +
+			"  • Open file from File Explorer on the left (Enter or Click)\n" +
+			"  • Create new file with 'a' in Explorer\n" +
+			"  • Quick buffer switcher via Ctrl+P\n" +
+			"  • Press ? for keyboard shortcuts & help\n"
 		lines := strings.Split(bodyContent, "\n")
 		for len(lines) < bodyHeight {
 			lines = append(lines, "")
@@ -318,64 +317,66 @@ func renderHelpModal() string {
 		Foreground(ui.CurrentTheme.FgHighlight).
 		MarginBottom(1)
 
-	renderedTitle := titleStyle.Render("📖 BANTUAN & PANDUAN PINTASAN KEYBOARD")
+	renderedTitle := titleStyle.Render("📖 KEYBOARD SHORTCUTS & HELP")
 
-	content := `Global & Navigasi:
-  • Ctrl+Q          : Keluar dari aplikasi
-  • Ctrl+E / F6     : Ganti Fokus Sidebar / Editor
-  • Ctrl+B          : Toggle Sembunyikan / Tampilkan Sidebar
-  • Alt+[ / Alt+]   : Persempit / Perlebar Lebar Kolom Sidebar
-  • Alt+1 / 2 / 3   : Beralih Tab Sidebar (Files / Git / Search)
-  • Alt+F / Alt+E   : Buka Menu File / Edit
-  • Alt+R / Alt+T   : Buka Menu Search / Setting
-  • Alt+A           : Buka Dialog About
-  • Alt+S / Alt+Z   : Toggle Auto-Save / Soft-Wrap
-  • Alt+I           : Pengaturan AI Model (OpenAI API Format)
-  • ? / Esc         : Buka Bantuan / Tutup Dialog Pop-up
+	content := `Global & Navigation:
+ • Ctrl+Q : Exit application
+ • Ctrl+E / F6 : Switch Focus Sidebar / Editor
+ • Ctrl+B : Toggle Sidebar Visibility
+ • Alt+[ / Alt+] : Narrow / Widen Sidebar Width
+ • Alt+1 / 2 / 3 : Switch Sidebar Tab (Files / Git / Search)
+ • Alt+F / Alt+E : Open Menu File / Edit
+ • Alt+R / Alt+T : Open Menu Search / Settings
+ • Alt+A : Open About Dialog
+ • Alt+S / Alt+Z : Toggle Auto-Save / Soft-Wrap
+ • Alt+I : AI Model Settings (OpenAI API Format)
+ • ? / Esc : Open Help / Close Pop-up Dialog
 
-Pencarian & Navigasi Kode:
-  • F1 / Ctrl+Shift+P : Buka Command Palette Lengkap
-  • Ctrl+P          : Buka Cepat File Workspace (Quick Open)
-  • Ctrl+Shift+O    : Go to Symbol (workspace)
-  • F12 / Shift+F12 : Go to Definition / Find References
-  • Ctrl+F / Ctrl+H : Cari / Cari & Ganti Teks di Buffer
-  • Ctrl+G          : Lompat ke Nomor Baris (Go to Line)
-  • F4              : Cari Teks Global di Seluruh Workspace
-  • Ctrl+O          : Buka File Baru dari Disk (File Picker)
-  • Ctrl+K, Ctrl+K  : Buka Direktori / Folder Baru di Workspace
+Search & Code Navigation:
+ • F1 / Ctrl+Shift+P : Open Command Palette
+ • Ctrl+P : Quick Open File (Workspace)
+ • Ctrl+Shift+O : Go to Symbol (workspace)
+ • F12 / Shift+F12 : Go to Definition / Find References
+ • Ctrl+F / Ctrl+H : Find / Find & Replace in Buffer
+ • Ctrl+G : Go to Line Number
+ • F4 : Global Search Across Workspace
+ • Ctrl+O : Open File from Disk (File Picker)
+ • Ctrl+K, Ctrl+K : Open Directory / Folder in Workspace
 
 Editor & Buffer:
-  • Ctrl+Z / Ctrl+Y : Undo / Redo Perubahan Teks
-  • Tab / Shift+Tab : Ekspansi Snippet / Lompat Tab-Stop / Indentasi
-  • Ctrl+Space      : Pemicu Autocomplete Sugesti LSP & Auto-Import
-  • Ctrl+/          : Toggle Komentar Baris Otomatis
-  • Shift+Alt+Panah : Seleksi Teks per Kata (Word Jump Block)
-  • Shift+Panah     : Seleksi Teks per Karakter / Baris
-  • Alt/Ctrl+Panah  : Lompat Kata (Word Jump Kiri / Kanan)
-  • Alt/Ctrl+Bcksp  : Hapus 1 Kata ke Belakang (atau Hapus Seleksi)
-  • Ctrl+Shift+D    : Tambah kursor pada occurrence berikutnya
-  • Ctrl+Alt+Up/Dn  : Tambah kursor di baris atas / bawah
-  • Ctrl+Shift+[ / ]: Fold / Unfold blok di kursor
-  • Ctrl+K Ctrl+0/J : Fold All / Unfold All
-  • Klik Gutter Fold: Toggle lipat blok (marker ▸/▾)
-  • Ctrl+S / Ctrl+W : Simpan Buffer / Tutup Tab Aktif
-  • Ctrl+Shift+I    : Format Dokumen Otomatis (via CLI)
-  • Ctrl+M / Alt+M  : Toggle Pratinjau Markdown (Glamour)
-  • Ctrl+A / C / V  : Pilih Semua / Salin / Tempel Teks
+ • Ctrl+Z / Ctrl+Y : Undo / Redo Text Changes
+ • Tab / Shift+Tab : Expand Snippet / Next Tab-Stop / Indent
+ • Ctrl+Space : Trigger LSP Completion & Auto-Import
+ • Ctrl+/ : Toggle Line Comment
+ • Shift+Alt+Arrow : Select Text by Word (Word Jump Block)
+ • Shift+Arrow : Select Text by Character / Line
+ • Alt/Ctrl+Arrow : Jump Word (Left / Right)
+ • Alt/Ctrl+Bcksp : Delete Word Left (or Delete Selection)
+ • Ctrl+Shift+D : Add Cursor at Next Occurrence
+ • Ctrl+Alt+Up/Dn : Add Cursor Above / Below
+ • Ctrl+Shift+[ / ]: Fold / Unfold Block at Cursor
+ • Ctrl+K Ctrl+0/J : Fold All / Unfold All
+ • Click Gutter Fold: Toggle Fold Block (Marker ▸/▾)
+ • Alt+P : Pin / Unpin Tab
+ • Drag Tab Mouse : Drag & Drop Reorder Tabs
+ • Ctrl+S / Ctrl+W : Save Buffer / Close Active Tab
+ • Ctrl+Shift+I : Format Document (via CLI)
+ • Ctrl+M / Alt+M : Toggle Markdown Preview (Glamour)
+ • Ctrl+A / C / V : Select All / Copy / Paste Text
 
 Terminal & Shell (PTY):
-  • Ctrl+Shift+\    : Buka Tab Terminal Shell Baru
-  • Ctrl+\          : Alihkan Fokus Terminal / TUI Editor
-  • Ctrl+Shift+W    : Tutup Tab Terminal Shell Aktif
-  • Alt/Ctrl+Panah  : Lompat Kata Kursor Shell CLI (Readline)
-  • Alt/Ctrl+Bcksp  : Hapus 1 Kata ke Belakang di Shell CLI
+ • Ctrl+Shift+\ : Open New Terminal Shell Tab
+ • Ctrl+\ : Switch Focus Terminal / TUI Editor
+ • Ctrl+Shift+W : Close Active Terminal Shell Tab
+ • Alt/Ctrl+Arrow : Jump Word in Shell CLI (Readline)
+ • Alt/Ctrl+Bcksp : Delete Word Left in Shell CLI
 
 Git Source Control:
-  • Alt+B           : Ganti / Checkout Branch Git
-  • Alt+G           : Buat Pesan Commit Otomatis via AI
-  • d / [x]         : Buang Perubahan File (Discard Changes)
-  • + / -           : Stage / Unstage Perubahan File
-  • Ctrl+Enter      : Lakukan Commit Pesan Git`
+ • Alt+B : Switch / Checkout Git Branch
+ • Alt+G : Generate Commit Message via AI
+ • d / [x] : Discard File Changes
+ • + / - : Stage / Unstage File Changes
+ • Ctrl+Enter : Commit Git Changes`
 
 	closeBtn := lipgloss.NewStyle().
 		Bold(true).
@@ -383,7 +384,7 @@ Git Source Control:
 		Background(ui.CurrentTheme.Accent).
 		Padding(0, 2).
 		MarginTop(1).
-		Render("[ Tutup (Esc / ?) ]")
+		Render("[ Close (Esc / ?) ]")
 
 	body := lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -408,21 +409,21 @@ func renderAboutModal() string {
 		Foreground(ui.CurrentTheme.FgHighlight).
 		MarginBottom(1)
 
-	renderedTitle := titleStyle.Render("ℹ TENTANG tui-workflow")
+	renderedTitle := titleStyle.Render("ℹ ABOUT tui-workflow")
 
 	content := `tui-workflow v0.1.1
 Modern, High-Performance Terminal User Interface Workflow Environment.
 
-Fitur Inti & Teknologi:
-  • Bahasa Pemrograman : Go 1.24+ (Goroutines, Channels)
-  • Terminal Engine    : Charmbracelet Bubble Tea & Lipgloss
-  • Syntax Tokenizer   : Chroma v2 Highlighting Cache
-  • Markdown Renderer  : Glamour ANSI Stylesheet
-  • Git Integration    : In-Memory Pure-Go (go-git/v5)
-  • PTY Terminal       : Embedded Pseudoterminal Subshell
+Core Features & Technologies:
+ • Programming Language: Go 1.24+ (Goroutines, Channels)
+ • Terminal Engine     : Charmbracelet Bubble Tea & Lipgloss
+ • Syntax Tokenizer    : Chroma v2 Highlighting Cache
+ • Markdown Renderer   : Glamour ANSI Stylesheet
+ • Git Integration     : In-Memory Pure-Go (go-git/v5)
+ • PTY Terminal        : Embedded Pseudoterminal Subshell
 
-Dirancang dengan standar 60 FPS, zero flickering, modeless text
-editing, dan mouse support penuh di lingkungan terminal.`
+Engineered for 60 FPS, zero flickering, modeless text
+editing, and full mouse support in terminal environments.`
 
 	closeBtn := lipgloss.NewStyle().
 		Bold(true).
@@ -430,7 +431,7 @@ editing, dan mouse support penuh di lingkungan terminal.`
 		Background(ui.CurrentTheme.Accent).
 		Padding(0, 2).
 		MarginTop(1).
-		Render("[ Tutup (Esc) ]")
+		Render("[ Close (Esc) ]")
 
 	body := lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -531,7 +532,7 @@ func (m Model) renderGoToSymbol() string {
 	queryLine := ui.CurrentTheme.StatusBarItemStyle.Render("❯ " + m.GoToSymbolQuery + "▌")
 	maxRows := 12
 	if len(m.GoToSymbolResults) == 0 {
-		body := ui.CurrentTheme.SidebarStyle.Render("  (tidak ada simbol)")
+		body := ui.CurrentTheme.SidebarStyle.Render("  (no symbols)")
 		box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(ui.CurrentTheme.Accent).Padding(0, 1).Width(width).Render(title + "\n" + queryLine + "\n" + body)
 		return box
 	}

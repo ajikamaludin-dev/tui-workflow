@@ -88,8 +88,8 @@ func TestAI_CommitGeneratorWorkflow(t *testing.T) {
 	m.GitRepo = nil
 	m.GitView = nil
 	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}, Alt: true})
-	if m.StatusBar.ToastMsg != "Bukan repositori git" {
-		t.Errorf("expected toast 'Bukan repositori git', got %q", m.StatusBar.ToastMsg)
+	if m.StatusBar.ToastMsg != "Not a git repository" {
+		t.Errorf("expected toast 'Not a git repository', got %q", m.StatusBar.ToastMsg)
 	}
 
 	// Test message handler for aiCommitGeneratedMsg

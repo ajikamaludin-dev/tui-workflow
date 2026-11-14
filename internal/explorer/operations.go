@@ -8,22 +8,22 @@ import (
 
 func CreateFile(parentDir, fileName string) (string, error) {
 	if fileName == "" {
-		return "", fmt.Errorf("nama file tidak boleh kosong")
+		return "", fmt.Errorf("file name cannot be empty")
 	}
 
 	targetPath := filepath.Join(parentDir, fileName)
 	if _, err := os.Stat(targetPath); err == nil {
-		return "", fmt.Errorf("file '%s' sudah ada", fileName)
+		return "", fmt.Errorf("file '%s' already exists", fileName)
 	}
 
 	dir := filepath.Dir(targetPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
-		return "", fmt.Errorf("gagal membuat direktori induk: %w", err)
+		return "", fmt.Errorf("failed to create parent directory: %w", err)
 	}
 
 	f, err := os.Create(targetPath)
 	if err != nil {
-		return "", fmt.Errorf("gagal membuat file: %w", err)
+		return "", fmt.Errorf("failed to create file: %w", err)
 	}
 	_ = f.Close()
 
@@ -32,16 +32,16 @@ func CreateFile(parentDir, fileName string) (string, error) {
 
 func CreateFolder(parentDir, folderName string) (string, error) {
 	if folderName == "" {
-		return "", fmt.Errorf("nama folder tidak boleh kosong")
+		return "", fmt.Errorf("folder name cannot be empty")
 	}
 
 	targetPath := filepath.Join(parentDir, folderName)
 	if _, err := os.Stat(targetPath); err == nil {
-		return "", fmt.Errorf("folder '%s' sudah ada", folderName)
+		return "", fmt.Errorf("folder '%s' already exists", folderName)
 	}
 
 	if err := os.MkdirAll(targetPath, 0755); err != nil {
-		return "", fmt.Errorf("gagal membuat folder: %w", err)
+		return "", fmt.Errorf("failed to create folder: %w", err)
 	}
 
 	return targetPath, nil
@@ -49,7 +49,7 @@ func CreateFolder(parentDir, folderName string) (string, error) {
 
 func RenamePath(oldPath, newName string) (string, error) {
 	if newName == "" {
-		return "", fmt.Errorf("nama baru tidak boleh kosong")
+		return "", fmt.Errorf("new name cannot be empty")
 	}
 
 	parent := filepath.Dir(oldPath)
@@ -60,11 +60,11 @@ func RenamePath(oldPath, newName string) (string, error) {
 	}
 
 	if _, err := os.Stat(newPath); err == nil {
-		return "", fmt.Errorf("item dengan nama '%s' sudah ada", newName)
+		return "", fmt.Errorf("item with name '%s' already exists", newName)
 	}
 
 	if err := os.Rename(oldPath, newPath); err != nil {
-		return "", fmt.Errorf("gagal mengubah nama: %w", err)
+		return "", fmt.Errorf("failed to rename: %w", err)
 	}
 
 	return newPath, nil
@@ -72,12 +72,12 @@ func RenamePath(oldPath, newName string) (string, error) {
 
 func DeletePath(path string) error {
 	if path == "" || path == "." || path == "/" {
-		return fmt.Errorf("tidak dapat menghapus root directory")
+		return fmt.Errorf("cannot delete root directory")
 	}
 
 	info, err := os.Stat(path)
 	if err != nil {
-		return fmt.Errorf("path tidak ditemukan: %w", err)
+		return fmt.Errorf("path not found: %w", err)
 	}
 
 	if info.IsDir() {

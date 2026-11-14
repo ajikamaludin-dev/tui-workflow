@@ -261,7 +261,7 @@ func (cp *CommandPalette) Render() string {
 
 	var listLines []string
 	if len(cp.Filtered) == 0 {
-		listLines = append(listLines, "  (Tidak ada perintah yang cocok)")
+		listLines = append(listLines, "  (No matching commands)")
 	} else {
 		endIdx := cp.ScrollTop + cp.MaxRows
 		if endIdx > len(cp.Filtered) {

@@ -18,10 +18,10 @@ func IsTooSmall(w, h int) bool {
 
 func RenderTooSmallWarning(w, h int) string {
 	msg := fmt.Sprintf(
-		"⚠️  Ukuran Terminal Terlalu Kecil\n\n"+
-			"Minimum Diperlukan: %d × %d\n"+
-			"Ukuran Saat Ini   : %d × %d\n\n"+
-			"Silakan perbesar jendela terminal Anda untuk melanjutkan.",
+		"⚠️  Terminal Size Too Small\n\n"+
+			"Minimum Required: %d × %d\n"+
+			"Current Size    : %d × %d\n\n"+
+			"Please resize your terminal window to continue.",
 		MinWidth, MinHeight, w, h,
 	)
 

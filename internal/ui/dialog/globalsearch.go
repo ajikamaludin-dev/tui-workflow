@@ -328,9 +328,9 @@ func (gs *GlobalSearch) Render() string {
 		Foreground(ui.CurrentTheme.FgHighlight).
 		MarginBottom(1)
 
-	headerText := "🔍 Cari Teks di Seluruh Workspace (Ctrl+Shift+F)"
+	headerText := "🔍 Search Text in Workspace (Ctrl+Shift+F)"
 	if gs.TotalFound > 0 {
-		headerText += fmt.Sprintf(" — %d hasil ditemukan", gs.TotalFound)
+		headerText += fmt.Sprintf(" — %d results found", gs.TotalFound)
 	}
 
 	renderedTitle := titleStyle.Render(headerText)
@@ -338,9 +338,9 @@ func (gs *GlobalSearch) Render() string {
 
 	var listLines []string
 	if strings.TrimSpace(gs.Filter.Value()) == "" {
-		listLines = append(listLines, "  Ketik kata kunci untuk mencari di seluruh file...")
+		listLines = append(listLines, "  Type keywords to search across files...")
 	} else if len(gs.Matches) == 0 {
-		listLines = append(listLines, "  (Tidak ada kecocokan ditemukan)")
+		listLines = append(listLines, "  (No matches found)")
 	} else {
 		endIdx := gs.ScrollTop + gs.MaxRows
 		if endIdx > len(gs.Matches) {

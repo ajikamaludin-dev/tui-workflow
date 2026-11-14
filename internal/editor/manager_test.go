@@ -188,3 +188,87 @@ func TestTabManagerCloseBatch(t *testing.T) {
 		}
 	}
 }
+
+
+func TestTabManager_MoveAndPin(t *testing.T) {
+	tm := NewTabManager()
+	for i := 0; i < 4; i++ {
+		name := fmt.Sprintf("file_%d.txt", i)
+		tm.Tabs = append(tm.Tabs, &Tab{
+			Path:   name,
+			Name:   name,
+			Buffer: NewBuffer("content"),
+		})
+	}
+	tm.ActiveIndex = 2 // file_2.txt
+
+	// 1. Pin tab 2 (file_2.txt) -> moves to index 0 (first pinned tab)
+	if !tm.TogglePinTab(2) {
+		t.Fatalf("TogglePinTab(2) failed")
+	}
+	if tm.PinnedCount() != 1 {
+		t.Errorf("Expected 1 pinned tab, got %d", tm.PinnedCount())
+	}
+	if !tm.Tabs[0].IsPinned || tm.Tabs[0].Name != "file_2.txt" {
+		t.Errorf("Expected tab 0 to be pinned file_2.txt, got %s (pinned=%v)", tm.Tabs[0].Name, tm.Tabs[0].IsPinned)
+	}
+	if tm.ActiveIndex != 0 {
+		t.Errorf("Expected ActiveIndex to follow moved tab to 0, got %d", tm.ActiveIndex)
+	}
+
+	// 2. RenderTabBar checks: pinned tab has pin icon and CloseX == -1
+	_ = tm.RenderTabBar(100)
+	if len(tm.ClickRegions) < 4 {
+		t.Fatalf("Expected at least 4 click regions, got %d", len(tm.ClickRegions))
+	}
+	reg0 := tm.ClickRegions[0]
+	if reg0.CloseX != -1 {
+		t.Errorf("Expected pinned tab CloseX to be -1, got %d", reg0.CloseX)
+	}
+	action, tabIdx := tm.HandleTabClick(reg0.StartX + 1)
+	if action != "activate" || tabIdx != 0 {
+		t.Errorf("Expected 'activate' for pinned tab click, got action=%q, tabIdx=%d", action, tabIdx)
+	}
+
+	// 3. MoveTab within unpinned group (indices 1, 2, 3: file_0, file_1, file_3)
+	// Move tab at 3 (file_3) to 1 -> order becomes [file_2(pinned), file_3, file_0, file_1]
+	if !tm.MoveTab(3, 1) {
+		t.Fatalf("MoveTab(3, 1) failed")
+	}
+	if tm.Tabs[1].Name != "file_3.txt" {
+		t.Errorf("Expected index 1 to be file_3.txt, got %s", tm.Tabs[1].Name)
+	}
+
+	// 4. MoveTab boundary protection: moving unpinned tab (index 2) to 0 clamps to 1
+	_ = tm.MoveTab(2, 0)
+	if tm.Tabs[0].Name != "file_2.txt" || !tm.Tabs[0].IsPinned {
+		t.Errorf("Pinned tab at 0 should remain intact after unpinned move attempt")
+	}
+
+	// 5. Batch close protection: CloseOtherTabs from index 2 (unpinned) must keep pinned tab 0!
+	tm.CloseOtherTabs(2)
+	if len(tm.Tabs) != 2 {
+		t.Fatalf("Expected 2 tabs (pinned tab + kept tab), got %d", len(tm.Tabs))
+	}
+	if !tm.Tabs[0].IsPinned {
+		t.Errorf("Tab 0 should still be pinned")
+	}
+
+	// 6. CloseAllTabs must preserve pinned tab!
+	tm.CloseAllTabs()
+	if len(tm.Tabs) != 1 || !tm.Tabs[0].IsPinned {
+		t.Errorf("CloseAllTabs should preserve pinned tab, remaining tabs=%d", len(tm.Tabs))
+	}
+
+	// 7. Unpin tab 0 -> becomes unpinned
+	if !tm.TogglePinTab(0) {
+		t.Fatalf("TogglePinTab(0) unpin failed")
+	}
+	if tm.PinnedCount() != 0 {
+		t.Errorf("Expected 0 pinned tabs after unpin, got %d", tm.PinnedCount())
+	}
+	tm.CloseAllTabs()
+	if len(tm.Tabs) != 0 {
+		t.Errorf("Expected 0 tabs after closing all when unpinned, got %d", len(tm.Tabs))
+	}
+}

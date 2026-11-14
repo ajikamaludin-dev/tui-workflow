@@ -169,7 +169,7 @@ func TestOpenFileAndFolderDialogs(t *testing.T) {
 
 	// Navigate into subdir and confirm folder
 	m.FilePicker.CurrentDir = subDir
-	// Simulate click on "Buka Folder Ini" button (mouse test)
+	// Simulate click on "Select Folder" button (mouse test)
 	fpStr := m.FilePicker.Render()
 	modalW := lipgloss.Width(fpStr)
 	modalH := lipgloss.Height(fpStr)
@@ -187,7 +187,7 @@ func TestOpenFileAndFolderDialogs(t *testing.T) {
 	m = newM.(Model)
 
 	if m.FilePicker.Active {
-		t.Errorf("FilePicker should be closed after clicking Buka Folder Ini")
+		t.Errorf("FilePicker should be closed after clicking Select Folder")
 	}
 	if m.RootDir != subDir {
 		t.Errorf("Expected root dir to be %s, got %s", subDir, m.RootDir)
@@ -235,7 +235,7 @@ func TestModalMouseClicks(t *testing.T) {
 	}
 
 	// 2. ConfirmDialog Mouse Click Cancel
-	m.ConfirmDialog.Open(dialog.ConfirmDelete, "Hapus File", "Yakin hapus?", "sample.txt")
+	m.ConfirmDialog.Open(dialog.ConfirmDelete, "Delete File", "Are you sure?", "sample.txt")
 	if !m.ConfirmDialog.Active {
 		t.Fatalf("Expected ConfirmDialog active")
 	}
@@ -414,7 +414,7 @@ func TestGitCommitAndPushButtonInteraction(t *testing.T) {
 	}
 
 	// Since there's no remote configured, it should show push error toast gracefully without crash
-	if !strings.Contains(m.StatusBar.ToastMsg, "Push gagal") && !strings.Contains(m.StatusBar.ToastMsg, "Push berhasil") {
+	if !strings.Contains(m.StatusBar.ToastMsg, "Push failed") && !strings.Contains(m.StatusBar.ToastMsg, "Push succeeded") {
 		t.Errorf("Expected push toast response, got %q", m.StatusBar.ToastMsg)
 	}
 }
@@ -593,6 +593,73 @@ func TestSoftWrapToggleAndWordJump(t *testing.T) {
 	m = newM.(Model)
 	if tab.Buffer.CursorRow != 0 || tab.Buffer.CursorCol != 3 {
 		t.Errorf("Expected cursor at (0, 3) after precise click, got (%d, %d)", tab.Buffer.CursorRow, tab.Buffer.CursorCol)
+	}
+}
+
+func TestGitCommit_UserNotConfiguredAlert(t *testing.T) {
+	repoDir, _ := setupTestGitRepoWithBranch(t)
+	defer os.RemoveAll(repoDir)
+
+	m, err := NewModelWithPath(repoDir, false)
+	if err != nil {
+		t.Fatalf("Failed to create model: %v", err)
+	}
+	m.Ready = true
+	m.Width = 100
+	m.Height = 30
+	m.SidebarView = SidebarGit
+	m.GitView.Refresh()
+
+	// Stage a change
+	filePath := filepath.Join(repoDir, "initial.txt")
+	_ = os.WriteFile(filePath, []byte("changed content\n"), 0644)
+	m.GitView.Refresh()
+	_ = m.GitRepo.StageFile("initial.txt")
+	m.GitView.Refresh()
+	m.GitView.CommitInput.SetValue("commit without git identity")
+
+	// Simulate unconfigured git user by overriding env and config
+	t.Setenv("GIT_AUTHOR_NAME", "")
+	t.Setenv("GIT_AUTHOR_EMAIL", "")
+	t.Setenv("GIT_COMMITTER_NAME", "")
+	t.Setenv("GIT_COMMITTER_EMAIL", "")
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
+	t.Setenv("HOME", repoDir)
+
+	// In case git CLI on host still sees global config, we also test openGitUserNotConfiguredAlert directly
+	userErr := &git.ErrGitUserNotConfigured{
+		MissingName:  true,
+		MissingEmail: true,
+	}
+	m.openGitUserNotConfiguredAlert()
+	if !m.ConfirmDialog.Active || m.ConfirmDialog.Type != dialog.ConfirmAlert {
+		t.Fatalf("Expected ConfirmAlert dialog active, got active=%v type=%v", m.ConfirmDialog.Active, m.ConfirmDialog.Type)
+	}
+	if !strings.Contains(m.ConfirmDialog.Title, "Git Identity Required") {
+		t.Errorf("Expected title 'Git Identity Required', got %q", m.ConfirmDialog.Title)
+	}
+	if !strings.Contains(m.ConfirmDialog.Message, "git config --global user.name") || !strings.Contains(m.ConfirmDialog.Message, "git config --global user.email") {
+		t.Errorf("Expected English guide in alert message, got: %s", m.ConfirmDialog.Message)
+	}
+
+	// Pressing Enter dismisses the alert dialog
+	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = newM.(Model)
+	if m.ConfirmDialog.Active {
+		t.Errorf("Expected ConfirmDialog inactive after Enter")
+	}
+
+	// Also verify that gitCommitResultMsg with ErrGitUserNotConfigured triggers the alert
+	newM, _ = m.Update(gitCommitResultMsg{
+		err: userErr,
+	})
+	m = newM.(Model)
+	if !m.ConfirmDialog.Active || m.ConfirmDialog.Type != dialog.ConfirmAlert {
+		t.Errorf("Expected alert dialog opened on gitCommitResultMsg with ErrGitUserNotConfigured")
+	}
+	if !strings.Contains(m.StatusBar.ToastMsg, "Git user identity not configured") {
+		t.Errorf("Expected toast notification, got %q", m.StatusBar.ToastMsg)
 	}
 }
 

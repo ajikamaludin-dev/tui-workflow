@@ -1,2 +1,2 @@
-- [ ] tambahkan tab editor bisa di pindahkan dengan drag and drop dengan mouse 
-- [ ] editoor tab dapat dilakukan pining
+- [x] tambahkan tab editor bisa di pindahkan dengan drag and drop dengan mouse 
+- [x] editoor tab dapat dilakukan pining

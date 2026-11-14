@@ -27,7 +27,7 @@ type BufferSwitcher struct {
 
 func NewBufferSwitcher() *BufferSwitcher {
 	ti := textinput.New()
-	ti.Prompt = "Cari Tab: "
+	ti.Prompt = "Search Tab: "
 	ti.CharLimit = 64
 	ti.Width = 38
 	ti.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
@@ -202,12 +202,12 @@ func (s *BufferSwitcher) Render() string {
 		Foreground(ui.CurrentTheme.FgHighlight).
 		MarginBottom(1)
 
-	renderedTitle := titleStyle.Render("⚡ Beralih Buffer Tab (Ctrl+P)")
+	renderedTitle := titleStyle.Render("⚡ Switch Buffer Tab (Ctrl+P)")
 	renderedInput := s.Filter.View()
 
 	var listLines []string
 	if len(s.Filtered) == 0 {
-		listLines = append(listLines, "  (Tidak ada tab yang cocok)")
+		listLines = append(listLines, "  (No matching tabs)")
 	} else {
 		for i, it := range s.Filtered {
 			prefix := "  "

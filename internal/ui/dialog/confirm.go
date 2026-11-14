@@ -16,6 +16,7 @@ const (
 	ConfirmExternalChange
 	ConfirmDiscardGit
 	ConfirmDiscardGitHunk
+	ConfirmAlert
 )
 
 type ConfirmDialog struct {
@@ -42,10 +43,14 @@ func (d *ConfirmDialog) Open(t ConfirmDialogType, title, message, targetPath str
 	d.Title = title
 	d.Message = message
 	d.TargetPath = targetPath
-	d.Selected = 1 // default to Cancel or Merge
-	if t == ConfirmExternalChange {
+	if t == ConfirmAlert {
+		d.Selected = 0
+		d.Width = 56
+	} else if t == ConfirmExternalChange {
+		d.Selected = 1
 		d.Width = 54
 	} else {
+		d.Selected = 1
 		d.Width = 48
 	}
 }
@@ -66,7 +71,17 @@ func (d *ConfirmDialog) Update(msg tea.Msg) (confirmed bool, canceled bool, disc
 			d.Close()
 			return false, true, false
 
+		case "space", " ":
+			if d.Type == ConfirmAlert {
+				d.Close()
+				return true, false, false
+			}
+			return false, false, false
+
 		case "left", "h":
+			if d.Type == ConfirmAlert {
+				return false, false, false
+			}
 			d.Selected--
 			if d.Selected < 0 {
 				if d.Type == ConfirmUnsavedChanges || d.Type == ConfirmExternalChange {
@@ -78,6 +93,9 @@ func (d *ConfirmDialog) Update(msg tea.Msg) (confirmed bool, canceled bool, disc
 			return false, false, false
 
 		case "right", "l", "tab":
+			if d.Type == ConfirmAlert {
+				return false, false, false
+			}
 			maxIdx := 1
 			if d.Type == ConfirmUnsavedChanges || d.Type == ConfirmExternalChange {
 				maxIdx = 2
@@ -87,6 +105,9 @@ func (d *ConfirmDialog) Update(msg tea.Msg) (confirmed bool, canceled bool, disc
 
 		case "enter":
 			d.Close()
+			if d.Type == ConfirmAlert {
+				return true, false, false
+			}
 			if d.Type == ConfirmUnsavedChanges || d.Type == ConfirmExternalChange {
 				if d.Selected == 0 {
 					return true, false, false // Save & close OR Reload from disk
@@ -130,6 +151,9 @@ func (d *ConfirmDialog) HandleMouse(relX, relY int) (confirmed bool, canceled bo
 	buttonY := boxH - 3
 	if relY == buttonY || relY == buttonY+1 {
 		d.Close()
+		if d.Type == ConfirmAlert {
+			return true, false, false, true
+		}
 		if d.Type == ConfirmUnsavedChanges {
 			if relX >= 2 && relX <= 12 {
 				return true, false, false, true // Save
@@ -170,7 +194,7 @@ func (d *ConfirmDialog) Render() string {
 	}
 
 	titleColor := ui.CurrentTheme.Red
-	if d.Type == ConfirmUnsavedChanges || d.Type == ConfirmExternalChange {
+	if d.Type == ConfirmUnsavedChanges || d.Type == ConfirmExternalChange || d.Type == ConfirmAlert {
 		titleColor = ui.CurrentTheme.Yellow
 	}
 
@@ -197,7 +221,10 @@ func (d *ConfirmDialog) Render() string {
 	btnSep := lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Render(" ")
 
 	var buttons string
-	if d.Type == ConfirmDiscardGitHunk {
+	if d.Type == ConfirmAlert {
+		btnOK := btnStyle.Background(ui.CurrentTheme.Accent).Foreground(ui.CurrentTheme.FgHighlight).Bold(true)
+		buttons = lipgloss.JoinHorizontal(lipgloss.Center, btnOK.Render("OK"))
+	} else if d.Type == ConfirmDiscardGitHunk {
 		btnDiscard := btnStyle
 		btnCancel := btnStyle
 		if d.Selected == 0 {
@@ -246,7 +273,7 @@ func (d *ConfirmDialog) Render() string {
 			btnSep,
 			btnMerge.Render("Merge (Diff)"),
 			btnSep,
-			btnCancel.Render("Batal"),
+			btnCancel.Render("Cancel"),
 		)
 	} else {
 		btnConfirm := btnStyle

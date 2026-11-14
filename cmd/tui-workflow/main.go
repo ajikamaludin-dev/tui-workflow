@@ -25,7 +25,7 @@ func main() {
 
 	if debugMode {
 		if err := logger.Init(true, "debug.log"); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: gagal init debug logger: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Warning: failed to initialize debug logger: %v\n", err)
 		} else {
 			defer logger.Close()
 			logger.Debugf("tui-workflow started with path: %s (debug mode enabled)", targetPath)

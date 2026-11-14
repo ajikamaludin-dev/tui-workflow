@@ -33,7 +33,7 @@ func Init(debugMode bool, filePath string) error {
 
 	f, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
-		return fmt.Errorf("gagal membuka debug log file %q: %w", filePath, err)
+		return fmt.Errorf("failed to open debug log file %q: %w", filePath, err)
 	}
 
 	logFile = f

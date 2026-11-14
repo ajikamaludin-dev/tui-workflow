@@ -13,13 +13,13 @@ func TestInputDialog(t *testing.T) {
 		t.Fatalf("Expected inactive initially")
 	}
 
-	d.Open(InputNewFile, "Buat File", "/tmp", "init.txt")
+	d.Open(InputNewFile, "Create File", "/tmp", "init.txt")
 	if !d.Active || d.Value() != "init.txt" {
 		t.Fatalf("Expected active with value 'init.txt'")
 	}
 
 	rendered := d.Render()
-	if !strings.Contains(rendered, "Buat File") {
+	if !strings.Contains(rendered, "Create File") {
 		t.Errorf("Rendered view missing title: %s", rendered)
 	}
 
@@ -38,7 +38,7 @@ func TestInputDialog(t *testing.T) {
 
 func TestNormalizeDialogBackground(t *testing.T) {
 	d := NewInputDialog()
-	d.Open(InputNewFile, "Buat File Baru", "/tmp", "")
+	d.Open(InputNewFile, "New File", "/tmp", "")
 	rendered := d.Render()
 
 	lines := strings.Split(rendered, "\n")
@@ -61,13 +61,13 @@ func TestConfirmDialog(t *testing.T) {
 		t.Fatalf("Expected inactive initially")
 	}
 
-	d.Open(ConfirmDelete, "Hapus File", "Hapus file ini?", "/tmp/file.txt")
+	d.Open(ConfirmDelete, "Delete File", "Delete this file?", "/tmp/file.txt")
 	if !d.Active || d.Selected != 1 {
 		t.Fatalf("Expected active with default cancel button")
 	}
 
 	rendered := d.Render()
-	if !strings.Contains(rendered, "Hapus File") || !strings.Contains(rendered, "Delete") {
+	if !strings.Contains(rendered, "Delete File") || !strings.Contains(rendered, "Delete") {
 		t.Errorf("Rendered view missing elements: %s", rendered)
 	}
 
@@ -78,7 +78,7 @@ func TestConfirmDialog(t *testing.T) {
 	}
 
 	// Test Unsaved Changes
-	d.Open(ConfirmUnsavedChanges, "Simpan?", "Perubahan belum disimpan", "")
+	d.Open(ConfirmUnsavedChanges, "Save Changes?", "Unsaved changes", "")
 	// Navigate right to Discard (1)
 	d.Selected = 1
 	var discard bool
@@ -88,9 +88,9 @@ func TestConfirmDialog(t *testing.T) {
 	}
 
 	// Test External Change Conflict
-	d.Open(ConfirmExternalChange, "Konflik File", "File diubah dari luar", "/tmp/conflict.txt")
+	d.Open(ConfirmExternalChange, "File Conflict", "File modified externally", "/tmp/conflict.txt")
 	rendered = d.Render()
-	if !strings.Contains(rendered, "Reload") || !strings.Contains(rendered, "Merge (Diff)") || !strings.Contains(rendered, "Batal") {
+	if !strings.Contains(rendered, "Reload") || !strings.Contains(rendered, "Merge (Diff)") || !strings.Contains(rendered, "Cancel") {
 		t.Errorf("Rendered view missing external change buttons: %s", rendered)
 	}
 
@@ -102,10 +102,44 @@ func TestConfirmDialog(t *testing.T) {
 	}
 
 	// Select 1: Merge
-	d.Open(ConfirmExternalChange, "Konflik File", "File diubah dari luar", "/tmp/conflict.txt")
+	d.Open(ConfirmExternalChange, "File Conflict", "File modified externally", "/tmp/conflict.txt")
 	d.Selected = 1
 	confirmed, canceled, discard = d.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if confirmed || canceled || !discard {
 		t.Errorf("Expected discard=true for Merge, got confirmed=%v, canceled=%v, discard=%v", confirmed, canceled, discard)
 	}
 }
+
+func TestConfirmDialog_Alert(t *testing.T) {
+	d := NewConfirmDialog()
+	d.Open(ConfirmAlert, "Git Identity Required", "Please configure your git user name and email", "")
+	if !d.Active || d.Selected != 0 {
+		t.Fatalf("Expected active with selected=0 for alert, got active=%v selected=%d", d.Active, d.Selected)
+	}
+
+	rendered := d.Render()
+	if !strings.Contains(rendered, "Git Identity Required") || !strings.Contains(rendered, "OK") {
+		t.Errorf("Rendered view missing elements: %s", rendered)
+	}
+
+	// Pressing Enter confirms and closes
+	confirmed, canceled, discard := d.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if !confirmed || canceled || discard || d.Active {
+		t.Errorf("Expected confirmed=true on Enter for alert, got confirmed=%v canceled=%v discard=%v active=%v", confirmed, canceled, discard, d.Active)
+	}
+
+	// Reopen and test space
+	d.Open(ConfirmAlert, "Notice", "Space to close", "")
+	confirmed, canceled, discard = d.Update(tea.KeyMsg{Type: tea.KeySpace})
+	if !confirmed || canceled || discard || d.Active {
+		t.Errorf("Expected confirmed=true on Space for alert")
+	}
+
+	// Reopen and test Esc
+	d.Open(ConfirmAlert, "Notice", "Esc to close", "")
+	confirmed, canceled, discard = d.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if confirmed || !canceled || discard || d.Active {
+		t.Errorf("Expected canceled=true on Esc for alert")
+	}
+}
+

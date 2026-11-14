@@ -1,6 +1,7 @@
 package git
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -357,6 +358,99 @@ func TestGetStatusDeterministicOrder(t *testing.T) {
 		}
 		if staged[0].Path != "beta.txt" || staged[1].Path != "zebra.txt" {
 			t.Fatalf("Expected staged sorted [beta.txt, zebra.txt], got [%s, %s]", staged[0].Path, staged[1].Path)
+		}
+	}
+}
+
+
+func TestHostSignature(t *testing.T) {
+	repo, err := OpenRepo(".")
+	if err != nil {
+		t.Fatalf("OpenRepo failed: %v", err)
+	}
+	sig, err := repo.GetUserSignature()
+	if err != nil {
+		t.Logf("Host signature err: %v", err)
+	} else {
+		t.Logf("Host signature resolved: name=%q email=%q", sig.Name, sig.Email)
+		if sig.Name == "" || sig.Email == "" {
+			t.Errorf("Expected non-empty name and email: %+v", sig)
+		}
+	}
+}
+func TestRepoGetUserSignature_FromEnv(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "tui-git-identity-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	_, err = gogit.PlainInit(tempDir, false)
+	if err != nil {
+		t.Fatalf("PlainInit failed: %v", err)
+	}
+
+	repo, err := OpenRepo(tempDir)
+	if err != nil {
+		t.Fatalf("OpenRepo failed: %v", err)
+	}
+
+	t.Setenv("GIT_AUTHOR_NAME", "Env Author")
+	t.Setenv("GIT_AUTHOR_EMAIL", "author@env.local")
+
+	sig, err := repo.GetUserSignature()
+	if err != nil {
+		t.Fatalf("Expected signature from env, got error: %v", err)
+	}
+	if sig.Name != "Env Author" {
+		t.Errorf("Expected Name 'Env Author', got %q", sig.Name)
+	}
+	if sig.Email != "author@env.local" {
+		t.Errorf("Expected Email 'author@env.local', got %q", sig.Email)
+	}
+}
+
+func TestRepoGetUserSignature_MissingReturnsError(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "tui-git-missing-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	_, err = gogit.PlainInit(tempDir, false)
+	if err != nil {
+		t.Fatalf("PlainInit failed: %v", err)
+	}
+
+	repo, err := OpenRepo(tempDir)
+	if err != nil {
+		t.Fatalf("OpenRepo failed: %v", err)
+	}
+
+	// Clear relevant env vars
+	t.Setenv("GIT_AUTHOR_NAME", "")
+	t.Setenv("GIT_AUTHOR_EMAIL", "")
+	t.Setenv("GIT_COMMITTER_NAME", "")
+	t.Setenv("GIT_COMMITTER_EMAIL", "")
+	t.Setenv("GIT_CONFIG_GLOBAL", "/dev/null")
+	t.Setenv("GIT_CONFIG_SYSTEM", "/dev/null")
+	t.Setenv("HOME", tempDir)
+
+	// In an isolated environment without config, it should return ErrGitUserNotConfigured
+	sig, err := repo.GetUserSignature()
+	if err != nil {
+		var userErr *ErrGitUserNotConfigured
+		if !errors.As(err, &userErr) {
+			t.Errorf("Expected *ErrGitUserNotConfigured, got %T: %v", err, err)
+		}
+		errMsg := err.Error()
+		if !strings.Contains(errMsg, "git config --global user.name") || !strings.Contains(errMsg, "git config --global user.email") {
+			t.Errorf("Expected English guide in error message, got: %s", errMsg)
+		}
+	} else if sig != nil {
+		// If the host global/system git config is still picked up by git CLI, verify sig is valid
+		if sig.Name == "" || sig.Email == "" {
+			t.Errorf("Signature returned empty fields: %+v", sig)
 		}
 	}
 }

@@ -35,7 +35,7 @@ func TestSearchViewSearchAndReplace(t *testing.T) {
 
 	// Test Render
 	rendered := sv.Render(30, 10, true)
-	if !strings.Contains(rendered, "[Cari]") || !strings.Contains(rendered, "[Ganti Semua]") {
+	if !strings.Contains(rendered, "[Find]") || !strings.Contains(rendered, "[Replace All]") {
 		t.Errorf("Expected action buttons in render output: %s", rendered)
 	}
 	if !strings.Contains(rendered, "sample.txt:1") {

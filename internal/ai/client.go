@@ -143,11 +143,11 @@ func parseSSEStream(body []byte) (string, error) {
 	}
 
 	if !foundData {
-		return "", fmt.Errorf("bukan format SSE stream")
+		return "", fmt.Errorf("not an SSE stream format")
 	}
 	result := sb.String()
 	if strings.TrimSpace(result) == "" {
-		return "", fmt.Errorf("SSE stream tidak menghasilkan konten teks")
+		return "", fmt.Errorf("SSE stream did not produce text content")
 	}
 	return result, nil
 }
@@ -162,7 +162,7 @@ func maskKey(k string) string {
 func (c *Client) GenerateCommitMessage(ctx context.Context, cfg config.AIConfig, diffText string) (string, error) {
 	trimmedDiff := strings.TrimSpace(diffText)
 	if trimmedDiff == "" {
-		return "", fmt.Errorf("diff kosong, tidak ada perubahan staged untuk dianalisis")
+		return "", fmt.Errorf("empty diff, no staged changes to analyze")
 	}
 
 	if len(trimmedDiff) > MaxDiffLength {
@@ -193,7 +193,7 @@ func (c *Client) GenerateCommitMessage(ctx context.Context, cfg config.AIConfig,
 
 	bodyBytes, err := json.Marshal(reqPayload)
 	if err != nil {
-		return "", fmt.Errorf("gagal encode request JSON: %w", err)
+		return "", fmt.Errorf("failed to encode request JSON: %w", err)
 	}
 
 	logger.Debugf("AI Request: POST %s | Model: %s | APIKey: %s", endpoint, model, maskKey(cfg.APIKey))
@@ -201,7 +201,7 @@ func (c *Client) GenerateCommitMessage(ctx context.Context, cfg config.AIConfig,
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(bodyBytes))
 	if err != nil {
-		return "", fmt.Errorf("gagal membuat request HTTP: %w", err)
+		return "", fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
@@ -212,14 +212,14 @@ func (c *Client) GenerateCommitMessage(ctx context.Context, cfg config.AIConfig,
 	resp, err := c.HTTPClient.Do(httpReq)
 	if err != nil {
 		logger.Debugf("AI Connection Error: %v", err)
-		return "", fmt.Errorf("koneksi API gagal: %w", err)
+		return "", fmt.Errorf("API connection failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		logger.Debugf("AI Read Error: %v", err)
-		return "", fmt.Errorf("gagal membaca response body: %w", err)
+		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	logger.Debugf("AI Response: HTTP %d | Headers: %v", resp.StatusCode, resp.Header)
@@ -259,11 +259,11 @@ func (c *Client) GenerateCommitMessage(ctx context.Context, cfg config.AIConfig,
 			bodySnippet = bodySnippet[:120] + "..."
 		}
 		logger.Debugf("AI JSON Unmarshal Error: %v | Raw snippet: %s", err, bodySnippet)
-		return "", fmt.Errorf("gagal decode response JSON: %w (respon: %q)", err, bodySnippet)
+		return "", fmt.Errorf("failed to decode response JSON: %w (response: %q)", err, bodySnippet)
 	}
 
 	if len(chatResp.Choices) == 0 {
-		return "", fmt.Errorf("API tidak mengembalikan choices pesan commit")
+		return "", fmt.Errorf("API returned no choices for commit message")
 	}
 
 	msgContent := chatResp.Choices[0].Message.Content

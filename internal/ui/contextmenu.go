@@ -33,10 +33,10 @@ func NewContextMenu() *ContextMenu {
 
 func (m *ContextMenu) Open(x, y int, hasSelection bool, hasClipboard bool, screenW, screenH int) {
 	items := []ContextMenuItem{
-		{ID: "copy", Label: "Salin", Shortcut: "Ctrl+C", Disabled: !hasSelection},
-		{ID: "paste", Label: "Tempel", Shortcut: "Ctrl+V", Disabled: !hasClipboard},
-		{ID: "cut", Label: "Potong", Shortcut: "Ctrl+X", Disabled: !hasSelection},
-		{ID: "select_all", Label: "Pilih Semua", Shortcut: "Ctrl+A", Disabled: false},
+		{ID: "copy", Label: "Copy", Shortcut: "Ctrl+C", Disabled: !hasSelection},
+		{ID: "paste", Label: "Paste", Shortcut: "Ctrl+V", Disabled: !hasClipboard},
+		{ID: "cut", Label: "Cut", Shortcut: "Ctrl+X", Disabled: !hasSelection},
+		{ID: "select_all", Label: "Select All", Shortcut: "Ctrl+A", Disabled: false},
 	}
 	m.OpenCustom(x, y, items, screenW, screenH)
 	if !hasSelection && hasClipboard {

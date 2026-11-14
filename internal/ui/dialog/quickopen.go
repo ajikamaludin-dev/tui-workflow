@@ -435,12 +435,12 @@ func (q *QuickOpen) Render() string {
 		Foreground(ui.CurrentTheme.FgHighlight).
 		MarginBottom(1)
 
-	renderedTitle := titleStyle.Render("⚡ Buka Cepat File Workspace (Ctrl+P)")
+	renderedTitle := titleStyle.Render("⚡ Quick Open File (Ctrl+P)")
 	renderedInput := q.Filter.View()
 
 	var listLines []string
 	if len(q.Filtered) == 0 {
-		listLines = append(listLines, "  (Tidak ada file yang cocok)")
+		listLines = append(listLines, "  (No matching files)")
 	} else {
 		endIdx := q.ScrollTop + q.MaxRows
 		if endIdx > len(q.Filtered) {

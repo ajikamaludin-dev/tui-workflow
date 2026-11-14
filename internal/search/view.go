@@ -56,7 +56,7 @@ type SearchView struct {
 // NewSearchView creates a new SearchView instance.
 func NewSearchView(rootDir string) *SearchView {
 	fi := textinput.New()
-	fi.Prompt = " Cari: "
+	fi.Prompt = " Find: "
 	fi.CharLimit = 64
 	fi.Width = 20
 	fi.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
@@ -64,7 +64,7 @@ func NewSearchView(rootDir string) *SearchView {
 	fi.Focus()
 
 	ri := textinput.New()
-	ri.Prompt = " Ganti: "
+	ri.Prompt = " Replace: "
 	ri.CharLimit = 64
 	ri.Width = 20
 	ri.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
@@ -352,7 +352,7 @@ func (sv *SearchView) Render(width, height int, focused bool) string {
 	if sv.TotalFound > 0 {
 		countStr = fmt.Sprintf(" (%d)", sv.TotalFound)
 	}
-	actionRow := " " + btnStyle.Render("[Cari]") + " " + btnStyle.Render("[Ganti Semua]") + countStyle.Render(countStr)
+	actionRow := " " + btnStyle.Render("[Find]") + " " + btnStyle.Render("[Replace All]") + countStyle.Render(countStr)
 	sep := strings.Repeat("─", width-1)
 
 	// Available height for matches
@@ -370,9 +370,9 @@ func (sv *SearchView) Render(width, height int, focused bool) string {
 
 	var rows []string
 	if len(sv.Matches) == 0 {
-		emptyMsg := " (Ketik teks & tekan Enter)"
+		emptyMsg := " (Type text & press Enter)"
 		if strings.TrimSpace(sv.FindInput.Value()) != "" {
-			emptyMsg = " (Tidak ada kecocokan)"
+			emptyMsg = " (No matches found)"
 		}
 		rows = append(rows, countStyle.Render(emptyMsg))
 	} else {

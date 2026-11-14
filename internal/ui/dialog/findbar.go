@@ -33,16 +33,16 @@ type FindBar struct {
 // NewFindBar initializes a new FindBar.
 func NewFindBar() *FindBar {
 	ti := textinput.New()
-	ti.Prompt = " Cari: "
+	ti.Prompt = " Find: "
 	ti.CharLimit = 64
 	ti.Width = 24
 	ti.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
 	ti.PromptStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent)
 
 	ri := textinput.New()
-	ri.Prompt = " Ganti: "
+	ri.Prompt = " Replace: "
 	ri.CharLimit = 64
-	ri.Width = 24
+	ri.Width = 22
 	ri.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
 	ri.PromptStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent)
 
@@ -302,8 +302,8 @@ func (f *FindBar) Render() string {
 
 	content := row1
 	if f.IsReplace {
-		btnRepOne := btnStyle.Render(" [Ganti] ")
-		btnRepAll := btnStyle.Render("[Semua] ")
+		btnRepOne := btnStyle.Render(" [Replace] ")
+		btnRepAll := btnStyle.Render("[All] ")
 
 		row2 := lipgloss.JoinHorizontal(
 			lipgloss.Center,

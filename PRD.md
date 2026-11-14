@@ -141,6 +141,8 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
 1. **Manajemen Tab:**
    - Mendukung multi-buffer: file teks biasa, file Markdown, dan Git Diff tab.
    - Active tab diberi highlight warna kontras.
+   - Tab Pinning: Menyematkan tab penting ke sisi kiri dengan icon `📌` via shortcut `Alt+P` atau menu konteks klik kanan. Tab yang disematkan tidak memiliki tombol tutup `[x]` dan dilindungi dari aksi penutupan massal (*Close Others / Close All*).
+   - Drag and Drop Reordering: Memindahkan urutan tab editor secara langsung menggunakan klik kiri dan tahan lalu geser mouse (*left click drag*). Tab yang disematkan dapat digeser di antara sesama tab yang disematkan, dan tab biasa dapat digeser di antara sesama tab biasa.
    - Indikator dirty buffer: Tanda asterisk (`*`) jika ada perubahan belum disimpan.
    - Tombol tutup (`[x]`) pada tiap tab yang dapat diklik mouse.
 2. **Tab Overflow Handling:**
@@ -363,6 +365,8 @@ Program diinisialisasi dengan `tea.WithMouseCellMotion()`.
 | **Git Staged/Changes** | Left-Click pada tombol `+` / `-` | Stage / Unstage file |
 | **Git File Item** | Left-Click pada nama file | Membuka Side-by-Side Diff Tab |
 | **Tab Bar** | Left-Click pada tab item | Mengaktifkan tab tersebut |
+| **Tab Bar** | Left-Click Drag pada tab item | Menggeser & memindahkan urutan tab editor (Drag & Drop) |
+| **Tab Bar** | Right-Click pada tab item | Membuka context menu tab (Sematkan/Lepas Sematan, Tutup, dll.) |
 | **Tab Bar** | Left-Click pada tombol `[x]` tab | Menutup tab (trigger modal unsaved jika dirty) |
 | **Editor Buffer** | Left-Click pada teks buffer | Memindahkan posisi kursor ke baris & kolom yang diklik |
 | **Editor / Preview / Diff** | Mouse Wheel Up / Down | Scroll vertikal konten viewport |

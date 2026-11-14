@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	gogit "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/config"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
@@ -49,7 +51,7 @@ type Repo struct {
 
 func (r *Repo) GetBranchName() (string, error) {
 	if r == nil || r.r == nil {
-		return "", fmt.Errorf("repositori tidak valid")
+		return "", fmt.Errorf("invalid repository")
 	}
 	head, err := r.r.Head()
 	if err != nil {
@@ -67,7 +69,7 @@ func (r *Repo) GetBranchName() (string, error) {
 
 func (r *Repo) Push() error {
 	if r == nil || r.r == nil {
-		return fmt.Errorf("repositori tidak valid")
+		return fmt.Errorf("invalid repository")
 	}
 	err := r.r.Push(&gogit.PushOptions{})
 	if err != nil {
@@ -84,12 +86,12 @@ func OpenRepo(path string) (*Repo, error) {
 		DetectDotGit: true,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("bukan repositori git: %w", err)
+		return nil, fmt.Errorf("not a git repository: %w", err)
 	}
 
 	w, err := r.Worktree()
 	if err != nil {
-		return nil, fmt.Errorf("gagal membuka worktree: %w", err)
+		return nil, fmt.Errorf("failed to open worktree: %w", err)
 	}
 
 	root := w.Filesystem.Root()
@@ -103,7 +105,7 @@ func OpenRepo(path string) (*Repo, error) {
 func (r *Repo) GetStatus() (staged []GitFileStatus, unstaged []GitFileStatus, err error) {
 	status, err := r.worktree.Status()
 	if err != nil {
-		return nil, nil, fmt.Errorf("gagal membaca status git: %w", err)
+		return nil, nil, fmt.Errorf("failed to read git status: %w", err)
 	}
 
 	for path, fileStatus := range status {
@@ -160,20 +162,20 @@ func formatStatusCode(code gogit.StatusCode) string {
 func (r *Repo) StageFile(relPath string) error {
 	_, err := r.worktree.Add(relPath)
 	if err != nil {
-		return fmt.Errorf("gagal stage file '%s': %w", relPath, err)
+		return fmt.Errorf("failed to stage file '%s': %w", relPath, err)
 	}
 	return nil
 }
 
 func (r *Repo) StageAll() error {
 	if r == nil || r.worktree == nil {
-		return fmt.Errorf("worktree tidak valid")
+		return fmt.Errorf("invalid worktree")
 	}
 	err := r.worktree.AddWithOptions(&gogit.AddOptions{
 		All: true,
 	})
 	if err != nil {
-		return fmt.Errorf("gagal stage semua file: %w", err)
+		return fmt.Errorf("failed to stage all files: %w", err)
 	}
 	return nil
 }
@@ -198,14 +200,14 @@ func (r *Repo) UnstageFile(relPath string) error {
 		Mode:   gogit.MixedReset,
 	})
 	if err != nil {
-		return fmt.Errorf("gagal unstage file '%s': %w", relPath, err)
+		return fmt.Errorf("failed to unstage file '%s': %w", relPath, err)
 	}
 	return nil
 }
 
 func (r *Repo) UnstageAll() error {
 	if r == nil || r.worktree == nil {
-		return fmt.Errorf("worktree tidak valid")
+		return fmt.Errorf("invalid worktree")
 	}
 	head, err := r.r.Head()
 	if err != nil {
@@ -220,14 +222,14 @@ func (r *Repo) UnstageAll() error {
 		Mode:   gogit.MixedReset,
 	})
 	if err != nil {
-		return fmt.Errorf("gagal unstage semua file: %w", err)
+		return fmt.Errorf("failed to unstage all files: %w", err)
 	}
 	return nil
 }
 
 func (r *Repo) GetUnpushedCount() (int, error) {
 	if r == nil || r.r == nil {
-		return 0, fmt.Errorf("repositori tidak valid")
+		return 0, fmt.Errorf("invalid repository")
 	}
 	branch, err := r.GetBranchName()
 	if err != nil {
@@ -285,23 +287,150 @@ func (r *Repo) GetUnpushedCount() (int, error) {
 	return count, nil
 }
 
+// ErrGitUserNotConfigured indicates that user.name or user.email is not set in Git.
+type ErrGitUserNotConfigured struct {
+	MissingName  bool
+	MissingEmail bool
+}
+
+func (e *ErrGitUserNotConfigured) Error() string {
+	var missing []string
+	if e.MissingName {
+		missing = append(missing, "user.name")
+	}
+	if e.MissingEmail {
+		missing = append(missing, "user.email")
+	}
+	return fmt.Sprintf("Git user identity not configured (%s missing).\n\nPlease configure your Git identity using:\n  git config --global user.name \"Your Name\"\n  git config --global user.email \"you@example.com\"\n\nOr configure for this repository only:\n  git config user.name \"Your Name\"\n  git config user.email \"you@example.com\"", strings.Join(missing, " & "))
+}
+
+// GetUserSignature resolves user.name and user.email from environment variables,
+// repository / global / system git configuration, or the git CLI on the host.
+func (r *Repo) GetUserSignature() (*object.Signature, error) {
+	name := strings.TrimSpace(os.Getenv("GIT_AUTHOR_NAME"))
+	if name == "" {
+		name = strings.TrimSpace(os.Getenv("GIT_COMMITTER_NAME"))
+	}
+
+	email := strings.TrimSpace(os.Getenv("GIT_AUTHOR_EMAIL"))
+	if email == "" {
+		email = strings.TrimSpace(os.Getenv("GIT_COMMITTER_EMAIL"))
+	}
+
+	if r != nil && r.r != nil {
+		// First try local repo config
+		if cfg, err := r.r.Config(); err == nil && cfg != nil {
+			if name == "" {
+				name = strings.TrimSpace(cfg.User.Name)
+				if name == "" {
+					name = strings.TrimSpace(cfg.Author.Name)
+				}
+			}
+			if email == "" {
+				email = strings.TrimSpace(cfg.User.Email)
+				if email == "" {
+					email = strings.TrimSpace(cfg.Author.Email)
+				}
+			}
+		}
+
+		// Then try global configuration
+		if name == "" || email == "" {
+			if cfg, err := r.r.ConfigScoped(config.GlobalScope); err == nil && cfg != nil {
+				if name == "" {
+					name = strings.TrimSpace(cfg.User.Name)
+					if name == "" {
+						name = strings.TrimSpace(cfg.Author.Name)
+					}
+				}
+				if email == "" {
+					email = strings.TrimSpace(cfg.User.Email)
+					if email == "" {
+						email = strings.TrimSpace(cfg.Author.Email)
+					}
+				}
+			}
+		}
+
+		// Then try system configuration
+		if name == "" || email == "" {
+			if cfg, err := r.r.ConfigScoped(config.SystemScope); err == nil && cfg != nil {
+				if name == "" {
+					name = strings.TrimSpace(cfg.User.Name)
+					if name == "" {
+						name = strings.TrimSpace(cfg.Author.Name)
+					}
+				}
+				if email == "" {
+					email = strings.TrimSpace(cfg.User.Email)
+					if email == "" {
+						email = strings.TrimSpace(cfg.Author.Email)
+					}
+				}
+			}
+		}
+	}
+
+	// Fallback to git CLI on host (handles conditional includes and custom config paths)
+	dir := ""
+	if r != nil {
+		dir = r.RootPath
+	}
+	if name == "" {
+		if out, err := runGitConfig(dir, "user.name"); err == nil && out != "" {
+			name = out
+		}
+	}
+	if email == "" {
+		if out, err := runGitConfig(dir, "user.email"); err == nil && out != "" {
+			email = out
+		}
+	}
+
+	if name == "" || email == "" {
+		return nil, &ErrGitUserNotConfigured{
+			MissingName:  name == "",
+			MissingEmail: email == "",
+		}
+	}
+
+	return &object.Signature{
+		Name:  name,
+		Email: email,
+		When:  time.Now(),
+	}, nil
+}
+
+func runGitConfig(dir, key string) (string, error) {
+	cmd := exec.Command("git", "config", key)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
 func (r *Repo) Commit(message string) (string, error) {
 	trimmed := strings.TrimSpace(message)
 	if trimmed == "" {
-		return "", fmt.Errorf("pesan commit tidak boleh kosong")
+		return "", fmt.Errorf("commit message cannot be empty")
+	}
+
+	sig, err := r.GetUserSignature()
+	if err != nil {
+		return "", err
 	}
 
 	commitHash, err := r.worktree.Commit(trimmed, &gogit.CommitOptions{
-		Author: &object.Signature{
-			Name:  "tui-workflow",
-			Email: "developer@tui-workflow.local",
-			When:  time.Now(),
-		},
+		Author:    sig,
+		Committer: sig,
 	})
 	if err != nil {
-		return "", fmt.Errorf("gagal melakukan commit: %w", err)
+		return "", fmt.Errorf("failed to commit: %w", err)
 	}
-
 	return commitHash.String()[:7], nil
 }
 
@@ -371,7 +500,7 @@ func (r *Repo) GetFileContentAtHEAD(relPath string) (string, error) {
 // DiscardFile discards unstaged changes for a specific file in the worktree.
 func (r *Repo) DiscardFile(relPath string) error {
 	if r == nil || r.worktree == nil {
-		return fmt.Errorf("worktree tidak valid")
+		return fmt.Errorf("invalid worktree")
 	}
 	status, err := r.worktree.Status()
 	if err != nil {
@@ -405,7 +534,7 @@ func (r *Repo) DiscardFile(relPath string) error {
 // GetBranches returns all local branch names and the current branch name.
 func (r *Repo) GetBranches() (branches []string, current string, err error) {
 	if r == nil || r.r == nil {
-		return nil, "", fmt.Errorf("repositori tidak valid")
+		return nil, "", fmt.Errorf("invalid repository")
 	}
 	head, err := r.r.Head()
 	if err == nil && head.Name().IsBranch() {
@@ -431,7 +560,7 @@ func (r *Repo) GetBranches() (branches []string, current string, err error) {
 // CheckoutBranch switches the worktree to the specified local branch.
 func (r *Repo) CheckoutBranch(branchName string) error {
 	if r == nil || r.worktree == nil {
-		return fmt.Errorf("worktree tidak valid")
+		return fmt.Errorf("invalid worktree")
 	}
 	branchRef := plumbing.NewBranchReferenceName(branchName)
 	return r.worktree.Checkout(&gogit.CheckoutOptions{
@@ -442,7 +571,7 @@ func (r *Repo) CheckoutBranch(branchName string) error {
 
 func (r *Repo) GetIndexFileContent(relPath string) (string, error) {
 	if r == nil || r.r == nil {
-		return "", fmt.Errorf("repositori tidak valid")
+		return "", fmt.Errorf("invalid repository")
 	}
 	idx, err := r.r.Storer.Index()
 	if err != nil || idx == nil {
@@ -472,7 +601,7 @@ func (r *Repo) GetIndexFileContent(relPath string) (string, error) {
 
 func (r *Repo) SetIndexFileContent(relPath string, content string) error {
 	if r == nil || r.worktree == nil {
-		return fmt.Errorf("repositori tidak valid")
+		return fmt.Errorf("invalid repository")
 	}
 	fullPath := filepath.Join(r.RootPath, relPath)
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
@@ -486,14 +615,14 @@ func (r *Repo) SetIndexFileContent(relPath string, content string) error {
 		return err
 	}
 	if _, err := r.worktree.Add(relPath); err != nil {
-		return fmt.Errorf("gagal memperbarui index untuk '%s': %w", relPath, err)
+		return fmt.Errorf("failed to update index for '%s': %w", relPath, err)
 	}
 	return nil
 }
 
 func (r *Repo) GetWorktreeFileContent(relPath string) (string, error) {
 	if r == nil || r.worktree == nil {
-		return "", fmt.Errorf("worktree tidak valid")
+		return "", fmt.Errorf("invalid worktree")
 	}
 	fullPath := filepath.Join(r.RootPath, relPath)
 	data, err := os.ReadFile(fullPath)
@@ -508,7 +637,7 @@ func (r *Repo) GetWorktreeFileContent(relPath string) (string, error) {
 
 func (r *Repo) GetDiffHunks(relPath string, staged bool, contextLines int) ([]DiffHunk, SplitDiffResult, string, string, error) {
 	if r == nil || r.worktree == nil || r.r == nil {
-		return nil, SplitDiffResult{}, "", "", fmt.Errorf("repositori tidak valid")
+		return nil, SplitDiffResult{}, "", "", fmt.Errorf("invalid repository")
 	}
 	headContent, err := r.GetFileContentAtHEAD(relPath)
 	if err != nil {
@@ -555,58 +684,58 @@ func invertUnifiedLines(lines []string) []string {
 
 func (r *Repo) StageHunk(relPath string, hunkIndex int) error {
 	if r == nil || r.worktree == nil {
-		return fmt.Errorf("repositori tidak valid")
+		return fmt.Errorf("invalid repository")
 	}
 	hunks, _, indexContent, _, err := r.GetDiffHunks(relPath, false, 3)
 	if err != nil {
 		return err
 	}
 	if hunkIndex < 0 || hunkIndex >= len(hunks) {
-		return fmt.Errorf("hunk tidak ditemukan")
+		return fmt.Errorf("hunk not found")
 	}
 	newIndex, err := ApplyUnifiedHunkToText(indexContent, hunks[hunkIndex], "orig")
 	if err != nil {
-		return fmt.Errorf("gagal stage hunk: %w", err)
+		return fmt.Errorf("failed to stage hunk: %w", err)
 	}
 	return r.SetIndexFileContent(relPath, newIndex)
 }
 
 func (r *Repo) UnstageHunk(relPath string, hunkIndex int) error {
 	if r == nil || r.worktree == nil {
-		return fmt.Errorf("repositori tidak valid")
+		return fmt.Errorf("invalid repository")
 	}
 	hunks, _, _, indexContent, err := r.GetDiffHunks(relPath, true, 3)
 	if err != nil {
 		return err
 	}
 	if hunkIndex < 0 || hunkIndex >= len(hunks) {
-		return fmt.Errorf("hunk tidak ditemukan")
+		return fmt.Errorf("hunk not found")
 	}
 	inv := hunks[hunkIndex]
 	inv.Lines = invertUnifiedLines(inv.Lines)
 	newIndex, err := ApplyUnifiedHunkToText(indexContent, inv, "mod")
 	if err != nil {
-		return fmt.Errorf("gagal unstage hunk: %w", err)
+		return fmt.Errorf("failed to unstage hunk: %w", err)
 	}
 	return r.SetIndexFileContent(relPath, newIndex)
 }
 
 func (r *Repo) DiscardHunk(relPath string, hunkIndex int) error {
 	if r == nil || r.worktree == nil {
-		return fmt.Errorf("repositori tidak valid")
+		return fmt.Errorf("invalid repository")
 	}
 	hunks, _, _, workContent, err := r.GetDiffHunks(relPath, false, 3)
 	if err != nil {
 		return err
 	}
 	if hunkIndex < 0 || hunkIndex >= len(hunks) {
-		return fmt.Errorf("hunk tidak ditemukan")
+		return fmt.Errorf("hunk not found")
 	}
 	inv := hunks[hunkIndex]
 	inv.Lines = invertUnifiedLines(inv.Lines)
 	newWork, err := ApplyUnifiedHunkToText(workContent, inv, "mod")
 	if err != nil {
-		return fmt.Errorf("gagal discard hunk: %w", err)
+		return fmt.Errorf("failed to discard hunk: %w", err)
 	}
 	fullPath := filepath.Join(r.RootPath, relPath)
 	mode := os.FileMode(0644)
@@ -621,7 +750,7 @@ func (r *Repo) DiscardHunk(relPath string, hunkIndex int) error {
 // GetStagedDiff returns unified diff text of all staged files against HEAD.
 func (r *Repo) GetStagedDiff() (string, error) {
 	if r == nil || r.worktree == nil {
-		return "", fmt.Errorf("worktree tidak valid")
+		return "", fmt.Errorf("invalid worktree")
 	}
 
 	staged, _, err := r.GetStatus()

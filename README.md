@@ -33,6 +33,8 @@
 
 ### 3. 📑 Multi-Tab Manager & Quick Buffer Switcher
 - **Single-Line Guarantee:** Tab bar dijamin selalu 1 baris, dilengkapi auto-truncate judul dan scrolling window horizontal `<` / `>` saat tab melebihi lebar layar.
+- **Tab Pinning (`Alt+P`):** Sematkan tab penting di sisi kiri dengan ikon pin `📌`. Tab yang disematkan dilindungi dari penutupan massal (*Close Others / Close All*) dan tidak memiliki tombol tutup `[×]`.
+- **Drag & Drop Tab Reordering:** Geser dan ubah urutan tab editor secara langsung menggunakan klik kiri tahan dan drag mouse.
 - **Quick Buffer Switcher (`Ctrl+P`):** Modal pencarian cepat untuk berpindah antar tab buffer aktif dengan filter realtime.
 - **Unsaved Changes Guard:** Modal konfirmasi keamanan saat menutup tab buffer yang belum tersimpan (`[Save]`, `[Discard]`, `[Cancel]`).
 
@@ -64,6 +66,8 @@
 - Klik untuk beralih tab sidebar (`1:Files` / `2:Git`).
 - Klik expand/collapse dan buka file pada File Explorer.
 - Klik tab editor untuk aktivasi dan tombol `[×]` untuk menutup tab.
+- Drag and drop tab editor dengan mouse (klik kiri tahan lalu geser) untuk mengubah posisi/urutan tab.
+- Right-click pada tab editor untuk membuka menu konteks (Sematkan Tab, Tutup, dll).
 - Klik tombol `[+]` dan `[-]` pada Git sidebar.
 - Mouse wheel scrolling pada editor buffer, markdown preview, dan split diff view.
 - `Alt+Click` pada simbol untuk Go to Definition.
@@ -123,6 +127,7 @@
 | Pintasan | Aksi |
 |---|---|
 | `Ctrl + S` | Simpan buffer aktif ke disk (opsional auto-format jika format_on_save aktif) |
+| `Alt + P` | Sematkan / Lepas Sematan tab aktif (Pin/Unpin Tab) |
 | `Ctrl + Shift + I` / `Alt + Shift + F` | Format dokumen aktif menggunakan CLI formatter (Prettier, Biome, Pint, Gofmt, dll) |
 | `Ctrl + W` | Tutup tab aktif |
 | `Ctrl + N` | Pindah ke tab berikutnya secara berurutan |

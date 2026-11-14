@@ -216,10 +216,10 @@ func isSessionRestorableFile(path string) error {
 		return err
 	}
 	if info.IsDir() {
-		return fmt.Errorf("path adalah direktori")
+		return fmt.Errorf("path is a directory")
 	}
 	if info.Size() > editor.MaxFileSize {
-		return fmt.Errorf("ukuran file (%d MB) melebihi batas 10MB", info.Size()/(1024*1024))
+		return fmt.Errorf("file size (%d MB) exceeds 10MB limit", info.Size()/(1024*1024))
 	}
 	f, err := os.Open(path)
 	if err != nil {
@@ -229,7 +229,7 @@ func isSessionRestorableFile(path string) error {
 	header := make([]byte, 512)
 	n, _ := f.Read(header)
 	if bytes.IndexByte(header[:n], 0x00) != -1 {
-		return fmt.Errorf("file biner tidak didukung")
+		return fmt.Errorf("binary file is not supported")
 	}
 	return nil
 }

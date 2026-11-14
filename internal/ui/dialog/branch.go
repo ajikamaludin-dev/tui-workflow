@@ -218,7 +218,7 @@ func (b *BranchSwitcher) Render() string {
 		Background(ui.CurrentTheme.BgTopMenu).
 		Padding(0, 1)
 
-	header := titleStyle.Render("🌿 Ganti Branch Git (Alt+B)")
+	header := titleStyle.Render("🌿 Switch Git Branch (Alt+B)")
 	searchBox := lipgloss.NewStyle().
 		Background(ui.CurrentTheme.BgTopMenu).
 		Padding(0, 1).
@@ -230,7 +230,7 @@ func (b *BranchSwitcher) Render() string {
 			Foreground(ui.CurrentTheme.FgSecondary).
 			Background(ui.CurrentTheme.BgTopMenu).
 			Padding(0, 2)
-		rows = append(rows, emptyStyle.Render("(Tidak ada branch yang cocok)"))
+		rows = append(rows, emptyStyle.Render("(No matching branches)"))
 	} else {
 		endIdx := b.ScrollTop + b.MaxRows
 		if endIdx > len(b.Filtered) {
@@ -275,7 +275,7 @@ func (b *BranchSwitcher) Render() string {
 		Foreground(ui.CurrentTheme.FgSecondary).
 		Background(ui.CurrentTheme.BgTopMenu).
 		Padding(0, 1)
-	hint := hintStyle.Render(" [↑/↓:Pilih Enter:Ganti Esc:Batal] ")
+	hint := hintStyle.Render(" [↑/↓:Select Enter:Switch Esc:Cancel] ")
 
 	body := lipgloss.JoinVertical(
 		lipgloss.Left,

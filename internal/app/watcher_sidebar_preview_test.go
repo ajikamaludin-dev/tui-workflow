@@ -397,7 +397,7 @@ func TestExternalChangeConflictDialogOptions(t *testing.T) {
 		tab.Buffer.InsertString(" + edit lokal saya")
 
 		time.Sleep(10 * time.Millisecond)
-		_ = os.WriteFile(filePath, []byte("perubahan luar lagi"), 0644)
+		_ = os.WriteFile(filePath, []byte("external changes again"), 0644)
 
 		newM, _ := m.Update(FileWatchTickMsg(time.Now()))
 		m = newM.(Model)
@@ -415,7 +415,7 @@ func TestExternalChangeConflictDialogOptions(t *testing.T) {
 		if !strings.Contains(tab.Buffer.Text(), "edit lokal saya") {
 			t.Errorf("Expected buffer to keep local edits on cancel, got: %q", tab.Buffer.Text())
 		}
-		if !strings.Contains(m.StatusBar.ToastMsg, "Perubahan eksternal diabaikan") {
+		if !strings.Contains(m.StatusBar.ToastMsg, "External changes ignored") {
 			t.Errorf("Expected toast notification for cancel/keep local, got %q", m.StatusBar.ToastMsg)
 		}
 	}

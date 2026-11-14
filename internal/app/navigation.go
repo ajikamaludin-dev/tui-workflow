@@ -23,7 +23,7 @@ func (m *Model) gotoDefinition() {
 	}
 	word := tab.Buffer.WordAtCursor()
 	if word == "" {
-		m.StatusBar.ShowToast("Cursor tidak berada di atas simbol", true, 2*time.Second)
+		m.StatusBar.ShowToast("Cursor is not on a symbol", true, 2*time.Second)
 		return
 	}
 
@@ -77,7 +77,7 @@ func (m *Model) gotoDefinitionAt(row, col int) {
 		e++
 	}
 	if s >= e {
-		m.StatusBar.ShowToast("Tidak ada simbol di posisi klik", true, 2*time.Second)
+		m.StatusBar.ShowToast("No symbol at click position", true, 2*time.Second)
 		return
 	}
 	word := string(line[s:e])
@@ -89,17 +89,17 @@ func (m *Model) gotoDefinitionAt(row, col int) {
 
 func (m *Model) gotoDefinitionWord(word string) {
 	if m.SymbolIndex == nil {
-		m.StatusBar.ShowToast("Symbol index belum siap", true, 2*time.Second)
+		m.StatusBar.ShowToast("Symbol index not ready", true, 2*time.Second)
 		return
 	}
 	defs := m.SymbolIndex.Definitions(word)
 	if len(defs) == 0 {
-		m.StatusBar.ShowToast("Tidak ada definisi untuk '"+word+"'", true, 2*time.Second)
+		m.StatusBar.ShowToast("No definition found for '"+word+"'", true, 2*time.Second)
 		return
 	}
 	d := defs[0]
 	if len(defs) > 1 {
-		m.StatusBar.ShowToast(fmt.Sprintf("%d definisi ditemukan, loncat ke pertama (%s:%d)", len(defs), d.FilePath, d.Line), false, 2*time.Second)
+		m.StatusBar.ShowToast(fmt.Sprintf("%d definitions found, jumping to first (%s:%d)", len(defs), d.FilePath, d.Line), false, 2*time.Second)
 	} else {
 		m.StatusBar.ShowToast(fmt.Sprintf("Definisi '%s' → %s:%d", word, d.FilePath, d.Line), false, 2*time.Second)
 	}
@@ -114,7 +114,7 @@ func (m *Model) findReferences() {
 	}
 	word := tab.Buffer.WordAtCursor()
 	if word == "" {
-		m.StatusBar.ShowToast("Cursor tidak berada di atas simbol", true, 2*time.Second)
+		m.StatusBar.ShowToast("Cursor is not on a symbol", true, 2*time.Second)
 		return
 	}
 	if m.SearchView == nil {
@@ -140,6 +140,6 @@ func (m *Model) addNextOccurrence() {
 		m.StatusBar.ShowToast(fmt.Sprintf("Cursor: %d", buf.CursorCount()), false, 1*time.Second)
 		return
 	}
-	m.StatusBar.ShowToast("Tidak ada occurrence lain", true, 2*time.Second)
+	m.StatusBar.ShowToast("No other occurrences found", true, 2*time.Second)
 }
 

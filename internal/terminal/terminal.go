@@ -75,7 +75,7 @@ func NewTerminalView(id string, cols, rows int, shell string, cwd string) (*Term
 		Cols: uint16(cols),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("gagal memulai PTY: %w", err)
+		return nil, fmt.Errorf("failed to start PTY: %w", err)
 	}
 
 	vt := vt10x.New(vt10x.WithSize(cols, rows))

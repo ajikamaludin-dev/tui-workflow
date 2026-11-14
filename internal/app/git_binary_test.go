@@ -34,8 +34,8 @@ func TestGitClickStageButtonAndBinaryGuard(t *testing.T) {
 		t.Errorf("Binary file should NOT be opened in TabManager diff view")
 	}
 
-	if m.StatusBar.ToastMsg != "Diff file biner tidak didukung" {
-		t.Errorf("Expected toast 'Diff file biner tidak didukung', got: %q", m.StatusBar.ToastMsg)
+	if m.StatusBar.ToastMsg != "Binary file diff is not supported" {
+		t.Errorf("Expected toast 'Binary file diff is not supported', got: %q", m.StatusBar.ToastMsg)
 	}
 
 	// 2. Test GitView click coordinates

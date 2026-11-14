@@ -311,7 +311,7 @@ func (t *Tree) Render(width, height int, focused bool) string {
 		return lipgloss.NewStyle().
 			Foreground(ui.CurrentTheme.FgSecondary).
 			Padding(1, 1).
-			Render("(Folder Kosong)")
+			Render("(Empty Folder)")
 	}
 
 	maxScroll := len(t.FlatNodes) - height

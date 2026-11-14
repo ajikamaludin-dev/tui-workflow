@@ -343,7 +343,7 @@ func (gv *GitView) AdvanceSpinner() {
 
 func (gv *GitView) StageAll() error {
 	if gv.Repo == nil {
-		return fmt.Errorf("repositori git tidak ditemukan")
+		return fmt.Errorf("git repository not found")
 	}
 	err := gv.Repo.StageAll()
 	if err != nil {
@@ -366,7 +366,7 @@ func (gv *GitView) UnstageSelected() error {
 
 func (gv *GitView) UnstageAll() error {
 	if gv.Repo == nil {
-		return fmt.Errorf("repositori git tidak ditemukan")
+		return fmt.Errorf("git repository not found")
 	}
 	err := gv.Repo.UnstageAll()
 	if err != nil {
@@ -378,10 +378,10 @@ func (gv *GitView) UnstageAll() error {
 
 func (gv *GitView) DoCommit() (string, error) {
 	if gv.Repo == nil {
-		return "", fmt.Errorf("repositori git tidak ditemukan")
+		return "", fmt.Errorf("git repository not found")
 	}
 	if len(gv.Staged) == 0 {
-		return "", fmt.Errorf("tidak ada perubahan di staging area")
+		return "", fmt.Errorf("no changes in staging area")
 	}
 	msg := gv.CommitInput.Value()
 	hash, err := gv.Repo.Commit(msg)
@@ -395,7 +395,7 @@ func (gv *GitView) DoCommit() (string, error) {
 
 func (gv *GitView) Push() error {
 	if gv.Repo == nil {
-		return fmt.Errorf("repositori git tidak ditemukan")
+		return fmt.Errorf("git repository not found")
 	}
 	err := gv.Repo.Push()
 	if err != nil {
@@ -761,8 +761,8 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 
 	if gv.Repo == nil {
 		lines := []string{
-			" Bukan repositori Git",
-			" Jalankan 'git init'",
+			" Not a Git repository",
+			" Run 'git init'",
 		}
 		for len(lines) < height {
 			lines = append(lines, "")

@@ -89,30 +89,30 @@ func (tm *TabManager) OpenFile(path string) (*Tab, error) {
 	// 2. Stat file & check size limit (10MB)
 	info, err := os.Stat(path)
 	if err != nil {
-		return nil, fmt.Errorf("gagal membaca info file: %w", err)
+		return nil, fmt.Errorf("failed to read file info: %w", err)
 	}
 
 	if info.Size() > MaxFileSize {
-		return nil, fmt.Errorf("ukuran file (%d MB) melebihi batas 10MB", info.Size()/(1024*1024))
+		return nil, fmt.Errorf("file size (%d MB) exceeds 10MB limit", info.Size()/(1024*1024))
 	}
 
 	// 3. Binary guard (check null byte in first 512 bytes)
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("gagal membuka file: %w", err)
+		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
 	defer f.Close()
 
 	header := make([]byte, 512)
 	n, _ := f.Read(header)
 	if bytes.IndexByte(header[:n], 0x00) != -1 {
-		return nil, fmt.Errorf("file biner tidak didukung")
+		return nil, fmt.Errorf("binary file is not supported")
 	}
 
 	// 4. Read file content
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("gagal membaca isi file: %w", err)
+		return nil, fmt.Errorf("failed to read file content: %w", err)
 	}
 
 	tab := NewFileTab(path, string(content))
@@ -171,7 +171,7 @@ func (tm *TabManager) SaveActive() error {
 
 	err := os.WriteFile(tab.Path, []byte(tab.Buffer.Text()), 0644)
 	if err != nil {
-		return fmt.Errorf("gagal menyimpan file: %w", err)
+		return fmt.Errorf("failed to save file: %w", err)
 	}
 
 	if info, errStat := os.Stat(tab.Path); errStat == nil {
@@ -193,7 +193,7 @@ func (tm *TabManager) SaveTab(idx int) error {
 
 	err := os.WriteFile(tab.Path, []byte(tab.Buffer.Text()), 0644)
 	if err != nil {
-		return fmt.Errorf("gagal menyimpan file '%s': %w", tab.Name, err)
+		return fmt.Errorf("failed to save file '%s': %w", tab.Name, err)
 	}
 
 	if info, errStat := os.Stat(tab.Path); errStat == nil {
@@ -227,36 +227,53 @@ func (tm *TabManager) CloseTab(idx int) {
 	}
 }
 
-// CloseOtherTabs closes all tabs except specified index.
+// CloseOtherTabs closes all unpinned tabs except specified index.
 func (tm *TabManager) CloseOtherTabs(keepIdx int) {
 	if keepIdx < 0 || keepIdx >= len(tm.Tabs) {
 		return
 	}
+	target := tm.Tabs[keepIdx]
+	var newTabs []*Tab
 	for i, tab := range tm.Tabs {
-		if i != keepIdx && tab.Type == TabTerminal && tab.TerminalView != nil {
+		if i == keepIdx || tab.IsPinned {
+			newTabs = append(newTabs, tab)
+		} else if tab.Type == TabTerminal && tab.TerminalView != nil {
 			_ = tab.TerminalView.Close()
 		}
 	}
-	target := tm.Tabs[keepIdx]
-	tm.Tabs = []*Tab{target}
-	tm.ActiveIndex = 0
-	tm.TabScrollOffset = 0
+	tm.Tabs = newTabs
+	newActive := 0
+	for i, tab := range tm.Tabs {
+		if tab == target {
+			newActive = i
+			break
+		}
+	}
+	tm.ActiveIndex = newActive
+	if tm.TabScrollOffset >= len(tm.Tabs) {
+		tm.TabScrollOffset = len(tm.Tabs) - 1
+	}
+	if tm.TabScrollOffset < 0 {
+		tm.TabScrollOffset = 0
+	}
 }
 
-// CloseTabsToRight closes all tabs right target index.
+// CloseTabsToRight closes all unpinned tabs to right of target index.
 func (tm *TabManager) CloseTabsToRight(idx int) {
 	if idx < 0 || idx >= len(tm.Tabs) {
 		return
 	}
-	for i := idx + 1; i < len(tm.Tabs); i++ {
-		tab := tm.Tabs[i]
-		if tab.Type == TabTerminal && tab.TerminalView != nil {
+	var newTabs []*Tab
+	for i, tab := range tm.Tabs {
+		if i <= idx || tab.IsPinned {
+			newTabs = append(newTabs, tab)
+		} else if tab.Type == TabTerminal && tab.TerminalView != nil {
 			_ = tab.TerminalView.Close()
 		}
 	}
-	tm.Tabs = tm.Tabs[:idx+1]
-	if tm.ActiveIndex > idx {
-		tm.ActiveIndex = idx
+	tm.Tabs = newTabs
+	if tm.ActiveIndex >= len(tm.Tabs) {
+		tm.ActiveIndex = len(tm.Tabs) - 1
 	}
 	if tm.TabScrollOffset >= len(tm.Tabs) {
 		tm.TabScrollOffset = len(tm.Tabs) - 1
@@ -266,23 +283,29 @@ func (tm *TabManager) CloseTabsToRight(idx int) {
 	}
 }
 
-// CloseTabsToLeft closes all tabs left target index.
+// CloseTabsToLeft closes all unpinned tabs to left of target index.
 func (tm *TabManager) CloseTabsToLeft(idx int) {
 	if idx <= 0 || idx >= len(tm.Tabs) {
 		return
 	}
-	for i := 0; i < idx; i++ {
-		tab := tm.Tabs[i]
-		if tab.Type == TabTerminal && tab.TerminalView != nil {
+	target := tm.Tabs[idx]
+	var newTabs []*Tab
+	for i, tab := range tm.Tabs {
+		if i >= idx || tab.IsPinned {
+			newTabs = append(newTabs, tab)
+		} else if tab.Type == TabTerminal && tab.TerminalView != nil {
 			_ = tab.TerminalView.Close()
 		}
 	}
-	tm.Tabs = append([]*Tab(nil), tm.Tabs[idx:]...)
-	if tm.ActiveIndex < idx {
-		tm.ActiveIndex = 0
-	} else {
-		tm.ActiveIndex -= idx
+	tm.Tabs = newTabs
+	newActive := 0
+	for i, tab := range tm.Tabs {
+		if tab == target {
+			newActive = i
+			break
+		}
 	}
+	tm.ActiveIndex = newActive
 	if tm.TabScrollOffset >= len(tm.Tabs) {
 		tm.TabScrollOffset = len(tm.Tabs) - 1
 	}
@@ -291,16 +314,122 @@ func (tm *TabManager) CloseTabsToLeft(idx int) {
 	}
 }
 
-// CloseAllTabs closes all tabs.
+// CloseAllTabs closes all unpinned tabs.
 func (tm *TabManager) CloseAllTabs() {
+	var newTabs []*Tab
 	for _, tab := range tm.Tabs {
-		if tab.Type == TabTerminal && tab.TerminalView != nil {
+		if tab.IsPinned {
+			newTabs = append(newTabs, tab)
+		} else if tab.Type == TabTerminal && tab.TerminalView != nil {
 			_ = tab.TerminalView.Close()
 		}
 	}
-	tm.Tabs = make([]*Tab, 0)
-	tm.ActiveIndex = 0
-	tm.TabScrollOffset = 0
+	tm.Tabs = newTabs
+	if tm.ActiveIndex >= len(tm.Tabs) {
+		tm.ActiveIndex = len(tm.Tabs) - 1
+	}
+	if tm.ActiveIndex < 0 && len(tm.Tabs) > 0 {
+		tm.ActiveIndex = 0
+	}
+	if tm.TabScrollOffset >= len(tm.Tabs) && len(tm.Tabs) > 0 {
+		tm.TabScrollOffset = len(tm.Tabs) - 1
+	} else if len(tm.Tabs) == 0 {
+		tm.TabScrollOffset = 0
+	}
+}
+
+// PinnedCount returns number of pinned tabs.
+func (tm *TabManager) PinnedCount() int {
+	count := 0
+	for _, t := range tm.Tabs {
+		if t.IsPinned {
+			count++
+		}
+	}
+	return count
+}
+
+// IsTabPinned returns whether tab at idx is pinned.
+func (tm *TabManager) IsTabPinned(idx int) bool {
+	if idx >= 0 && idx < len(tm.Tabs) {
+		return tm.Tabs[idx].IsPinned
+	}
+	return false
+}
+
+func (tm *TabManager) moveRawTab(from, to int) {
+	if from == to || from < 0 || from >= len(tm.Tabs) || to < 0 || to >= len(tm.Tabs) {
+		return
+	}
+	tab := tm.Tabs[from]
+	tm.Tabs = append(tm.Tabs[:from], tm.Tabs[from+1:]...)
+	tm.Tabs = append(tm.Tabs[:to], append([]*Tab{tab}, tm.Tabs[to:]...)...)
+
+	if tm.ActiveIndex == from {
+		tm.ActiveIndex = to
+	} else if from < tm.ActiveIndex && to >= tm.ActiveIndex {
+		tm.ActiveIndex--
+	} else if from > tm.ActiveIndex && to <= tm.ActiveIndex {
+		tm.ActiveIndex++
+	}
+}
+
+// MoveTab moves tab from from index to to index, respecting pinned grouping.
+func (tm *TabManager) MoveTab(from, to int) bool {
+	if from < 0 || from >= len(tm.Tabs) || to < 0 || to >= len(tm.Tabs) || from == to {
+		return false
+	}
+	fromTab := tm.Tabs[from]
+	if fromTab.IsPinned {
+		lastPinned := 0
+		for i, t := range tm.Tabs {
+			if t.IsPinned {
+				lastPinned = i
+			}
+		}
+		if to > lastPinned {
+			to = lastPinned
+		}
+	} else {
+		firstUnpinned := len(tm.Tabs) - 1
+		for i, t := range tm.Tabs {
+			if !t.IsPinned {
+				firstUnpinned = i
+				break
+			}
+		}
+		if to < firstUnpinned {
+			to = firstUnpinned
+		}
+	}
+	if from == to {
+		return false
+	}
+	tm.moveRawTab(from, to)
+	return true
+}
+
+// TogglePinTab toggles the pinned status of tab at idx and keeps pinned tabs grouped on the left.
+func (tm *TabManager) TogglePinTab(idx int) bool {
+	if idx < 0 || idx >= len(tm.Tabs) {
+		return false
+	}
+	tab := tm.Tabs[idx]
+	tab.IsPinned = !tab.IsPinned
+
+	numPinned := tm.PinnedCount()
+	var targetIdx int
+	if tab.IsPinned {
+		targetIdx = numPinned - 1
+	} else {
+		targetIdx = numPinned
+	}
+
+	if targetIdx != idx && targetIdx >= 0 && targetIdx < len(tm.Tabs) {
+		tm.moveRawTab(idx, targetIdx)
+	}
+	tm.EnsureActiveTabVisible()
+	return true
 }
 
 func (tm *TabManager) SetActiveIndex(idx int) bool {
@@ -408,7 +537,7 @@ func (tm *TabManager) HandleTabClick(clickX int) (action string, tabIdx int) {
 
 	for _, reg := range tm.ClickRegions {
 		if clickX >= reg.StartX && clickX <= reg.EndX {
-			if clickX >= reg.CloseX && clickX <= reg.EndX {
+			if reg.CloseX >= 0 && clickX >= reg.CloseX && clickX <= reg.EndX {
 				return "close", reg.TabIdx
 			}
 			return "activate", reg.TabIdx
@@ -427,7 +556,7 @@ func (tm *TabManager) RenderTabBar(width int) string {
 	tm.ScrollRightEndX = -1
 
 	if len(tm.Tabs) == 0 {
-		return ui.CurrentTheme.TabBarContainer.Width(width).MaxHeight(1).Render(" (Tidak ada file terbuka)")
+		return ui.CurrentTheme.TabBarContainer.Width(width).MaxHeight(1).Render(" (No open files)")
 	}
 
 	var rightButton string
@@ -461,12 +590,20 @@ func (tm *TabManager) RenderTabBar(width int) string {
 		if ansi.StringWidth(rawTitle) > maxTabTitleLen {
 			rawTitle = ansi.Truncate(rawTitle, maxTabTitleLen, "..")
 		}
-		titleWithClose := rawTitle + " ×"
-		var r string
-		if i == tm.ActiveIndex {
-			r = ui.CurrentTheme.TabActiveStyle.Render(titleWithClose)
+		var titleContent string
+		if t.IsPinned {
+			titleContent = "📌 " + rawTitle
 		} else {
-			r = ui.CurrentTheme.TabInactiveStyle.Render(titleWithClose)
+			titleContent = rawTitle + " ×"
+		}
+
+		var r string
+		if i == tm.DraggingIndex {
+			r = ui.CurrentTheme.TabActiveStyle.Underline(true).Render(titleContent)
+		} else if i == tm.ActiveIndex {
+			r = ui.CurrentTheme.TabActiveStyle.Render(titleContent)
+		} else {
+			r = ui.CurrentTheme.TabInactiveStyle.Render(titleContent)
 		}
 		renderedTabs[i] = renderedTabInfo{
 			Index:    i,
@@ -509,7 +646,10 @@ func (tm *TabManager) RenderTabBar(width int) string {
 
 		startX := currX
 		endX := startX + rt.Width - 1
-		closeX := endX - 2 // Position of '×'
+		closeX := -1
+		if !tm.Tabs[rt.Index].IsPinned {
+			closeX = endX - 2 // Position of '×'
+		}
 
 		tm.ClickRegions = append(tm.ClickRegions, TabClickRegion{
 			TabIdx: rt.Index,

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"sort"
 	"bytes"
 	"context"
@@ -67,6 +68,9 @@ type Model struct {
 	ShowAbout         bool
 	ClosingTabIdx     int
 	ContextMenuTabIdx int
+	DraggingTabIdx    int
+	IsDraggingTab     bool
+	DragTabStartX     int
 	ResizingSidebar   bool
 	lastPointerShape  string
 
@@ -104,7 +108,7 @@ func NewModelWithPath(targetPath string, explicitArg bool) (Model, error) {
 	}
 	fi, err := os.Stat(cleanPath)
 	if err != nil {
-		return Model{}, fmt.Errorf("path tidak ditemukan: %w", err)
+		return Model{}, fmt.Errorf("path not found: %w", err)
 	}
 
 	var rootDir string
@@ -181,6 +185,7 @@ func NewModelWithPath(targetPath string, explicitArg bool) (Model, error) {
 		ShowAbout:         false,
 		ClosingTabIdx:     -1,
 		ContextMenuTabIdx: -1,
+		DraggingTabIdx:    -1,
 		SessionExplicitArg: explicitArg,
 		LinterStore:       linter.NewStore(),
 		LSPManager:        lsp.NewManager(rootDir),
@@ -359,13 +364,13 @@ func (m Model) handleCtrlSpace() (tea.Model, tea.Cmd) {
 		} else {
 			serverBin, _, _ := lsp.DetectLanguageServer(m.RootDir, ext)
 			if serverBin == "" {
-				m.StatusBar.ShowToast("Autocomplete lokal & snippet aktif (LSP server tidak ditemukan)", false, 2*time.Second)
+				m.StatusBar.ShowToast("Local autocomplete & snippets active (LSP server not found)", false, 2*time.Second)
 			}
 		}
 	}
 
 	if len(filtered) == 0 {
-		m.StatusBar.ShowToast("Tidak ada sugesti autocomplete", false, 1*time.Second)
+		m.StatusBar.ShowToast("No autocomplete suggestions", false, 1*time.Second)
 	}
 
 	return m, nil
@@ -564,7 +569,7 @@ type gitPushResultMsg struct {
 func gitPushCmd(repo *git.Repo) tea.Cmd {
 	return func() tea.Msg {
 		if repo == nil {
-			return gitPushResultMsg{err: fmt.Errorf("repositori git tidak ditemukan")}
+			return gitPushResultMsg{err: fmt.Errorf("git repository not found")}
 		}
 		err := repo.Push()
 		return gitPushResultMsg{err: err}
@@ -576,10 +581,57 @@ type gitCommitResultMsg struct {
 	err  error
 }
 
+func (m *Model) triggerGitCommit() (Model, tea.Cmd) {
+	if m.GitView == nil {
+		return *m, nil
+	}
+	if m.GitView.IsLoading {
+		return *m, nil
+	}
+	if len(m.GitView.Staged) == 0 {
+		m.StatusBar.ShowToast("No changes in staging area", true, 3*time.Second)
+		return *m, nil
+	}
+	if m.GitRepo == nil {
+		m.StatusBar.ShowToast("Git repository not found", true, 3*time.Second)
+		return *m, nil
+	}
+
+	// Proactively check git user identity on host
+	if _, err := m.GitRepo.GetUserSignature(); err != nil {
+		var userErr *git.ErrGitUserNotConfigured
+		if errors.As(err, &userErr) {
+			m.openGitUserNotConfiguredAlert()
+			m.StatusBar.ShowToast("Commit failed: Git user identity not configured", true, 4*time.Second)
+			return *m, nil
+		}
+	}
+
+	commitMsg := m.GitView.CommitInput.Value()
+	m.GitView.IsLoading = true
+	m.GitView.LoadingMsg = "Committing..."
+	m.GitView.SpinnerFrame = 0
+	m.StatusBar.ShowToast("Melakukan commit...", false, 3*time.Second)
+	return *m, tea.Batch(gitCommitCmd(m.GitRepo, commitMsg), gitLoadingTickCmd())
+}
+
+func (m *Model) openGitUserNotConfiguredAlert() {
+	title := "Git Identity Required"
+	msg := "Git user name and email are not configured on this host.\n\n" +
+		"Please configure your Git identity using terminal:\n" +
+		"  git config --global user.name \"Your Name\"\n" +
+		"  git config --global user.email \"you@example.com\"\n\n" +
+		"Or configure for this repository only:\n" +
+		"  git config user.name \"Your Name\"\n" +
+		"  git config user.email \"you@example.com\""
+
+	m.ConfirmDialog.Open(dialog.ConfirmAlert, title, msg, "")
+}
+
 func gitCommitCmd(repo *git.Repo, commitMsg string) tea.Cmd {
 	return func() tea.Msg {
 		if repo == nil {
-			return gitCommitResultMsg{err: fmt.Errorf("repositori git tidak ditemukan")}
+			return gitCommitResultMsg{err: fmt.Errorf("git repository not found")}
 		}
 		hash, err := repo.Commit(commitMsg)
 		return gitCommitResultMsg{hash: hash, err: err}
@@ -619,7 +671,7 @@ func formatBufferCmd(tabID string, content string, filePath string, workspaceDir
 
 func (m *Model) openGoToSymbol() {
 	if m.SymbolIndex == nil {
-		m.StatusBar.ShowToast("Symbol index belum siap", true, 2*time.Second)
+		m.StatusBar.ShowToast("Symbol index not ready", true, 2*time.Second)
 		return
 	}
 	m.GoToSymbolActive = true
@@ -746,7 +798,7 @@ func (m *Model) handleGoToSymbolKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *Model) triggerFormatCurrentBuffer() (Model, tea.Cmd) {
 	tab := m.TabManager.ActiveTab()
 	if tab == nil || tab.Buffer == nil || tab.IsDiff {
-		m.StatusBar.ShowToast("Tidak ada file aktif untuk diformat", true, 3*time.Second)
+		m.StatusBar.ShowToast("No active file to format", true, 3*time.Second)
 		return *m, nil
 	}
 
@@ -801,7 +853,7 @@ func (m *Model) openNewTerminalTab() (Model, tea.Cmd) {
 	termID := fmt.Sprintf("term:%d", time.Now().UnixNano())
 	term, err := terminal.NewTerminalView(termID, contentWidth, bodyHeight, "", m.RootDir)
 	if err != nil {
-		m.StatusBar.ShowToast(fmt.Sprintf("Gagal membuka terminal: %v", err), true, 3*time.Second)
+		m.StatusBar.ShowToast(fmt.Sprintf("Failed to open terminal: %v", err), true, 3*time.Second)
 		return *m, nil
 	}
 
@@ -824,7 +876,7 @@ type aiCommitErrorMsg struct {
 func aiGenerateCommitCmd(client *ai.Client, cfg config.AIConfig, repo *git.Repo) tea.Cmd {
 	return func() tea.Msg {
 		if repo == nil {
-			return aiCommitErrorMsg{err: fmt.Errorf("repositori git tidak ditemukan")}
+			return aiCommitErrorMsg{err: fmt.Errorf("git repository not found")}
 		}
 		diff, err := repo.GetStagedDiff()
 		if err != nil {
@@ -843,14 +895,14 @@ func aiGenerateCommitCmd(client *ai.Client, cfg config.AIConfig, repo *git.Repo)
 
 func (m *Model) triggerAICommit() (Model, tea.Cmd) {
 	if m.GitRepo == nil || m.GitView == nil {
-		m.StatusBar.ShowToast("Bukan repositori git", true, 3*time.Second)
+		m.StatusBar.ShowToast("Not a git repository", true, 3*time.Second)
 		return *m, nil
 	}
 	if m.GitView.IsLoading {
 		return *m, nil
 	}
 	if len(m.GitView.Staged) == 0 {
-		m.StatusBar.ShowToast("Tidak ada perubahan di staging area (+ untuk stage)", true, 3*time.Second)
+		m.StatusBar.ShowToast("No changes in staging area (+ to stage)", true, 3*time.Second)
 		return *m, nil
 	}
 	m.GitView.IsLoading = true
@@ -966,10 +1018,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.GitView.IsLoading = false
 			m.GitView.LoadingMsg = ""
 			if msg.err != nil {
-				m.StatusBar.ShowToast("Push gagal: "+msg.err.Error(), true, 4*time.Second)
+				m.StatusBar.ShowToast("Push failed: "+msg.err.Error(), true, 4*time.Second)
 			} else {
 				m.GitView.Refresh()
-				m.StatusBar.ShowToast("Push berhasil", false, 3*time.Second)
+				m.StatusBar.ShowToast("Push succeeded", false, 3*time.Second)
 			}
 		}
 		return m, nil
@@ -979,7 +1031,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.GitView.IsLoading = false
 			m.GitView.LoadingMsg = ""
 			if msg.err != nil {
-				m.StatusBar.ShowToast("Commit gagal: "+msg.err.Error(), true, 4*time.Second)
+				var userErr *git.ErrGitUserNotConfigured
+				if errors.As(msg.err, &userErr) {
+					m.openGitUserNotConfiguredAlert()
+					m.StatusBar.ShowToast("Commit failed: Git user identity not configured", true, 4*time.Second)
+				} else {
+					m.StatusBar.ShowToast("Commit failed: "+msg.err.Error(), true, 4*time.Second)
+				}
 			} else {
 				m.GitView.CommitInput.SetValue("")
 				m.GitView.Refresh()
@@ -1001,7 +1059,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.GitView.CommitInput.Focus()
 			m.GitView.FocusArea = git.GitFocusCommitInput
 		}
-		m.StatusBar.ShowToast("Saran commit message berhasil disarankan AI (Ctrl+Enter untuk commit)", false, 4*time.Second)
+		m.StatusBar.ShowToast("Commit message suggested by AI (Ctrl+Enter to commit)", false, 4*time.Second)
 		return m, nil
 
 	case aiCommitErrorMsg:
@@ -1022,7 +1080,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					tab.Buffer.ReplaceContentWithUndo(msg.NewText)
 					m.StatusBar.ShowToast("✓ Formatted with "+msg.ToolName, false, 3*time.Second)
 				} else {
-					m.StatusBar.ShowToast("Dokumen sudah rapi ("+msg.ToolName+")", false, 3*time.Second)
+					m.StatusBar.ShowToast("Document already formatted ("+msg.ToolName+")", false, 3*time.Second)
 				}
 			}
 		}
@@ -1112,7 +1170,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.StatusBar.ShowToast("Ctrl+K chord dibatalkan", false, 1*time.Second)
 				return m, nil
 			default:
-				m.StatusBar.ShowToast("Ctrl+K chord: gunakan Ctrl+0/Ctrl+J (atau Ctrl+K untuk buka folder)", true, 2*time.Second)
+				m.StatusBar.ShowToast("Ctrl+K chord: use Ctrl+0/Ctrl+J (or Ctrl+K to open folder)", true, 2*time.Second)
 				return m, nil
 			}
 		}
@@ -1175,14 +1233,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						cur, tot := tab.Buffer.MatchInfo()
 						m.FindBar.SetMatches(cur, tot)
 						m.syncStatusBarWithActiveTab()
-						m.StatusBar.ShowToast("1 kecocokan diganti", false, 1*time.Second)
+						m.StatusBar.ShowToast("1 match replaced", false, 1*time.Second)
 					}
 				case "replace_all":
 					count := tab.Buffer.ReplaceAll(m.FindBar.Input.Value(), m.FindBar.ReplaceInput.Value())
 					cur, tot := tab.Buffer.MatchInfo()
 					m.FindBar.SetMatches(cur, tot)
 					m.syncStatusBarWithActiveTab()
-					m.StatusBar.ShowToast(fmt.Sprintf("%d kecocokan diganti", count), false, 2*time.Second)
+					m.StatusBar.ShowToast(fmt.Sprintf("%d matches replaced", count), false, 2*time.Second)
 				}
 			}
 			return m, cmd
@@ -1235,7 +1293,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if closed {
 				if selectedBranch != "" && m.GitRepo != nil {
 					if err := m.GitRepo.CheckoutBranch(selectedBranch); err != nil {
-						m.StatusBar.ShowToast("Gagal ganti branch: "+err.Error(), true, 3*time.Second)
+						m.StatusBar.ShowToast("Failed to switch branch: "+err.Error(), true, 3*time.Second)
 					} else {
 						m.StatusBar.Branch = selectedBranch
 						if m.GitView != nil {
@@ -1255,7 +1313,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if saved {
 				m.Config.AI = newCfg
 				_ = config.SaveConfig(m.Config)
-				m.StatusBar.ShowToast("Pengaturan AI berhasil disimpan", false, 3*time.Second)
+				m.StatusBar.ShowToast("AI settings saved successfully", false, 3*time.Second)
 			} else if canceled {
 				// Dialog closed
 			}
@@ -1283,7 +1341,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if confirmed {
 				m.handleFilePickerConfirmed(selectedPath)
 			} else if canceled {
-				m.StatusBar.ShowToast("Operasi dibatalkan", false, 2*time.Second)
+				m.StatusBar.ShowToast("Operation cancelled", false, 2*time.Second)
 			}
 			return m, cmd
 		}
@@ -1294,7 +1352,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if confirmed {
 				m.handleInputConfirmed()
 			} else if canceled {
-				m.StatusBar.ShowToast("Operasi dibatalkan", false, 2*time.Second)
+				m.StatusBar.ShowToast("Operation cancelled", false, 2*time.Second)
 			}
 			return m, cmd
 		}
@@ -1313,10 +1371,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, cmd
 				}
 			} else if canceled {
+				if m.ConfirmDialog.Type == dialog.ConfirmAlert {
+					return m, nil
+				}
 				if m.ConfirmDialog.Type == dialog.ConfirmExternalChange {
-					m.StatusBar.ShowToast("Perubahan eksternal diabaikan (lokal dipertahankan)", false, 2*time.Second)
+					m.StatusBar.ShowToast("External changes ignored (local preserved)", false, 2*time.Second)
 				} else {
-					m.StatusBar.ShowToast("Operasi dibatalkan", false, 2*time.Second)
+					m.StatusBar.ShowToast("Operation cancelled", false, 2*time.Second)
 				}
 				m.ClosingTabIdx = -1
 			}
@@ -1358,7 +1419,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				switch msg.String() {
 				case "ctrl+\\", "ctrl+`", "f6":
 					m.Focus = FocusSidebar
-					m.StatusBar.ShowToast("Fokus: Sidebar (tekan Ctrl+\\ untuk kembali ke Terminal)", false, 2*time.Second)
+					m.StatusBar.ShowToast("Focus: Sidebar (press Ctrl+\\ to return to Terminal)", false, 2*time.Second)
 					return m, nil
 				case "ctrl+shift+\\", "ctrl+t":
 					var cmd tea.Cmd
@@ -1399,8 +1460,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.hasDirtyTabs() && !m.AutoSave {
 				m.ConfirmDialog.Open(
 					dialog.ConfirmUnsavedChanges,
-					"Perubahan Belum Disimpan",
-					"Terdapat buffer yang belum disimpan.\nSimpan sebelum keluar?",
+					"Unsaved Changes",
+					"There are unsaved buffers.\nSave before exiting?",
 					"app.exit",
 				)
 				return m, nil
@@ -1420,6 +1481,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.toggleFocus()
 			return m, nil
 
+		case "alt+p", "alt+P":
+			if m.TabManager.Count() > 0 && m.TabManager.ActiveIndex >= 0 {
+				tab := m.TabManager.ActiveTab()
+				wasPinned := tab != nil && tab.IsPinned
+				m.TabManager.TogglePinTab(m.TabManager.ActiveIndex)
+				if wasPinned {
+					m.StatusBar.ShowToast("Tab unpinned", false, 2*time.Second)
+				} else {
+					m.StatusBar.ShowToast("Tab pinned", false, 2*time.Second)
+				}
+				m.syncStatusBarWithActiveTab()
+			}
+			return m, nil
 		case "alt+s":
 			m.AutoSave = !m.AutoSave
 			m.StatusBar.AutoSave = m.AutoSave
@@ -1472,22 +1546,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "ctrl+enter":
-			if m.GitView != nil && m.GitRepo != nil {
-				if m.GitView.IsLoading {
-					return m, nil
-				}
-				if len(m.GitView.Staged) == 0 {
-					m.StatusBar.ShowToast("Tidak ada perubahan di staging area", true, 3*time.Second)
-					return m, nil
-				}
-				commitMsg := m.GitView.CommitInput.Value()
-				m.GitView.IsLoading = true
-				m.GitView.LoadingMsg = "Committing..."
-				m.GitView.SpinnerFrame = 0
-				m.StatusBar.ShowToast("Melakukan commit...", false, 3*time.Second)
-				return m, tea.Batch(gitCommitCmd(m.GitRepo, commitMsg), gitLoadingTickCmd())
-			}
-			return m, nil
+			return m.triggerGitCommit()
 
 		case "ctrl+shift+o", "ctrl+O":
 			m.openGoToSymbol()
@@ -1498,7 +1557,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "ctrl+k":
 			m.ctrlKPending = true
-			m.StatusBar.ShowToast("Ctrl+K: Ctrl+0 fold all, Ctrl+J unfold all, Ctrl+K buka folder", false, 2*time.Second)
+			m.StatusBar.ShowToast("Ctrl+K: Ctrl+0 fold all, Ctrl+J unfold all, Ctrl+K open folder", false, 2*time.Second)
 			return m, nil
 
 		case "ctrl+p":
@@ -1538,7 +1597,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.syncStatusBarWithActiveTab()
 			} else {
-				m.StatusBar.ShowToast("Tab aktif bukan file Markdown", true, 2*time.Second)
+				m.StatusBar.ShowToast("Active tab is not a Markdown file", true, 2*time.Second)
 			}
 			return m, nil
 
@@ -1566,8 +1625,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						if sel != nil {
 							m.ConfirmDialog.Open(
 								dialog.ConfirmDiscardGit,
-								"Buang Perubahan",
-								fmt.Sprintf("Buang semua perubahan lokal pada '%s'? Tindakan ini tidak dapat dibatalkan.", sel.Name),
+								"Discard Changes",
+								fmt.Sprintf("Discard all local changes in '%s'? This action cannot be undone.", sel.Name),
 								sel.Path,
 							)
 							return m, nil
@@ -1581,7 +1640,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						if f := m.GitView.SelectedChangesFile(); f != nil {
 							if hIdx, ok := m.GitView.SelectedHunkIndex(false); ok {
 								if err := m.GitRepo.StageHunk(f.Path, hIdx); err != nil {
-									m.StatusBar.ShowToast("Gagal stage hunk (fallback file-level): "+err.Error(), true, 3*time.Second)
+									m.StatusBar.ShowToast("Failed to stage hunk (fallback file-level): "+err.Error(), true, 3*time.Second)
 								} else {
 									m.StatusBar.ShowToast(fmt.Sprintf("Hunk %d di-stage (%s)", hIdx+1, filepath.Base(f.Path)), false, 2*time.Second)
 								}
@@ -1590,14 +1649,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								}
 								m.refreshDiffTabsForPath(f.Path)
 							} else {
-								m.StatusBar.ShowToast("Tidak ada hunk aktif", true, 2*time.Second)
+								m.StatusBar.ShowToast("No active hunk", true, 2*time.Second)
 							}
 						}
 					case "__hunk_unstage__":
 						if f := m.GitView.SelectedStagedFile(); f != nil {
 							if hIdx, ok := m.GitView.SelectedHunkIndex(true); ok {
 								if err := m.GitRepo.UnstageHunk(f.Path, hIdx); err != nil {
-									m.StatusBar.ShowToast("Gagal unstage hunk (fallback file-level): "+err.Error(), true, 3*time.Second)
+									m.StatusBar.ShowToast("Failed to unstage hunk (fallback file-level): "+err.Error(), true, 3*time.Second)
 								} else {
 									m.StatusBar.ShowToast(fmt.Sprintf("Hunk %d di-unstage (%s)", hIdx+1, filepath.Base(f.Path)), false, 2*time.Second)
 								}
@@ -1606,7 +1665,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								}
 								m.refreshDiffTabsForPath(f.Path)
 							} else {
-								m.StatusBar.ShowToast("Tidak ada hunk aktif", true, 2*time.Second)
+								m.StatusBar.ShowToast("No active hunk", true, 2*time.Second)
 							}
 						}
 					case "__hunk_discard__":
@@ -1622,7 +1681,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								)
 								return m, cmd
 							}
-							m.StatusBar.ShowToast("Tidak ada hunk aktif", true, 2*time.Second)
+							m.StatusBar.ShowToast("No active hunk", true, 2*time.Second)
 						}
 					default:
 						if fileToOpen.Status == "?" || fileToOpen.Status == "U" {
@@ -1692,18 +1751,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				case "a":
 					parentDir := m.getSelectedParentDir()
-					m.InputDialog.Open(dialog.InputNewFile, "Buat File Baru", parentDir, "")
+					m.InputDialog.Open(dialog.InputNewFile, "New File", parentDir, "")
 					return m, nil
 
 				case "A":
 					parentDir := m.getSelectedParentDir()
-					m.InputDialog.Open(dialog.InputNewFolder, "Buat Folder Baru", parentDir, "")
+					m.InputDialog.Open(dialog.InputNewFolder, "New Folder", parentDir, "")
 					return m, nil
 
 				case "F2":
 					node := m.Explorer.SelectedNode()
 					if node != nil {
-						m.InputDialog.Open(dialog.InputRename, "Ubah Nama: "+node.Name, node.Path, node.Name)
+						m.InputDialog.Open(dialog.InputRename, "Rename: "+node.Name, node.Path, node.Name)
 					}
 					return m, nil
 
@@ -1712,8 +1771,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if node != nil {
 						m.ConfirmDialog.Open(
 							dialog.ConfirmDelete,
-							"Konfirmasi Hapus",
-							"Apakah Anda yakin ingin menghapus:\n"+node.Path+"?",
+							"Confirm Delete",
+							"Are you sure you want to delete:\n"+node.Path+"?",
 							node.Path,
 						)
 					}
@@ -1812,7 +1871,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				case "ctrl+a":
 					tab.MarkdownViewer.SelectAll()
-					m.StatusBar.ShowToast("Semua teks preview dipilih", false, 1*time.Second)
+					m.StatusBar.ShowToast("All preview text selected", false, 1*time.Second)
 					return m, nil
 
 				case "ctrl+v":
@@ -1859,9 +1918,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 					if err := m.TabManager.SaveActive(); err != nil {
-						m.StatusBar.ShowToast("Error simpan: "+err.Error(), true, 3*time.Second)
+						m.StatusBar.ShowToast("Save error: "+err.Error(), true, 3*time.Second)
 					} else {
-						m.StatusBar.ShowToast("Disimpan: "+tab.Name, false, 2*time.Second)
+						m.StatusBar.ShowToast("Saved: "+tab.Name, false, 2*time.Second)
 						if m.SymbolIndex != nil {
 							m.SymbolIndex.UpdateFile(tab.Path)
 						}
@@ -1920,7 +1979,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.syncStatusBarWithActiveTab()
 						m.StatusBar.ShowToast("Undo", false, 1*time.Second)
 					} else {
-						m.StatusBar.ShowToast("Sudah di perubahan paling awal", false, 1*time.Second)
+						m.StatusBar.ShowToast("Already at earliest change", false, 1*time.Second)
 					}
 					return m, nil
 
@@ -1929,7 +1988,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.syncStatusBarWithActiveTab()
 						m.StatusBar.ShowToast("Redo", false, 1*time.Second)
 					} else {
-						m.StatusBar.ShowToast("Sudah di perubahan paling akhir", false, 1*time.Second)
+						m.StatusBar.ShowToast("Already at latest change", false, 1*time.Second)
 					}
 					return m, nil
 
@@ -2165,7 +2224,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							}
 						}
 						if !folded {
-							m.StatusBar.ShowToast("Tidak ada blok untuk dilipat", true, 1500*time.Millisecond)
+							m.StatusBar.ShowToast("No foldable blocks found", true, 1500*time.Millisecond)
 						}
 					} else {
 						// already folded at cursor anchor -> keep folded (no-op) or refold; ToggleFold would unfold
@@ -2189,7 +2248,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						buf.ToggleFold(buf.CursorRow)
 						unfolded = true
 					}
-					if !unfolded { m.StatusBar.ShowToast("Tidak ada blok terlipat di kursor", true, 1500*time.Millisecond) }
+					if !unfolded { m.StatusBar.ShowToast("No folded block at cursor", true, 1500*time.Millisecond) }
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
@@ -2216,7 +2275,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if buf.ToggleFold(buf.CursorRow) {
 						m.syncStatusBarWithActiveTab()
 					} else {
-						m.StatusBar.ShowToast("Tidak ada blok untuk dilipat di baris ini", true, 2*time.Second)
+						m.StatusBar.ShowToast("No foldable block on this line", true, 2*time.Second)
 					}
 					return m, nil
 
@@ -2309,14 +2368,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							cur, tot := tab.Buffer.MatchInfo()
 							m.FindBar.SetMatches(cur, tot)
 							m.syncStatusBarWithActiveTab()
-							m.StatusBar.ShowToast("1 kecocokan diganti", false, 1*time.Second)
+							m.StatusBar.ShowToast("1 match replaced", false, 1*time.Second)
 						}
 					case "replace_all":
 						count := tab.Buffer.ReplaceAll(m.FindBar.Input.Value(), m.FindBar.ReplaceInput.Value())
 						cur, tot := tab.Buffer.MatchInfo()
 						m.FindBar.SetMatches(cur, tot)
 						m.syncStatusBarWithActiveTab()
-						m.StatusBar.ShowToast(fmt.Sprintf("%d kecocokan diganti", count), false, 2*time.Second)
+						m.StatusBar.ShowToast(fmt.Sprintf("%d matches replaced", count), false, 2*time.Second)
 					}
 				}
 				return m, nil
@@ -2425,7 +2484,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if handled {
 					if closed && targetBranch != "" && m.GitRepo != nil {
 						if err := m.GitRepo.CheckoutBranch(targetBranch); err != nil {
-							m.StatusBar.ShowToast("Gagal ganti branch: "+err.Error(), true, 3*time.Second)
+							m.StatusBar.ShowToast("Failed to switch branch: "+err.Error(), true, 3*time.Second)
 						} else {
 							m.StatusBar.Branch = targetBranch
 							if m.GitView != nil {
@@ -2457,7 +2516,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if confirmed {
 						m.Config.AI = newCfg
 						_ = config.SaveConfig(m.Config)
-						m.StatusBar.ShowToast("Konfigurasi AI berhasil disimpan", false, 3*time.Second)
+						m.StatusBar.ShowToast("AI configuration saved successfully", false, 3*time.Second)
 					} else if canceled {
 						m.StatusBar.ShowToast("Pengaturan AI dibatalkan", false, 2*time.Second)
 					}
@@ -2482,7 +2541,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if confirmed {
 					m.handleFilePickerConfirmed(selectedPath)
 				} else if canceled {
-					m.StatusBar.ShowToast("Operasi dibatalkan", false, 2*time.Second)
+					m.StatusBar.ShowToast("Operation cancelled", false, 2*time.Second)
 				}
 				if handled {
 					return m, nil
@@ -2504,7 +2563,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if confirmed {
 					m.handleInputConfirmed()
 				} else if canceled {
-					m.StatusBar.ShowToast("Operasi dibatalkan", false, 2*time.Second)
+					m.StatusBar.ShowToast("Operation cancelled", false, 2*time.Second)
 				}
 				if handled {
 					return m, nil
@@ -2528,10 +2587,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else if discard {
 					return m, m.handleDiscardConfirmed()
 				} else if canceled {
+					if m.ConfirmDialog.Type == dialog.ConfirmAlert {
+						return m, nil
+					}
 					if m.ConfirmDialog.Type == dialog.ConfirmExternalChange {
-						m.StatusBar.ShowToast("Perubahan eksternal diabaikan (lokal dipertahankan)", false, 2*time.Second)
+						m.StatusBar.ShowToast("External changes ignored (local preserved)", false, 2*time.Second)
 					} else {
-						m.StatusBar.ShowToast("Operasi dibatalkan", false, 2*time.Second)
+						m.StatusBar.ShowToast("Operation cancelled", false, 2*time.Second)
 					}
 					m.ClosingTabIdx = -1
 				}
@@ -2593,6 +2655,45 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		if m.DraggingTabIdx >= 0 {
+			if msg.Action == tea.MouseActionMotion {
+				diffX := msg.X - m.DragTabStartX
+				if diffX < 0 {
+					diffX = -diffX
+				}
+				if diffX >= 1 {
+					m.IsDraggingTab = true
+					m.setMousePointer("grab")
+					editorStartX := 0
+					if m.SidebarVisible {
+						editorStartX = m.SidebarWidth
+					}
+					if msg.Y == 1 && msg.X >= editorStartX {
+						relX := msg.X - editorStartX
+						targetTab := m.TabManager.FindTabAt(relX)
+						if targetTab >= 0 && targetTab != m.DraggingTabIdx {
+							if m.TabManager.MoveTab(m.DraggingTabIdx, targetTab) {
+								m.DraggingTabIdx = targetTab
+								m.TabManager.DraggingIndex = targetTab
+								m.TabManager.ActiveIndex = targetTab
+								editorWidth := m.Width - editorStartX
+								_ = m.TabManager.RenderTabBar(editorWidth)
+								m.syncStatusBarWithActiveTab()
+							}
+						}
+					}
+				}
+				return m, nil
+			}
+			if msg.Action == tea.MouseActionRelease {
+				m.DraggingTabIdx = -1
+				m.IsDraggingTab = false
+				m.TabManager.DraggingIndex = -1
+				m.setMousePointer("default")
+				return m, nil
+			}
+		}
+
 		editorStartX := 0
 		if m.SidebarVisible {
 			editorStartX = m.SidebarWidth
@@ -2615,23 +2716,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				clickedTabIdx := m.TabManager.FindTabAt(relX)
 				if clickedTabIdx >= 0 && clickedTabIdx < m.TabManager.Count() {
 					m.ContextMenuTabIdx = clickedTabIdx
+					targetTab := m.TabManager.Tabs[clickedTabIdx]
+					pinLabel := "Pin Tab"
+					if targetTab.IsPinned {
+						pinLabel = "Unpin Tab"
+					}
 					items := []ui.ContextMenuItem{
-						{ID: "tab_close_this", Label: "Tutup", Shortcut: "Ctrl+W"},
-						{ID: "tab_close_others", Label: "Tutup Lainnya"},
-						{ID: "tab_close_right", Label: "Tutup ke Kanan"},
-						{ID: "tab_close_left", Label: "Tutup ke Kiri"},
-						{ID: "tab_close_all", Label: "Tutup Semua"},
+						{ID: "tab_toggle_pin", Label: pinLabel, Shortcut: "Alt+P"},
+						{ID: "tab_close_this", Label: "Close", Shortcut: "Ctrl+W"},
+						{ID: "tab_close_others", Label: "Close Others"},
+						{ID: "tab_close_right", Label: "Close to the Right"},
+						{ID: "tab_close_left", Label: "Close to the Left"},
+						{ID: "tab_close_all", Label: "Close All"},
+					}
+					if targetTab.IsPinned {
+						items[1].Disabled = true
 					}
 					if m.TabManager.Count() <= 1 {
-						items[1].Disabled = true
 						items[2].Disabled = true
 						items[3].Disabled = true
+						items[4].Disabled = true
 					} else {
 						if clickedTabIdx == m.TabManager.Count()-1 {
-							items[2].Disabled = true
+							items[3].Disabled = true
 						}
 						if clickedTabIdx == 0 {
-							items[3].Disabled = true
+							items[4].Disabled = true
 						}
 					}
 					m.ContextMenu.OpenCustom(msg.X, msg.Y+1, items, m.Width, m.Height)
@@ -2717,6 +2827,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Action == tea.MouseActionRelease && msg.Button == tea.MouseButtonLeft {
 			if m.ResizingSidebar {
 				m.ResizingSidebar = false
+				return m, nil
+			}
+			if m.DraggingTabIdx >= 0 {
+				m.DraggingTabIdx = -1
+				m.IsDraggingTab = false
+				m.TabManager.DraggingIndex = -1
+				m.setMousePointer("default")
 				return m, nil
 			}
 			tab := m.TabManager.ActiveTab()
@@ -2911,6 +3028,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.TabManager.ActiveIndex = clickedTabIdx
 					m.Focus = FocusEditor
 					m.syncStatusBarWithActiveTab()
+					m.DraggingTabIdx = clickedTabIdx
+					m.IsDraggingTab = false
+					m.DragTabStartX = msg.X
+					m.TabManager.DraggingIndex = clickedTabIdx
 					return m, nil
 				} else if action == "close" {
 					m.attemptCloseTab(clickedTabIdx)
@@ -2923,12 +3044,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Focus = FocusSidebar
 				if m.SidebarView == SidebarFiles {
 					m.Explorer.Refresh()
-					m.StatusBar.ShowToast("File explorer dimuat ulang", false, 2*time.Second)
+					m.StatusBar.ShowToast("File explorer reloaded", false, 2*time.Second)
 				} else if m.SidebarView == SidebarGit && m.GitView != nil {
 					return m, m.triggerGitRefresh()
 				} else if m.SidebarView == SidebarSearch && m.SearchView != nil {
 					m.SearchView.DoSearch()
-					m.StatusBar.ShowToast("Pencarian diperbarui", false, 2*time.Second)
+					m.StatusBar.ShowToast("Search updated", false, 2*time.Second)
 				}
 				return m, nil
 			}
@@ -2986,25 +3107,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					relLine := msg.Y - 3
 					targetFile, action, _ := m.GitView.HandleMouseClick(msg.X, relLine)
 					if action == "commit" {
-						if m.GitView.IsLoading {
-							return m, nil
-						}
-						if len(m.GitView.Staged) == 0 {
-							m.StatusBar.ShowToast("Tidak ada perubahan di staging area", true, 3*time.Second)
-							return m, nil
-						}
-						commitMsg := m.GitView.CommitInput.Value()
-						m.GitView.IsLoading = true
-						m.GitView.LoadingMsg = "Committing..."
-						m.GitView.SpinnerFrame = 0
-						m.StatusBar.ShowToast("Melakukan commit...", false, 3*time.Second)
-						return m, tea.Batch(gitCommitCmd(m.GitRepo, commitMsg), gitLoadingTickCmd())
+						return m.triggerGitCommit()
 					} else if action == "push" {
 						if m.GitView.IsLoading {
 							return m, nil
 						}
 						if m.GitRepo == nil {
-							m.StatusBar.ShowToast("Repositori git tidak ditemukan", true, 3*time.Second)
+							m.StatusBar.ShowToast("Git repository not found", true, 3*time.Second)
 							return m, nil
 						}
 						m.GitView.IsLoading = true
@@ -3018,8 +3127,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if action == "discard" && targetFile != nil {
 						m.ConfirmDialog.Open(
 							dialog.ConfirmDiscardGit,
-							"Buang Perubahan",
-							fmt.Sprintf("Buang semua perubahan lokal pada '%s'? Tindakan ini tidak dapat dibatalkan.", targetFile.Name),
+							"Discard Changes",
+							fmt.Sprintf("Discard all local changes in '%s'? This action cannot be undone.", targetFile.Name),
 							targetFile.Path,
 						)
 						return m, nil
@@ -3143,7 +3252,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if tab != nil && tab.Buffer != nil {
 						curLine = tab.Buffer.CursorRow + 1
 					}
-					m.InputDialog.Open(dialog.InputGotoLine, "Lompat ke Baris [baris:kolom]", "", strconv.Itoa(curLine))
+					m.InputDialog.Open(dialog.InputGotoLine, "Go to Line [line:col]", "", strconv.Itoa(curLine))
 					return m, nil
 
 				case "help":
@@ -3221,7 +3330,7 @@ func (m *Model) checkWatchedFiles() {
 		info, err := os.Stat(tab.Path)
 		if err != nil {
 			if os.IsNotExist(err) && !tab.LastModTime.IsZero() {
-				m.StatusBar.ShowToast(fmt.Sprintf("File '%s' telah dihapus dari disk", tab.Name), true, 3*time.Second)
+				m.StatusBar.ShowToast(fmt.Sprintf("File '%s' was deleted from disk", tab.Name), true, 3*time.Second)
 				tab.LastModTime = time.Time{}
 			}
 			continue
@@ -3239,12 +3348,12 @@ func (m *Model) checkWatchedFiles() {
 					m.StatusBar.ShowToast(fmt.Sprintf("File '%s' diperbarui dari disk", tab.Name), false, 2*time.Second)
 				}
 			} else {
-				m.StatusBar.ShowToast(fmt.Sprintf("Peringatan: File '%s' diubah dari luar (ada perubahan lokal)", tab.Name), true, 4*time.Second)
+				m.StatusBar.ShowToast(fmt.Sprintf("Warning: File '%s' changed externally (has local modifications)", tab.Name), true, 4*time.Second)
 				if m.ConfirmDialog != nil && !m.ConfirmDialog.Active {
 					m.ConfirmDialog.Open(
 						dialog.ConfirmExternalChange,
-						"Konflik Perubahan Eksternal",
-						fmt.Sprintf("File '%s' telah diubah dari luar, namun terdapat perubahan lokal di editor.\nReload dari disk atau buka Split Diff untuk merge?", tab.Name),
+						"External Change Conflict",
+						fmt.Sprintf("File '%s' was modified externally, but has local changes in editor.\nReload from disk or open Split Diff to merge?", tab.Name),
 						tab.Path,
 					)
 				}
@@ -3258,7 +3367,7 @@ func (m *Model) toggleFocus() {
 		if m.AutoSave {
 			saved, err := editor.TriggerAutoSave(m.TabManager)
 			if saved > 0 {
-				m.StatusBar.ShowToast(fmt.Sprintf("%d file disimpan", saved), false, 1500*time.Millisecond)
+				m.StatusBar.ShowToast(fmt.Sprintf("%d files saved", saved), false, 1500*time.Millisecond)
 			} else if err != nil {
 				m.StatusBar.ShowToast("Auto-save error: "+err.Error(), true, 3*time.Second)
 			}
@@ -3284,12 +3393,16 @@ func (m *Model) attemptCloseTab(tabIdx int) {
 	}
 
 	tab := m.TabManager.Tabs[tabIdx]
+	if tab.IsPinned {
+		m.StatusBar.ShowToast("Tab is pinned (unpin tab first to close)", true, 3*time.Second)
+		return
+	}
 	if tab.IsDirty() && !m.AutoSave {
 		m.ClosingTabIdx = tabIdx
 		m.ConfirmDialog.Open(
 			dialog.ConfirmUnsavedChanges,
-			"Simpan Perubahan?",
-			fmt.Sprintf("File '%s' telah dimodifikasi.\nSimpan perubahan sebelum menutup?", tab.Name),
+			"Save Changes?",
+			fmt.Sprintf("File '%s' has been modified.\nSave changes before closing?", tab.Name),
 			tab.Path,
 		)
 		return
@@ -3343,6 +3456,7 @@ func (m *Model) openCommandPalette() {
 		{ID: "file.open_folder", Title: "Open Folder", Category: "File", Shortcut: "Ctrl+K Ctrl+K"},
 		{ID: "file.save", Title: "Save File", Category: "File", Shortcut: "Ctrl+S"},
 		{ID: "file.close", Title: "Close Tab", Category: "File", Shortcut: "Ctrl+W"},
+		{ID: "tab.toggle_pin", Title: "Pin / Unpin Tab", Category: "File", Shortcut: "Alt+P"},
 		{ID: "tab.close_others", Title: "Close Other Tabs", Category: "File", Shortcut: ""},
 		{ID: "tab.close_all", Title: "Close All Tabs", Category: "File", Shortcut: ""},
 		{ID: "app.exit", Title: "Exit Application", Category: "File", Shortcut: "Ctrl+Q"},
@@ -3421,7 +3535,7 @@ func (m *Model) openGlobalSearch() {
 func (m *Model) openFindBar() {
 	tab := m.TabManager.ActiveTab()
 	if tab == nil || tab.Buffer == nil || (tab.Type == editor.TabMarkdown && tab.MarkdownPreview) || tab.IsDiff {
-		m.StatusBar.ShowToast("Pencarian teks hanya didukung di buffer editor aktif", true, 2*time.Second)
+		m.StatusBar.ShowToast("Text search is only supported in active editor buffer", true, 2*time.Second)
 		return
 	}
 	selectedText := tab.Buffer.GetSelectedText()
@@ -3436,7 +3550,7 @@ func (m *Model) openFindBar() {
 func (m *Model) openReplaceBar() {
 	tab := m.TabManager.ActiveTab()
 	if tab == nil || tab.Buffer == nil || (tab.Type == editor.TabMarkdown && tab.MarkdownPreview) || tab.IsDiff {
-		m.StatusBar.ShowToast("Cari & Ganti hanya didukung di buffer editor aktif", true, 2*time.Second)
+		m.StatusBar.ShowToast("Find & Replace is only supported in active editor buffer", true, 2*time.Second)
 		return
 	}
 	selectedText := tab.Buffer.GetSelectedText()
@@ -3451,11 +3565,11 @@ func (m *Model) openReplaceBar() {
 func (m *Model) openGotoLine() {
 	tab := m.TabManager.ActiveTab()
 	if tab == nil || tab.Buffer == nil || (tab.Type == editor.TabMarkdown && tab.MarkdownPreview) || tab.IsDiff {
-		m.StatusBar.ShowToast("Go to Line hanya didukung di buffer editor aktif", true, 2*time.Second)
+		m.StatusBar.ShowToast("Go to Line is only supported in active editor buffer", true, 2*time.Second)
 		return
 	}
 	curLine := tab.Buffer.CursorRow + 1
-	m.InputDialog.Open(dialog.InputGotoLine, "Lompat ke Baris [baris:kolom]", "", strconv.Itoa(curLine))
+	m.InputDialog.Open(dialog.InputGotoLine, "Go to Line [line:col]", "", strconv.Itoa(curLine))
 }
 
 func (m *Model) openFileAt(path string, line, col int) {
@@ -3475,7 +3589,7 @@ func (m *Model) openFileAt(path string, line, col int) {
 
 func (m *Model) openBufferSwitcher() {
 	if m.TabManager.Count() == 0 {
-		m.StatusBar.ShowToast("Tidak ada tab terbuka", false, 2*time.Second)
+		m.StatusBar.ShowToast("No open tabs", false, 2*time.Second)
 		return
 	}
 
@@ -3494,12 +3608,12 @@ func (m *Model) openBufferSwitcher() {
 
 func (m *Model) openBranchSwitcher() {
 	if m.GitRepo == nil {
-		m.StatusBar.ShowToast("Bukan repositori git aktif", true, 2*time.Second)
+		m.StatusBar.ShowToast("Not an active git repository", true, 2*time.Second)
 		return
 	}
 	branches, current, err := m.GitRepo.GetBranches()
 	if err != nil || len(branches) == 0 {
-		m.StatusBar.ShowToast("Tidak dapat membaca branch git", true, 2*time.Second)
+		m.StatusBar.ShowToast("Cannot read git branch", true, 2*time.Second)
 		return
 	}
 	m.BranchSwitcher.Open(branches, current)
@@ -3520,7 +3634,7 @@ func (m *Model) syncStatusBarWithActiveTab() {
 
 	tab := m.TabManager.ActiveTab()
 	if tab == nil {
-		m.StatusBar.FilePath = "[Tidak Ada File Terbuka]"
+		m.StatusBar.FilePath = "[No Open Files]"
 		m.StatusBar.Line = 0
 		m.StatusBar.Col = 0
 		m.StatusBar.FileSyntax = "None"
@@ -3624,7 +3738,7 @@ func (m *Model) handleInputConfirmed() {
 				m.SymbolIndex.UpdateFile(createdPath)
 			}
 			m.openFile(createdPath)
-			m.StatusBar.ShowToast("File dibuat: "+filepath.Base(createdPath), false, 2*time.Second)
+			m.StatusBar.ShowToast("File created: "+filepath.Base(createdPath), false, 2*time.Second)
 		}
 
 	case dialog.InputNewFolder:
@@ -3633,7 +3747,7 @@ func (m *Model) handleInputConfirmed() {
 			m.StatusBar.ShowToast("Error: "+err.Error(), true, 3*time.Second)
 		} else {
 			m.Explorer.Refresh()
-			m.StatusBar.ShowToast("Folder dibuat: "+filepath.Base(createdPath), false, 2*time.Second)
+			m.StatusBar.ShowToast("Folder created: "+filepath.Base(createdPath), false, 2*time.Second)
 		}
 
 	case dialog.InputRename:
@@ -3655,9 +3769,9 @@ func (m *Model) handleInputConfirmed() {
 		}
 		fi, err := os.Stat(target)
 		if err != nil {
-			m.StatusBar.ShowToast("File tidak ditemukan: "+err.Error(), true, 3*time.Second)
+			m.StatusBar.ShowToast("File not found: "+err.Error(), true, 3*time.Second)
 		} else if fi.IsDir() {
-			m.StatusBar.ShowToast("Path adalah direktori, bukan file", true, 3*time.Second)
+			m.StatusBar.ShowToast("Path is a directory, not a file", true, 3*time.Second)
 		} else {
 			m.openFile(target)
 			m.Focus = FocusEditor
@@ -3670,12 +3784,12 @@ func (m *Model) handleInputConfirmed() {
 		}
 		cleanPath, err := filepath.Abs(target)
 		if err != nil {
-			m.StatusBar.ShowToast("Path tidak valid: "+err.Error(), true, 3*time.Second)
+			m.StatusBar.ShowToast("Invalid path: "+err.Error(), true, 3*time.Second)
 			return
 		}
 		fi, err := os.Stat(cleanPath)
 		if err != nil || !fi.IsDir() {
-			m.StatusBar.ShowToast("Direktori tidak ditemukan", true, 3*time.Second)
+			m.StatusBar.ShowToast("Directory not found", true, 3*time.Second)
 			return
 		}
 
@@ -3718,10 +3832,10 @@ func (m *Model) handleInputConfirmed() {
 				tab.Buffer.ClearSelection()
 				tab.Buffer.ClampCursor()
 				m.syncStatusBarWithActiveTab()
-				m.StatusBar.ShowToast(fmt.Sprintf("Baris %d, Kolom %d", line, col), false, 2*time.Second)
+				m.StatusBar.ShowToast(fmt.Sprintf("Line %d, Column %d", line, col), false, 2*time.Second)
 			}
 		} else {
-			m.StatusBar.ShowToast("Format baris tidak valid (gunakan: baris[:kolom])", true, 2*time.Second)
+			m.StatusBar.ShowToast("Invalid line format (use: line[:column])", true, 2*time.Second)
 		}
 
 	case dialog.InputFilterExplorer:
@@ -3736,16 +3850,18 @@ func (m *Model) handleInputConfirmed() {
 
 func (m *Model) handleConfirmConfirmed() tea.Cmd {
 	switch m.ConfirmDialog.Type {
+	case dialog.ConfirmAlert:
+		return nil
 	case dialog.ConfirmDelete:
 		err := explorer.DeletePath(m.ConfirmDialog.TargetPath)
 		if err != nil {
-			m.StatusBar.ShowToast("Error hapus: "+err.Error(), true, 3*time.Second)
+			m.StatusBar.ShowToast("Delete error: "+err.Error(), true, 3*time.Second)
 		} else {
 			m.Explorer.Refresh()
 			if m.SymbolIndex != nil {
 				m.SymbolIndex.RemoveFile(m.ConfirmDialog.TargetPath)
 			}
-			m.StatusBar.ShowToast("Berhasil dihapus: "+filepath.Base(m.ConfirmDialog.TargetPath), false, 2*time.Second)
+			m.StatusBar.ShowToast("Successfully deleted: "+filepath.Base(m.ConfirmDialog.TargetPath), false, 2*time.Second)
 		}
 
 	case dialog.ConfirmUnsavedChanges:
@@ -3759,7 +3875,7 @@ func (m *Model) handleConfirmConfirmed() tea.Cmd {
 			m.TabManager.CloseTab(m.ClosingTabIdx)
 			m.ClosingTabIdx = -1
 			m.syncStatusBarWithActiveTab()
-			m.StatusBar.ShowToast("Disimpan & ditutup", false, 2*time.Second)
+			m.StatusBar.ShowToast("Saved & closed", false, 2*time.Second)
 		}
 
 	case dialog.ConfirmExternalChange:
@@ -3767,9 +3883,9 @@ func (m *Model) handleConfirmConfirmed() tea.Cmd {
 		for _, tab := range m.TabManager.Tabs {
 			if tab != nil && tab.Path == targetPath && tab.Buffer != nil {
 				if err := tab.ReloadFromDisk(); err == nil {
-					m.StatusBar.ShowToast(fmt.Sprintf("File '%s' berhasil dimuat ulang dari disk", tab.Name), false, 2*time.Second)
+					m.StatusBar.ShowToast(fmt.Sprintf("File '%s' successfully reloaded from disk", tab.Name), false, 2*time.Second)
 				} else {
-					m.StatusBar.ShowToast("Gagal reload file: "+err.Error(), true, 3*time.Second)
+					m.StatusBar.ShowToast("Failed to reload file: "+err.Error(), true, 3*time.Second)
 				}
 				break
 			}
@@ -3779,7 +3895,7 @@ func (m *Model) handleConfirmConfirmed() tea.Cmd {
 		if m.GitRepo != nil {
 			err := m.GitRepo.DiscardFile(m.ConfirmDialog.TargetPath)
 			if err != nil {
-				m.StatusBar.ShowToast("Gagal membuang perubahan: "+err.Error(), true, 3*time.Second)
+				m.StatusBar.ShowToast("Failed to discard changes: "+err.Error(), true, 3*time.Second)
 			} else {
 				if m.GitView != nil {
 					m.GitView.Refresh()
@@ -3790,14 +3906,14 @@ func (m *Model) handleConfirmConfirmed() tea.Cmd {
 					}
 				}
 				m.syncStatusBarWithActiveTab()
-				m.StatusBar.ShowToast("Perubahan dibuang: "+filepath.Base(m.ConfirmDialog.TargetPath), false, 2*time.Second)
+				m.StatusBar.ShowToast("Changes discarded: "+filepath.Base(m.ConfirmDialog.TargetPath), false, 2*time.Second)
 			}
 		}
 
 	case dialog.ConfirmDiscardGitHunk:
 		if m.GitRepo != nil && m.pendingGitHunkPath != "" {
 			if err := m.GitRepo.DiscardHunk(m.pendingGitHunkPath, m.pendingGitHunkIndex); err != nil {
-				m.StatusBar.ShowToast("Gagal discard hunk: "+err.Error(), true, 3*time.Second)
+				m.StatusBar.ShowToast("Failed to discard hunk: "+err.Error(), true, 3*time.Second)
 			} else {
 				m.StatusBar.ShowToast(fmt.Sprintf("Hunk %d dibuang", m.pendingGitHunkIndex+1), false, 2*time.Second)
 				if m.GitView != nil {
@@ -3829,7 +3945,7 @@ func (m *Model) handleDiscardConfirmed() tea.Cmd {
 			m.TabManager.CloseTab(m.ClosingTabIdx)
 			m.ClosingTabIdx = -1
 			m.syncStatusBarWithActiveTab()
-			m.StatusBar.ShowToast("Perubahan dibuang", false, 2*time.Second)
+			m.StatusBar.ShowToast("Changes discarded", false, 2*time.Second)
 		}
 	} else if m.ConfirmDialog.Type == dialog.ConfirmExternalChange {
 		targetPath := m.ConfirmDialog.TargetPath
@@ -3839,9 +3955,9 @@ func (m *Model) handleDiscardConfirmed() tea.Cmd {
 				if err == nil {
 					m.TabManager.OpenDiff(targetPath, string(diskBytes), tab.Buffer.Text(), false, "Δ "+filepath.Base(targetPath)+" (External)")
 					m.syncStatusBarWithActiveTab()
-					m.StatusBar.ShowToast("Split Diff dibuka: Periksa & merge perubahan", false, 3*time.Second)
+					m.StatusBar.ShowToast("Split Diff opened: Review & merge changes", false, 3*time.Second)
 				} else {
-					m.StatusBar.ShowToast("Gagal membaca disk: "+err.Error(), true, 3*time.Second)
+					m.StatusBar.ShowToast("Failed to read disk: "+err.Error(), true, 3*time.Second)
 				}
 				break
 			}
@@ -3898,12 +4014,12 @@ func (m *Model) applyDiffHunkAction(tab *editor.Tab, action string) tea.Cmd {
 	}
 	h, ok := tab.DiffView.ActiveHunkData()
 	if !ok {
-		m.StatusBar.ShowToast("Tidak ada hunk aktif", true, 2*time.Second)
+		m.StatusBar.ShowToast("No active hunk", true, 2*time.Second)
 		return nil
 	}
 	relPath := tab.Path
 	if relPath == "" {
-		m.StatusBar.ShowToast("Path diff tidak valid", true, 2*time.Second)
+		m.StatusBar.ShowToast("Invalid diff path", true, 2*time.Second)
 		return nil
 	}
 	if m.isUnsafeForHunkAction(relPath) {
@@ -3917,7 +4033,7 @@ func (m *Model) applyDiffHunkAction(tab *editor.Tab, action string) tea.Cmd {
 			return nil
 		}
 		if err := m.GitRepo.StageHunk(relPath, h.Index); err != nil {
-			m.StatusBar.ShowToast("Gagal stage hunk (fallback file-level): "+err.Error(), true, 3*time.Second)
+			m.StatusBar.ShowToast("Failed to stage hunk (fallback file-level): "+err.Error(), true, 3*time.Second)
 			return nil
 		}
 		m.StatusBar.ShowToast(fmt.Sprintf("Hunk %d di-stage", h.Index+1), false, 2*time.Second)
@@ -3927,13 +4043,13 @@ func (m *Model) applyDiffHunkAction(tab *editor.Tab, action string) tea.Cmd {
 			return nil
 		}
 		if err := m.GitRepo.UnstageHunk(relPath, h.Index); err != nil {
-			m.StatusBar.ShowToast("Gagal unstage hunk (fallback file-level): "+err.Error(), true, 3*time.Second)
+			m.StatusBar.ShowToast("Failed to unstage hunk (fallback file-level): "+err.Error(), true, 3*time.Second)
 			return nil
 		}
 		m.StatusBar.ShowToast(fmt.Sprintf("Hunk %d di-unstage", h.Index+1), false, 2*time.Second)
 	case "discard":
 		if tab.DiffStaged {
-			m.StatusBar.ShowToast("Discard hunk hanya untuk perubahan unstaged", true, 2*time.Second)
+			m.StatusBar.ShowToast("Discard hunk is only for unstaged changes", true, 2*time.Second)
 			return nil
 		}
 		m.pendingGitHunkPath = relPath
@@ -3999,7 +4115,7 @@ func (m *Model) openDiff(relPath string, staged bool) {
 		mod, _ = m.GitRepo.GetWorktreeFileContent(relPath)
 	}
 	if isBinaryBytes([]byte(base)) || isBinaryBytes([]byte(mod)) {
-		m.StatusBar.ShowToast("Diff file biner tidak didukung", true, 3*time.Second)
+		m.StatusBar.ShowToast("Binary file diff is not supported", true, 3*time.Second)
 		return
 	}
 	title := "Δ " + filepath.Base(relPath) + " (" + label + ")"
@@ -4014,8 +4130,8 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 		if m.hasDirtyTabs() && !m.AutoSave {
 			m.ConfirmDialog.Open(
 				dialog.ConfirmUnsavedChanges,
-				"Perubahan Belum Disimpan",
-				"Terdapat buffer yang belum disimpan.\nSimpan sebelum keluar?",
+				"Unsaved Changes",
+				"There are unsaved buffers.\nSave before exiting?",
 				"app.exit",
 			)
 			return nil
@@ -4029,7 +4145,7 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 
 	case "file.new":
 		parentDir := m.getSelectedParentDir()
-		m.InputDialog.Open(dialog.InputNewFile, "Buat File Baru", parentDir, "")
+		m.InputDialog.Open(dialog.InputNewFile, "New File", parentDir, "")
 	case "terminal.new":
 		var cmd tea.Cmd
 		*m, cmd = m.openNewTerminalTab()
@@ -4085,9 +4201,9 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 
 	case "file.save":
 		if err := m.TabManager.SaveActive(); err != nil {
-			m.StatusBar.ShowToast("Gagal simpan: "+err.Error(), true, 3*time.Second)
+			m.StatusBar.ShowToast("Save failed: "+err.Error(), true, 3*time.Second)
 		} else {
-			m.StatusBar.ShowToast("File disimpan", false, 2*time.Second)
+			m.StatusBar.ShowToast("File saved", false, 2*time.Second)
 			if m.SymbolIndex != nil {
 				if t := m.TabManager.ActiveTab(); t != nil {
 					m.SymbolIndex.UpdateFile(t.Path)
@@ -4098,6 +4214,19 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 
 	case "file.close":
 		m.attemptCloseTab(m.TabManager.ActiveIndex)
+	case "tab.toggle_pin":
+		if m.TabManager.Count() > 0 && m.TabManager.ActiveIndex >= 0 {
+			tab := m.TabManager.ActiveTab()
+			wasPinned := tab != nil && tab.IsPinned
+			m.TabManager.TogglePinTab(m.TabManager.ActiveIndex)
+			if wasPinned {
+				m.StatusBar.ShowToast("Tab unpinned", false, 2*time.Second)
+			} else {
+				m.StatusBar.ShowToast("Tab pinned", false, 2*time.Second)
+			}
+			m.syncStatusBarWithActiveTab()
+		}
+		return nil
 
 	case "setting.autosave":
 		m.AutoSave = !m.AutoSave
@@ -4322,7 +4451,7 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 			if m.GitView != nil {
 				m.GitView.Refresh()
 			}
-			m.StatusBar.ShowToast("Semua perubahan dimasukkan ke staging area", false, 2*time.Second)
+			m.StatusBar.ShowToast("All changes staged", false, 2*time.Second)
 		}
 
 	case "git.unstage_all":
@@ -4331,7 +4460,7 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 			if m.GitView != nil {
 				m.GitView.Refresh()
 			}
-			m.StatusBar.ShowToast("Semua perubahan dikeluarkan dari staging area", false, 2*time.Second)
+			m.StatusBar.ShowToast("All changes unstaged", false, 2*time.Second)
 		}
 
 	case "git.refresh":
@@ -4375,7 +4504,7 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 			if f := m.GitView.SelectedChangesFile(); f != nil {
 				if hIdx, ok := m.GitView.SelectedHunkIndex(false); ok {
 					if err := m.GitRepo.StageHunk(f.Path, hIdx); err != nil {
-						m.StatusBar.ShowToast("Gagal stage hunk (fallback file-level): "+err.Error(), true, 3*time.Second)
+						m.StatusBar.ShowToast("Failed to stage hunk (fallback file-level): "+err.Error(), true, 3*time.Second)
 					} else {
 						m.StatusBar.ShowToast(fmt.Sprintf("Hunk %d di-stage (%s)", hIdx+1, filepath.Base(f.Path)), false, 2*time.Second)
 					}
@@ -4393,7 +4522,7 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 			if f := m.GitView.SelectedStagedFile(); f != nil {
 				if hIdx, ok := m.GitView.SelectedHunkIndex(true); ok {
 					if err := m.GitRepo.UnstageHunk(f.Path, hIdx); err != nil {
-						m.StatusBar.ShowToast("Gagal unstage hunk (fallback file-level): "+err.Error(), true, 3*time.Second)
+						m.StatusBar.ShowToast("Failed to unstage hunk (fallback file-level): "+err.Error(), true, 3*time.Second)
 					} else {
 						m.StatusBar.ShowToast(fmt.Sprintf("Hunk %d di-unstage (%s)", hIdx+1, filepath.Base(f.Path)), false, 2*time.Second)
 					}
@@ -4426,7 +4555,7 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 		if m.Explorer != nil {
 			m.Explorer.Refresh()
 		}
-		m.StatusBar.ShowToast("File explorer dimuat ulang", false, 2*time.Second)
+		m.StatusBar.ShowToast("File explorer reloaded", false, 2*time.Second)
 	}
 	return nil
 }
@@ -4439,7 +4568,7 @@ func (m *Model) handleFilePickerConfirmed(selectedPath string) {
 		}
 		fi, err := os.Stat(cleanPath)
 		if err != nil || !fi.IsDir() {
-			m.StatusBar.ShowToast("Direktori tidak valid", true, 3*time.Second)
+			m.StatusBar.ShowToast("Invalid directory", true, 3*time.Second)
 			return
 		}
 
@@ -4488,6 +4617,20 @@ func (m *Model) openExplorerContextMenu(absX, absY int) {
 
 func (m *Model) handleContextMenuAction(action string) tea.Cmd {
 	switch action {
+	case "tab_toggle_pin":
+		targetIdx := m.ContextMenuTabIdx
+		if targetIdx >= 0 && targetIdx < m.TabManager.Count() {
+			tab := m.TabManager.Tabs[targetIdx]
+			wasPinned := tab.IsPinned
+			m.TabManager.TogglePinTab(targetIdx)
+			if wasPinned {
+				m.StatusBar.ShowToast("Tab unpinned", false, 2*time.Second)
+			} else {
+				m.StatusBar.ShowToast("Tab pinned", false, 2*time.Second)
+			}
+			m.syncStatusBarWithActiveTab()
+		}
+		return nil
 	case "tab_close_this":
 		if m.ContextMenuTabIdx >= 0 {
 			m.attemptCloseTab(m.ContextMenuTabIdx)
@@ -4517,7 +4660,7 @@ func (m *Model) handleContextMenuAction(action string) tea.Cmd {
 			}
 			if firstDirty != -1 {
 				m.attemptCloseTab(firstDirty)
-				m.StatusBar.ShowToast("Simpan atau buang perubahan sebelum menutup tab lainnya", true, 3*time.Second)
+				m.StatusBar.ShowToast("Save or discard changes before closing other tabs", true, 3*time.Second)
 			} else {
 				m.TabManager.CloseOtherTabs(targetIdx)
 				m.syncStatusBarWithActiveTab()
@@ -4548,7 +4691,7 @@ func (m *Model) handleContextMenuAction(action string) tea.Cmd {
 			}
 			if firstDirty != -1 {
 				m.attemptCloseTab(firstDirty)
-				m.StatusBar.ShowToast("Simpan atau buang perubahan sebelum menutup tab di sebelah kanan", true, 3*time.Second)
+				m.StatusBar.ShowToast("Save or discard changes before closing tabs to the right", true, 3*time.Second)
 			} else {
 				m.TabManager.CloseTabsToRight(targetIdx)
 				m.syncStatusBarWithActiveTab()
@@ -4579,7 +4722,7 @@ func (m *Model) handleContextMenuAction(action string) tea.Cmd {
 			}
 			if firstDirty != -1 {
 				m.attemptCloseTab(firstDirty)
-				m.StatusBar.ShowToast("Simpan atau buang perubahan sebelum menutup tab di sebelah kiri", true, 3*time.Second)
+				m.StatusBar.ShowToast("Save or discard changes before closing tabs to the left", true, 3*time.Second)
 			} else {
 				m.TabManager.CloseTabsToLeft(targetIdx)
 				m.syncStatusBarWithActiveTab()
@@ -4606,7 +4749,7 @@ func (m *Model) handleContextMenuAction(action string) tea.Cmd {
 			}
 			if firstDirty != -1 {
 				m.attemptCloseTab(firstDirty)
-				m.StatusBar.ShowToast("Simpan atau buang perubahan sebelum menutup semua tab", true, 3*time.Second)
+				m.StatusBar.ShowToast("Save or discard changes before closing all tabs", true, 3*time.Second)
 			} else {
 				m.TabManager.CloseAllTabs()
 				m.syncStatusBarWithActiveTab()
@@ -4615,17 +4758,17 @@ func (m *Model) handleContextMenuAction(action string) tea.Cmd {
 		return nil
 	case "explorer_new_file":
 		parentDir := m.getSelectedParentDir()
-		m.InputDialog.Open(dialog.InputNewFile, "Buat File Baru", parentDir, "")
+		m.InputDialog.Open(dialog.InputNewFile, "New File", parentDir, "")
 		return nil
 
 	case "explorer_new_folder":
 		parentDir := m.getSelectedParentDir()
-		m.InputDialog.Open(dialog.InputNewFolder, "Buat Folder Baru", parentDir, "")
+		m.InputDialog.Open(dialog.InputNewFolder, "New Folder", parentDir, "")
 		return nil
 
 	case "explorer_rename":
 		if node := m.Explorer.SelectedNode(); node != nil {
-			m.InputDialog.Open(dialog.InputRename, "Ubah Nama: "+node.Name, node.Path, node.Name)
+			m.InputDialog.Open(dialog.InputRename, "Rename: "+node.Name, node.Path, node.Name)
 		}
 		return nil
 
@@ -4633,8 +4776,8 @@ func (m *Model) handleContextMenuAction(action string) tea.Cmd {
 		if node := m.Explorer.SelectedNode(); node != nil {
 			m.ConfirmDialog.Open(
 				dialog.ConfirmDelete,
-				"Konfirmasi Hapus",
-				"Apakah Anda yakin ingin menghapus:\n"+node.Path+"?",
+				"Confirm Delete",
+				"Are you sure you want to delete:\n"+node.Path+"?",
 				node.Path,
 			)
 		}

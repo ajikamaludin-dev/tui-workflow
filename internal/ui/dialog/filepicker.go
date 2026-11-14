@@ -48,7 +48,7 @@ type FilePicker struct {
 
 func NewFilePicker() *FilePicker {
 	ti := textinput.New()
-	ti.Prompt = "Cari: "
+	ti.Prompt = "Search: "
 	ti.CharLimit = 64
 	ti.Width = 36
 	ti.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
@@ -57,7 +57,7 @@ func NewFilePicker() *FilePicker {
 	return &FilePicker{
 		Active:      false,
 		Mode:        PickerModeFolder,
-		Title:       "Pilih Folder",
+		Title:       "Select Folder",
 		CurrentDir:  ".",
 		Items:       make([]PickerItem, 0),
 		Filtered:    make([]PickerItem, 0),
@@ -89,9 +89,9 @@ func (p *FilePicker) Open(mode PickerMode, startDir string, showHidden bool) {
 	p.CurrentDir = absDir
 
 	if p.Mode == PickerModeFolder {
-		p.Title = "📂 Buka Folder (Pilih Direktori Kerja)"
+		p.Title = "📂 Open Folder (Select Working Directory)"
 	} else {
-		p.Title = "📄 Buka File (Pilih File untuk Diedit)"
+		p.Title = "📄 Open File (Select File to Edit)"
 	}
 
 	p.FilterInput.SetValue("")
@@ -111,7 +111,7 @@ func (p *FilePicker) loadDir() {
 	parent := filepath.Dir(p.CurrentDir)
 	if parent != p.CurrentDir {
 		p.Items = append(p.Items, PickerItem{
-			Name:     ".. (Naik 1 Folder)",
+			Name:     ".. (Up 1 Folder)",
 			Path:     parent,
 			IsDir:    true,
 			IsParent: true,
@@ -463,15 +463,15 @@ func (p *FilePicker) Render() string {
 	renderedList := strings.Join(listLines, "\n")
 
 	// Scroll indicator info
-	scrollInfo := fmt.Sprintf("[%d/%d]  ▲/▼ Scroll | Tab: Pindah | Enter: Pilih", min(p.SelectedIdx+1, len(p.Filtered)), len(p.Filtered))
+	scrollInfo := fmt.Sprintf("[%d/%d]  ▲/▼ Scroll | Tab: Switch | Enter: Select", min(p.SelectedIdx+1, len(p.Filtered)), len(p.Filtered))
 	scrollStyle := lipgloss.NewStyle().
 		Foreground(ui.CurrentTheme.FgSecondary)
 	renderedScroll := scrollStyle.Render(scrollInfo)
 
 	// Action buttons
-	btnSelectText := "Buka Folder Ini (Enter)"
+	btnSelectText := "Open This Folder (Enter)"
 	if p.Mode == PickerModeFile {
-		btnSelectText = "Buka File (Enter)"
+		btnSelectText = "Open File (Enter)"
 	}
 
 	btnSelectStyle := lipgloss.NewStyle().
@@ -501,7 +501,7 @@ func (p *FilePicker) Render() string {
 		lipgloss.Center,
 		btnSelectStyle.Render(btnSelectText),
 		btnSep,
-		btnCancelStyle.Render("Batal (Esc)"),
+		btnCancelStyle.Render("Cancel (Esc)"),
 	)
 
 	content := lipgloss.JoinVertical(

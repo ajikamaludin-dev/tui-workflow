@@ -39,7 +39,7 @@ func TestFindBarOpenModesAndMatches(t *testing.T) {
 		t.Fatalf("Expected FindBar to be in replace mode")
 	}
 	renderedReplace := fb.Render()
-	if !strings.Contains(renderedReplace, "Ganti") {
+	if !strings.Contains(renderedReplace, "Replace") {
 		t.Errorf("Expected replace prompt in rendered view")
 	}
 

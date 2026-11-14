@@ -49,7 +49,7 @@ func TestE2EStartupAndResize(t *testing.T) {
 
 	// Initial unready state
 	view := m.View()
-	if !strings.Contains(view, "Memuat tui-workflow") {
+	if !strings.Contains(view, "Memuat tui-workflow") && !strings.Contains(view, "Loading tui-workflow") {
 		t.Errorf("Expected loading message on unready model, got: %s", view)
 	}
 
@@ -71,7 +71,7 @@ func TestE2EStartupAndResize(t *testing.T) {
 	m = newM.(Model)
 
 	view = m.View()
-	if !strings.Contains(view, "Ukuran Terminal Terlalu Kecil") {
+	if !strings.Contains(view, "Ukuran Terminal Terlalu Kecil") && !strings.Contains(view, "Terminal Size Too Small") {
 		t.Errorf("Expected too small warning on 70x20 terminal")
 	}
 }

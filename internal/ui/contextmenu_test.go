@@ -27,7 +27,7 @@ func TestContextMenu(t *testing.T) {
 	}
 
 	rendered := cm.Render()
-	if !strings.Contains(rendered, "Salin") || !strings.Contains(rendered, "Tempel") {
+	if !strings.Contains(rendered, "Copy") || !strings.Contains(rendered, "Paste") {
 		t.Errorf("rendered menu missing expected labels: %s", rendered)
 	}
 
@@ -42,7 +42,7 @@ func TestContextMenu(t *testing.T) {
 		t.Errorf("expected right-click release to be consumed without closing menu")
 	}
 
-	// 2. Mouse motion over item 0 ("Salin", X=12, Y=6)
+	// 2. Mouse motion over item 0 ("Copy", X=12, Y=6)
 	action, handled = cm.HandleMouse(tea.MouseMsg{
 		X:      12,
 		Y:      6,
@@ -52,7 +52,7 @@ func TestContextMenu(t *testing.T) {
 		t.Errorf("expected hover over item 0 to keep menu active and select idx 0")
 	}
 
-	// 3. Left click press on item 0 ("Salin", X=12, Y=6)
+	// 3. Left click press on item 0 ("Copy", X=12, Y=6)
 	action, handled = cm.HandleMouse(tea.MouseMsg{
 		X:      12,
 		Y:      6,
@@ -81,11 +81,11 @@ func TestContextMenu(t *testing.T) {
 func TestContextMenuCustom(t *testing.T) {
 	cm := NewContextMenu()
 	customItems := []ContextMenuItem{
-		{ID: "close_this", Label: "Tutup", Shortcut: "Ctrl+W"},
-		{ID: "close_others", Label: "Tutup Lainnya"},
-		{ID: "close_right", Label: "Tutup ke Kanan"},
-		{ID: "close_left", Label: "Tutup ke Kiri"},
-		{ID: "close_all", Label: "Tutup Semua"},
+		{ID: "close_this", Label: "Close", Shortcut: "Ctrl+W"},
+		{ID: "close_others", Label: "Close Others"},
+		{ID: "close_right", Label: "Close to the Right"},
+		{ID: "close_left", Label: "Close to the Left"},
+		{ID: "close_all", Label: "Close All"},
 	}
 
 	cm.OpenCustom(15, 2, customItems, 80, 24)
@@ -97,11 +97,11 @@ func TestContextMenuCustom(t *testing.T) {
 	}
 
 	rendered := cm.Render()
-	if !strings.Contains(rendered, "Tutup Lainnya") || !strings.Contains(rendered, "Tutup ke Kanan") {
+	if !strings.Contains(rendered, "Close Others") || !strings.Contains(rendered, "Close to the Right") {
 		t.Errorf("rendered menu missing custom labels: %s", rendered)
 	}
 
-	// Click on item 1: "Tutup Lainnya" at X=17, Y=4
+	// Click on item 1: "Close Others" at X=17, Y=4
 	action, handled := cm.HandleMouse(tea.MouseMsg{
 		X:      17,
 		Y:      4,

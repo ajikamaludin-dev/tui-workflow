@@ -159,6 +159,16 @@ func (t *TerminalView) Write(p []byte) (int, error) {
 	return t.ptyFile.Write(p)
 }
 
+// WriteToVT writes ANSI escape sequences directly into the internal vt10x virtual terminal emulator.
+func (t *TerminalView) WriteToVT(p []byte) (int, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.vt == nil {
+		return 0, nil
+	}
+	return t.vt.Write(p)
+}
+
 // Resize resizes the PTY and virtual terminal grid.
 func (t *TerminalView) Resize(cols, rows int) {
 	if cols < 10 || rows < 2 {

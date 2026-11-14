@@ -27,3 +27,5 @@
 | 2026-11-14 | [2026-11-14 - Word Jump Selection and Word Delete Backspace in Editor and Terminal](done/2026-11-14%20-%20Word%20Jump%20Selection%20and%20Word%20Delete%20Backspace%20in%20Editor%20and%20Terminal.md) | done |
 | 2026-11-14 | [2026-11-14 - Perbaikan Temuan Audit Kode (Rule Compliance, Layout Safety, Linter & Git Hunk)](done/2026-11-14%20-%20Perbaikan%20Temuan%20Audit%20Kode%20%28Rule%20Compliance%2C%20Layout%20Safety%2C%20Linter%20%26%20Git%20Hunk%29.md) | done |
 | 2026-11-14 | [2026-11-14 - Tab Drag-and-Drop Reordering & Tab Pinning](done/2026-11-14%20-%20Tab%20Drag-and-Drop%20Reordering%20%26%20Tab%20Pinning.md) | done |
+| 2026-11-14 | [2026-11-14 - Peningkatan Terminal Safety, Menu Shortcut, Viewport Centering, dan Ergonomi Keymap](done/2026-11-14%20-%20Peningkatan%20Terminal%20Safety%2C%20Menu%20Shortcut%2C%20Viewport%20Centering%2C%20dan%20Ergonomi%20Keymap.md) | done |
+

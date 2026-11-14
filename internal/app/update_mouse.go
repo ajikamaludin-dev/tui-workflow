@@ -573,15 +573,10 @@ func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		tab := m.TabManager.ActiveTab()
-		if tab != nil && tab.Type == editor.TabTerminal && tab.TerminalView != nil {
+		if tab != nil && tab.Type == editor.TabTerminal && tab.TerminalView != nil &&
+			msg.Y >= 2 && msg.Y < m.Height-1 && msg.X >= editorStartX {
 			relX := msg.X - editorStartX
-			if relX < 0 {
-				relX = 0
-			}
 			relY := msg.Y - 2
-			if relY < 0 {
-				relY = 0
-			}
 			if tab.TerminalView.WantsMouse() {
 				_ = tab.TerminalView.ForwardMouse(msg, relX, relY)
 				return m, nil
@@ -688,24 +683,22 @@ func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 			} else if tab.Type == editor.TabTerminal && tab.TerminalView != nil {
-				if tab.TerminalView.WantsMouse() {
-					relX := msg.X - editorStartX
-					relY := msg.Y - 2
-					if relX < 0 {
-						relX = 0
+				if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
+					if msg.Y >= 2 && msg.Y < m.Height-1 && msg.X >= editorStartX {
+						relX := msg.X - editorStartX
+						relY := msg.Y - 2
+						if tab.TerminalView.WantsMouse() {
+							_ = tab.TerminalView.ForwardMouse(msg, relX, relY)
+							return m, nil
+						}
+						if msg.Button == tea.MouseButtonWheelUp {
+							tab.TerminalView.ScrollUp(3)
+							return m, nil
+						} else if msg.Button == tea.MouseButtonWheelDown {
+							tab.TerminalView.ScrollDown(3)
+							return m, nil
+						}
 					}
-					if relY < 0 {
-						relY = 0
-					}
-					_ = tab.TerminalView.ForwardMouse(msg, relX, relY)
-					return m, nil
-				}
-				if msg.Button == tea.MouseButtonWheelUp {
-					tab.TerminalView.ScrollUp(3)
-					return m, nil
-				} else if msg.Button == tea.MouseButtonWheelDown {
-					tab.TerminalView.ScrollDown(3)
-					return m, nil
 				}
 			} else if tab.Buffer != nil {
 				buf := tab.Buffer

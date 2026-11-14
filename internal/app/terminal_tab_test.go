@@ -1,6 +1,8 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -222,3 +224,110 @@ func TestQuickOpenSwitchToCommandPalette(t *testing.T) {
 		t.Errorf("expected CommandPalette to be active after typing '>'")
 	}
 }
+
+func TestTerminalMouseDoesNotHijackTabBarAndMenu(t *testing.T) {
+	dir := t.TempDir()
+	testFile := filepath.Join(dir, "test.go")
+	_ = os.WriteFile(testFile, []byte("package main\nfunc main() {}\n"), 0644)
+
+	m, _ := NewModelWithPath(dir, false)
+	m.Width = 100
+	m.Height = 30
+	m.Ready = true
+	m.SidebarVisible = true
+	m.SidebarWidth = 25
+
+	// Tab 0: Regular file tab
+	m.openFile(testFile)
+	if m.TabManager.Count() != 1 {
+		t.Fatalf("expected 1 tab, got %d", m.TabManager.Count())
+	}
+
+	// Tab 1: Terminal tab
+	newM, cmd := m.openNewTerminalTab()
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd from openNewTerminalTab")
+	}
+	m = newM
+	if m.TabManager.Count() != 2 {
+		t.Fatalf("expected 2 tabs, got %d", m.TabManager.Count())
+	}
+
+	termTab := m.TabManager.Tabs[1]
+	if termTab.TerminalView == nil {
+		t.Fatal("expected TerminalView")
+	}
+	defer termTab.TerminalView.Close()
+
+	// Enable inner mouse reporting on the virtual terminal (simulate top/btop)
+	_, _ = termTab.TerminalView.WriteToVT([]byte("\x1b[?1000h\x1b[?1006h"))
+	if !termTab.TerminalView.WantsMouse() {
+		t.Fatal("expected WantsMouse to be true after VT mouse mode sequence")
+	}
+
+	m.TabManager.ActiveIndex = 1
+	m.Focus = FocusEditor
+	_ = m.View()
+
+	if len(m.TabManager.ClickRegions) < 2 {
+		t.Fatalf("expected at nil least 2 tab click regions, got %d", len(m.TabManager.ClickRegions))
+	}
+
+	// 1. Click on Tab 0 (Row 1) in Tab Bar
+	tab0Region := m.TabManager.ClickRegions[0]
+	clickX := tab0Region.StartX + 1 + m.SidebarWidth
+	clickY := 1
+
+	resM, _ := m.Update(tea.MouseMsg{X: clickX, Y: clickY, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = resM.(Model)
+	resM, _ = m.Update(tea.MouseMsg{X: clickX, Y: clickY, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease})
+	m = resM.(Model)
+
+	if m.TabManager.ActiveIndex != 0 {
+		t.Errorf("expected ActiveIndex to be 0 after clicking Tab 0, got %d", m.TabManager.ActiveIndex)
+	}
+
+	// Switch back to Terminal tab
+	m.TabManager.ActiveIndex = 1
+	_ = m.View()
+
+	// 2. Click on Menu Bar (Row 0)
+	cat0 := m.MenuBar.Categories[0]
+	menuClickX := cat0.StartX + 1
+	resM, _ = m.Update(tea.MouseMsg{X: menuClickX, Y: 0, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = resM.(Model)
+
+	if !m.MenuBar.IsOpen() {
+		t.Errorf("expected MenuBar to be open after clicking category %q", cat0.Title)
+	}
+
+	// 3. Click on another Menu Bar category (Row 0, e.g. Category 1)
+	cat1 := m.MenuBar.Categories[1]
+	menuClickX1 := cat1.StartX + 1
+	resM, _ = m.Update(tea.MouseMsg{X: menuClickX1, Y: 0, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = resM.(Model)
+
+	if !m.MenuBar.IsOpen() || m.MenuBar.ActiveMenu != 1 {
+		t.Errorf("expected MenuBar category 1 to be active, got open=%v active=%d", m.MenuBar.IsOpen(), m.MenuBar.ActiveMenu)
+	}
+
+	// Close menu
+	m.MenuBar.Close()
+
+	// 4. Test Scroll Wheel on Tab Bar (Row 1) does not get swallowed by Terminal
+	m.TabManager.ActiveIndex = 1
+	resM, _ = m.Update(tea.MouseMsg{X: clickX, Y: 1, Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress})
+	m = resM.(Model)
+	// Still valid state, no panics or corruptions
+
+	// 5. Test Click inside Terminal Area (Row 5, Col 30) IS forwarded to PTY/Terminal
+	resM, _ = m.Update(tea.MouseMsg{X: 30, Y: 5, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = resM.(Model)
+	resM, _ = m.Update(tea.MouseMsg{X: 30, Y: 5, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease})
+	m = resM.(Model)
+	// Active tab remains terminal
+	if m.TabManager.ActiveIndex != 1 {
+		t.Errorf("expected ActiveIndex to remain 1 after clicking inside terminal area, got %d", m.TabManager.ActiveIndex)
+	}
+}
+

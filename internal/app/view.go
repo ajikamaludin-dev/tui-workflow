@@ -346,6 +346,9 @@ Editor & Buffer:
   • Tab / Shift+Tab : Ekspansi Snippet / Lompat Tab-Stop / Indentasi
   • Ctrl+Space      : Pemicu Autocomplete Sugesti LSP & Auto-Import
   • Ctrl+/          : Toggle Komentar Baris Otomatis
+  • Shift+Alt+Panah : Seleksi Teks per Kata (Word Jump Block)
+  • Shift+Panah     : Seleksi Teks per Karakter / Baris
+  • Alt/Ctrl+Bcksp  : Hapus 1 Kata ke Belakang (atau Hapus Seleksi)
   • Ctrl+Shift+D    : Tambah kursor pada occurrence berikutnya
   • Ctrl+Alt+Up/Dn  : Tambah kursor di baris atas / bawah
   • Ctrl+Shift+[ / ]: Fold / Unfold blok di kursor
@@ -360,6 +363,8 @@ Terminal & Shell (PTY):
   • Ctrl+Shift+\    : Buka Tab Terminal Shell Baru
   • Ctrl+\          : Alihkan Fokus Terminal / TUI Editor
   • Ctrl+Shift+W    : Tutup Tab Terminal Shell Aktif
+  • Alt/Ctrl+Panah  : Lompat Kata Kursor Shell CLI (Readline)
+  • Alt/Ctrl+Bcksp  : Hapus 1 Kata ke Belakang di Shell CLI
 
 Git Source Control:
   • Alt+B           : Ganti / Checkout Branch Git

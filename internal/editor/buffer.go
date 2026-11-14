@@ -440,6 +440,71 @@ func (b *Buffer) Backspace() {
 	b.backspaceInternal()
 }
 
+// DeleteWordLeft deletes word or whitespace to the left of the cursor, or active selection.
+func (b *Buffer) DeleteWordLeft() {
+	b.endTypingGroup()
+	b.pushUndo()
+	if b.HasMultipleCursors() {
+		b.applyToAllCursors(b.deleteWordLeftInternal)
+		return
+	}
+	if b.HasSelection {
+		b.deleteSelectionInternal()
+		return
+	}
+	b.deleteWordLeftInternal()
+}
+
+func (b *Buffer) deleteWordLeftInternal() {
+	b.clampCursor()
+	if b.CursorRow < 0 || b.CursorRow >= len(b.Lines) {
+		return
+	}
+	if b.CursorCol == 0 {
+		if b.CursorRow > 0 {
+			prevLine := b.Lines[b.CursorRow-1]
+			currLine := b.Lines[b.CursorRow]
+			prevLen := len(prevLine)
+			merged := append(prevLine, currLine...)
+			b.Lines[b.CursorRow-1] = merged
+			b.Lines = append(b.Lines[:b.CursorRow], b.Lines[b.CursorRow+1:]...)
+			b.CursorRow--
+			b.CursorCol = prevLen
+			b.IsDirty = true
+			b.markContentChanged()
+		}
+		return
+	}
+	line := b.Lines[b.CursorRow]
+	col := b.CursorCol
+	if col > len(line) {
+		col = len(line)
+	}
+	targetCol := col
+	// 1. Skip whitespace left
+	for targetCol > 0 && unicode.IsSpace(line[targetCol-1]) {
+		targetCol--
+	}
+	if targetCol > 0 {
+		if isWordChar(line[targetCol-1]) {
+			for targetCol > 0 && isWordChar(line[targetCol-1]) {
+				targetCol--
+			}
+		} else {
+			for targetCol > 0 && !isWordChar(line[targetCol-1]) && !unicode.IsSpace(line[targetCol-1]) {
+				targetCol--
+			}
+		}
+	}
+	newLine := make([]rune, 0, len(line)-(col-targetCol))
+	newLine = append(newLine, line[:targetCol]...)
+	newLine = append(newLine, line[col:]...)
+	b.Lines[b.CursorRow] = newLine
+	b.CursorCol = targetCol
+	b.IsDirty = true
+	b.markContentChanged()
+}
+
 func (b *Buffer) backspaceInternal() {
 	b.clampCursor()
 
@@ -778,6 +843,64 @@ func (b *Buffer) UpdateSelection(row, col int) {
 // ClearSelection removes any active selection.
 func (b *Buffer) ClearSelection() {
 	b.HasSelection = false
+}
+
+func (b *Buffer) ensureSelectionAnchor() {
+	if !b.HasSelection {
+		b.SelectAnchorRow = b.CursorRow
+		b.SelectAnchorCol = b.CursorCol
+	}
+}
+
+func (b *Buffer) updateSelectionAfterMove() {
+	b.clampCursor()
+	if b.CursorRow == b.SelectAnchorRow && b.CursorCol == b.SelectAnchorCol {
+		b.HasSelection = false
+	} else {
+		b.HasSelection = true
+	}
+}
+
+// SelectLeft moves cursor left while extending selection.
+func (b *Buffer) SelectLeft() {
+	b.ensureSelectionAnchor()
+	b.MoveLeft()
+	b.updateSelectionAfterMove()
+}
+
+// SelectRight moves cursor right while extending selection.
+func (b *Buffer) SelectRight() {
+	b.ensureSelectionAnchor()
+	b.MoveRight()
+	b.updateSelectionAfterMove()
+}
+
+// SelectUp moves cursor up while extending selection.
+func (b *Buffer) SelectUp() {
+	b.ensureSelectionAnchor()
+	b.MoveUp()
+	b.updateSelectionAfterMove()
+}
+
+// SelectDown moves cursor down while extending selection.
+func (b *Buffer) SelectDown() {
+	b.ensureSelectionAnchor()
+	b.MoveDown()
+	b.updateSelectionAfterMove()
+}
+
+// SelectWordLeft moves cursor word left while extending selection.
+func (b *Buffer) SelectWordLeft() {
+	b.ensureSelectionAnchor()
+	b.MoveWordLeft()
+	b.updateSelectionAfterMove()
+}
+
+// SelectWordRight moves cursor word right while extending selection.
+func (b *Buffer) SelectWordRight() {
+	b.ensureSelectionAnchor()
+	b.MoveWordRight()
+	b.updateSelectionAfterMove()
 }
 
 // SelectAll selects the entire buffer content.

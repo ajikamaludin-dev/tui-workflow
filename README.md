@@ -143,6 +143,10 @@
 | `Ctrl + K, Ctrl + J` / `zR` | Unfold All (buka seluruh lipatan) |
 | `Ctrl + M` / `Alt + M` | Toggle mode Live Markdown Preview (Glamour) vs Raw Editor |
 | `Ctrl + A` / `Ctrl + C` / `Ctrl + V` | Pilih Semua / Salin / Tempel Teks Clipboard |
+| `Alt + Left` / `Alt + Right` / `Ctrl + Left` / `Ctrl + Right` | Lompat kata (word jump) ke kiri / kanan |
+| `Shift + Alt + Left` / `Shift + Alt + Right` | Seleksi teks per kata (word jump selection) ke kiri / kanan |
+| `Shift + Panah` | Seleksi teks per karakter / baris |
+| `Alt + Backspace` / `Ctrl + Backspace` | Hapus satu kata ke kiri (atau hapus teks terblok) |
 | `Panah` / `Home` / `End` | Navigasi kursor per karakter dan baris |
 | `Page Up` / `Page Down` | Navigasi kursor per halaman |
 
@@ -190,6 +194,8 @@
 | `Ctrl + Shift + \` / `Ctrl + T` | Buka tab terminal terintegrasi baru |
 | `Ctrl + \` / `Ctrl + \`` / `F6` | Pindah fokus antara Terminal dan Sidebar |
 | `Alt + W` / `Ctrl + Shift + W` | Tutup tab terminal aktif |
+| `Alt + Left` / `Alt + Right` / `Ctrl + Left` / `Ctrl + Right` | Lompat kata kursor shell CLI (Readline) |
+| `Alt + Backspace` / `Ctrl + Backspace` | Hapus satu kata ke belakang di shell CLI |
 | `Ctrl + N` | Pindah ke tab berikutnya |
 | `Ctrl + Shift + P` / `F1` | Buka Command Palette |
 | `exit` | Tutup shell dan tutup tab terminal otomatis |

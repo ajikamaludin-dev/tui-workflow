@@ -58,6 +58,7 @@ func NewMenuBar() *MenuBar {
 					{Label: "Find & Replace...", Shortcut: "Ctrl+H", ActionID: "search.replace"},
 					{Label: "Go to Line...", Shortcut: "Ctrl+G", ActionID: "edit.goto_line"},
 					{Label: "Toggle Comment", Shortcut: "Ctrl+/", ActionID: "edit.toggle_comment"},
+					{Label: "Delete Word Left", Shortcut: "Alt+Backspace", ActionID: "edit.delete_word_left"},
 					{Label: "Add Cursor Above", Shortcut: "Ctrl+Alt+Up", ActionID: "edit.add_cursor_above"},
 					{Label: "Add Cursor Below", Shortcut: "Ctrl+Alt+Down", ActionID: "edit.add_cursor_below"},
 					{Label: "Add Next Occurrence", Shortcut: "Ctrl+Shift+D", ActionID: "edit.add_next_occurrence"},

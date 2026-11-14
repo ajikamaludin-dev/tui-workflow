@@ -62,6 +62,31 @@ func TestKeyToBytes(t *testing.T) {
 			msg:      tea.KeyMsg{Type: tea.KeyDown},
 			expected: []byte("\x1b[B"),
 		},
+		{
+			name:     "Alt+Left (word back)",
+			msg:      tea.KeyMsg{Type: tea.KeyLeft, Alt: true},
+			expected: []byte("\x1bb"),
+		},
+		{
+			name:     "Alt+Right (word forward)",
+			msg:      tea.KeyMsg{Type: tea.KeyRight, Alt: true},
+			expected: []byte("\x1bf"),
+		},
+		{
+			name:     "Ctrl+Left (word back)",
+			msg:      tea.KeyMsg{Type: tea.KeyCtrlLeft},
+			expected: []byte("\x1bb"),
+		},
+		{
+			name:     "Ctrl+Right (word forward)",
+			msg:      tea.KeyMsg{Type: tea.KeyCtrlRight},
+			expected: []byte("\x1bf"),
+		},
+		{
+			name:     "Alt+Backspace (word delete)",
+			msg:      tea.KeyMsg{Type: tea.KeyBackspace, Alt: true},
+			expected: []byte("\x1b\x7f"),
+		},
 	}
 
 	for _, tc := range tests {

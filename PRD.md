@@ -155,6 +155,9 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
 1. **Model Interaksi (VS Code Style):**
    - Editor bersifat **modeless** (tidak menggunakan modal Vim NORMAL/INSERT). Pengguna langsung mengetik teks.
    - Navigasi kursor menggunakan tombol panah (`Left`, `Right`, `Up`, `Down`), `Home`, `End`, `PageUp`, `PageDown`.
+   - Lompat kata (*Word Jump*) ke kiri / kanan menggunakan `Alt+Left` / `Alt+Right` atau `Ctrl+Left` / `Ctrl+Right`.
+   - Seleksi teks per kata (*Word Jump Block Selection*) menggunakan `Shift+Alt+Left` / `Shift+Alt+Right` (atau `Shift+Ctrl+Left` / `Shift+Ctrl+Right`), serta seleksi per karakter/baris via `Shift+Panah`.
+   - Penghapusan kata ke kiri menggunakan `Alt+Backspace` atau `Ctrl+Backspace` (serta penghapusan teks terblok aktif dengan `Backspace`).
    - Tombol `Tab`: Menyisipkan indentasi (default 4 spasi atau karakter tab) ke dalam buffer teks.
 2. **Custom Line Buffer & Syntax Highlighting:**
    - Dibangun dengan struktur custom line-based buffer (`[][]rune` atau `[]string`) untuk performa tinggi.
@@ -222,6 +225,7 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
    - Mendukung penuh TUI app bertingkat (*nested alternate screen*) seperti code agent (`pi`, `claude`), system monitor (`btop`, `htop`), `git`, `python`, `node`, dll.
 3. **Focus & Keystroke Isolation:**
    - Keystroke di-forward secara mentah (*raw byte streaming*) ke PTY saat tab aktif dan fokus berada di Editor/Terminal Pane.
+   - Mendukung pemetaan escape sequences standar terminal: `Alt/Ctrl+Left` (`\x1bb`) dan `Alt/Ctrl+Right` (`\x1bf`) untuk navigasi kata Readline/shell, serta `Alt+Backspace` (`\x1b\x7f`) dan `Ctrl+Backspace` (`\x17` / Ctrl+W) untuk penghapusan kata shell CLI.
    - Shortcut `Ctrl+\` / `Ctrl+` ` / `F6`: Beralih fokus antara Terminal dan Sidebar.
    - Shortcut `Alt+W` / `Ctrl+Shift+W` atau mengetik `exit`: Menutup tab terminal secara bersih (*clean teardown* proses shell & PTY descriptor).
    - Shortcut `Ctrl+Shift+P` / `F1`: Tetap dapat membuka Command Palette secara global.

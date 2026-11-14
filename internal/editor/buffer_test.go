@@ -475,3 +475,85 @@ func TestBufferReplaceContentWithUndo(t *testing.T) {
 		t.Errorf("Expected text restored to original after undo, got %q", buf.Text())
 	}
 }
+
+func TestBufferSelectWord(t *testing.T) {
+	buf := NewBuffer("hello world foo bar")
+	buf.SetCursor(0, 0)
+
+	buf.SelectWordRight()
+	if !buf.HasSelection {
+		t.Fatalf("Expected selection active after SelectWordRight")
+	}
+	if buf.CursorCol != 6 {
+		t.Fatalf("Expected cursor at col 6, got %d", buf.CursorCol)
+	}
+	if sel := buf.GetSelectedText(); sel != "hello " {
+		t.Errorf("Expected selected 'hello ', got %q", sel)
+	}
+
+	buf.SelectWordRight()
+	if sel := buf.GetSelectedText(); sel != "hello world " {
+		t.Errorf("Expected selected 'hello world ', got %q", sel)
+	}
+
+	buf.SelectWordLeft()
+	if sel := buf.GetSelectedText(); sel != "hello " {
+		t.Errorf("Expected selected 'hello ', got %q", sel)
+	}
+
+	buf.SelectWordLeft()
+	if buf.HasSelection {
+		t.Errorf("Expected HasSelection false when cursor returns to anchor")
+	}
+}
+
+func TestBufferDirectionalSelection(t *testing.T) {
+	buf := NewBuffer("hello\nworld")
+	buf.SetCursor(0, 0)
+
+	buf.SelectRight()
+	if !buf.HasSelection || buf.GetSelectedText() != "h" {
+		t.Errorf("Expected 'h' selected, got %q (hasSelection: %v)", buf.GetSelectedText(), buf.HasSelection)
+	}
+
+	buf.SelectDown()
+	if !buf.HasSelection {
+		t.Errorf("Expected selection active after SelectDown")
+	}
+
+	buf.SelectUp()
+	buf.SelectLeft()
+	if buf.HasSelection {
+		t.Errorf("Expected selection cleared when back to start")
+	}
+}
+
+func TestBufferDeleteWordLeft(t *testing.T) {
+	buf := NewBuffer("hello world")
+	buf.SetCursor(0, 11) // after "world"
+
+	buf.DeleteWordLeft()
+	if string(buf.Lines[0]) != "hello " {
+		t.Fatalf("Expected 'hello ', got %q", string(buf.Lines[0]))
+	}
+	if buf.CursorCol != 6 {
+		t.Errorf("Expected cursor at col 6, got %d", buf.CursorCol)
+	}
+
+	// Undo restores deleted word
+	if !buf.Undo() {
+		t.Fatalf("Expected Undo to succeed")
+	}
+	if string(buf.Lines[0]) != "hello world" {
+		t.Errorf("Expected 'hello world' restored after undo, got %q", string(buf.Lines[0]))
+	}
+
+	// Selection delete via DeleteWordLeft
+	buf.StartSelection(0, 6)
+	buf.UpdateSelection(0, 11)
+	buf.DeleteWordLeft()
+	if string(buf.Lines[0]) != "hello " {
+		t.Errorf("Expected 'hello ' after deleting selection with DeleteWordLeft, got %q", string(buf.Lines[0]))
+	}
+}
+

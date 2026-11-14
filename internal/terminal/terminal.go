@@ -351,6 +351,17 @@ func (t *TerminalView) Render(width, height int, focused bool) string {
 
 // KeyToBytes converts a Bubble Tea KeyMsg to raw bytes expected by the PTY.
 func KeyToBytes(msg tea.KeyMsg) []byte {
+	switch msg.String() {
+	case "alt+left", "ctrl+left":
+		return []byte("\x1bb")
+	case "alt+right", "ctrl+right":
+		return []byte("\x1bf")
+	case "alt+backspace":
+		return []byte("\x1b\x7f")
+	case "ctrl+backspace":
+		return []byte{0x17}
+	}
+
 	if msg.Type == tea.KeyRunes {
 		if msg.Alt {
 			return append([]byte{0x1b}, []byte(string(msg.Runes))...)
@@ -362,6 +373,9 @@ func KeyToBytes(msg tea.KeyMsg) []byte {
 	case tea.KeyEnter:
 		return []byte{'\r'}
 	case tea.KeyBackspace:
+		if msg.Alt {
+			return []byte("\x1b\x7f")
+		}
 		return []byte{0x7f}
 	case tea.KeyTab:
 		return []byte{'\t'}
@@ -374,9 +388,19 @@ func KeyToBytes(msg tea.KeyMsg) []byte {
 	case tea.KeyDown:
 		return []byte("\x1b[B")
 	case tea.KeyRight:
+		if msg.Alt {
+			return []byte("\x1bf")
+		}
 		return []byte("\x1b[C")
 	case tea.KeyLeft:
+		if msg.Alt {
+			return []byte("\x1bb")
+		}
 		return []byte("\x1b[D")
+	case tea.KeyCtrlLeft:
+		return []byte("\x1bb")
+	case tea.KeyCtrlRight:
+		return []byte("\x1bf")
 	case tea.KeyHome:
 		return []byte("\x1b[H")
 	case tea.KeyEnd:

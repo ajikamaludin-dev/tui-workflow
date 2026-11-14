@@ -2002,6 +2002,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
+				case "alt+backspace", "ctrl+backspace":
+					buf.DeleteWordLeft()
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+
 				case "delete":
 					buf.Delete()
 					m.syncStatusBarWithActiveTab()
@@ -2032,6 +2037,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
+				case "shift+up":
+					buf.SelectUp()
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+
 				case "down":
 					if m.CompletionPopup != nil && m.CompletionPopup.Active {
 						m.CompletionPopup.MoveDown()
@@ -2042,9 +2052,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
+				case "shift+down":
+					buf.SelectDown()
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+
 				case "left":
 					buf.ClearSelection()
 					buf.MoveLeft()
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+
+				case "shift+left":
+					buf.SelectLeft()
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
@@ -2054,15 +2074,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
+				case "shift+alt+left", "alt+shift+left", "shift+ctrl+left", "ctrl+shift+left":
+					buf.SelectWordLeft()
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+
 				case "right":
 					buf.ClearSelection()
 					buf.MoveRight()
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
+				case "shift+right":
+					buf.SelectRight()
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+
 				case "ctrl+right", "alt+right":
 					buf.ClearSelection()
 					buf.MoveWordRight()
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+
+				case "shift+alt+right", "alt+shift+right", "shift+ctrl+right", "ctrl+shift+right":
+					buf.SelectWordRight()
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
@@ -3332,6 +3367,7 @@ func (m *Model) openCommandPalette() {
 		{ID: "edit.undo", Title: "Undo Text Change", Category: "Edit", Shortcut: "Ctrl+Z"},
 		{ID: "edit.redo", Title: "Redo Text Change", Category: "Edit", Shortcut: "Ctrl+Y"},
 		{ID: "edit.toggle_comment", Title: "Toggle Comment (Line / Selection)", Category: "Edit", Shortcut: "Ctrl+/"},
+		{ID: "edit.delete_word_left", Title: "Delete Word Left", Category: "Edit", Shortcut: "Alt+Backspace / Ctrl+Backspace"},
 		{ID: "edit.lsp_completion", Title: "Trigger LSP Completion & Auto-Import", Category: "Edit", Shortcut: "Ctrl+Space"},
 		{ID: "edit.indent_rainbow", Title: "Toggle Indent Rainbow Guide", Category: "Settings", Shortcut: ""},
 		{ID: "explorer.filter", Title: "Filter File Explorer", Category: "Explorer", Shortcut: "/"},
@@ -4135,6 +4171,14 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 				m.syncStatusBarWithActiveTab()
 				m.StatusBar.ShowToast("Undo", false, 1*time.Second)
 			}
+		}
+
+	case "edit.delete_word_left":
+		tab := m.TabManager.ActiveTab()
+		if tab != nil && tab.Buffer != nil {
+			tab.Buffer.DeleteWordLeft()
+			tab.Buffer.ClampCursor()
+			m.syncStatusBarWithActiveTab()
 		}
 
 	case "edit.redo":

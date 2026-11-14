@@ -5,6 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 type MenuItem struct {
@@ -303,12 +304,17 @@ func (m *MenuBar) Render() string {
 	}
 
 	renderedBar := sb.String()
-	barLen := lipgloss.Width(renderedBar)
-	if barLen < m.Width {
-		renderedBar += strings.Repeat(" ", m.Width-barLen)
+	barLen := ansi.StringWidth(renderedBar)
+	if m.Width > 0 {
+		if barLen < m.Width {
+			renderedBar += strings.Repeat(" ", m.Width-barLen)
+		} else if barLen > m.Width {
+			renderedBar = ansi.Truncate(renderedBar, m.Width, "")
+		}
+		return CurrentTheme.TopMenuStyle.Width(m.Width).MaxHeight(1).Render(renderedBar)
 	}
 
-	return CurrentTheme.TopMenuStyle.Width(m.Width).Render(renderedBar)
+	return CurrentTheme.TopMenuStyle.MaxHeight(1).Render(renderedBar)
 }
 
 func (m *MenuBar) RenderDropdown() (string, int, int) {

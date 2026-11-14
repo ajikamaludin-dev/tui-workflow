@@ -76,3 +76,56 @@ func TestStore(t *testing.T) {
 		t.Errorf("DiagnosticAt(5) want 'syntax error', got %+v", atLine5)
 	}
 }
+
+func TestParseBiomeJSON(t *testing.T) {
+	raw := `{
+		"summary": {
+			"diagnostics": 2
+		},
+		"diagnostics": [
+			{
+				"category": "lint/suspicious/noExplicitAny",
+				"severity": "error",
+				"description": "Unexpected any. Specify a different type.",
+				"location": {
+					"path": {
+						"file": "src/types.ts"
+					},
+					"start": {
+						"line": 15,
+						"column": 8
+					}
+				}
+			},
+			{
+				"category": "lint/style/useConst",
+				"severity": "warn",
+				"description": "This variable is let, use const instead.",
+				"location": {
+					"start": {
+						"line": 22,
+						"column": 5
+					}
+				}
+			}
+		]
+	}`
+
+	diags := ParseBiomeJSON([]byte(raw), "src/types.ts")
+	if len(diags) != 2 {
+		t.Fatalf("ParseBiomeJSON want 2 diagnostics, got %d", len(diags))
+	}
+
+	d1 := diags[0]
+	if d1.Line != 15 || d1.Col != 8 || d1.Severity != SeverityError || d1.RuleID != "lint/suspicious/noExplicitAny" {
+		t.Errorf("d1 unexpected: %+v", d1)
+	}
+	if d1.Source != "biome" || d1.FilePath != "src/types.ts" {
+		t.Errorf("d1 source/filePath unexpected: %+v", d1)
+	}
+
+	d2 := diags[1]
+	if d2.Line != 22 || d2.Col != 5 || d2.Severity != SeverityWarning || d2.RuleID != "lint/style/useConst" {
+		t.Errorf("d2 unexpected: %+v", d2)
+	}
+}

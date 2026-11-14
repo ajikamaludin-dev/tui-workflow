@@ -228,18 +228,8 @@ func (mv *MarkdownViewer) Render(rawText string, width, height int) string {
 }
 
 func truncateAnsi(s string, width int) string {
-	// Simple rune truncation if lipgloss width exceeds
-	if lipgloss.Width(s) <= width {
+	if ansi.StringWidth(s) <= width {
 		return s
 	}
-	runes := []rune(s)
-	curW := 0
-	for i, r := range runes {
-		rw := lipgloss.Width(string(r))
-		if curW+rw > width {
-			return string(runes[:i])
-		}
-		curW += rw
-	}
-	return s
+	return ansi.Truncate(s, width, "")
 }

@@ -68,7 +68,8 @@ func NewDarkTheme() Theme {
 
 	t.TopMenuStyle = lipgloss.NewStyle().
 		Background(t.BgTopMenu).
-		Foreground(t.FgPrimary)
+		Foreground(t.FgPrimary).
+		MaxHeight(1)
 
 	t.TopMenuItemStyle = lipgloss.NewStyle().
 		Padding(0, 1).

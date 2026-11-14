@@ -3878,8 +3878,8 @@ func (m *Model) isUnsafeForHunkAction(relPath string) bool {
 	abs := filepath.Join(m.GitRepo.RootPath, relPath)
 	info, err := os.Stat(abs)
 	if err != nil {
-		// untracked/delete/rename-conflict-like ambiguity: keep safe fallback
-		return false
+		// deleted/untracked/ambiguous file: fallback to safe file-level actions
+		return true
 	}
 	if info.Size() > editor.MaxFileSize {
 		return true

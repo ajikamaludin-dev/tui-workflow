@@ -22,6 +22,9 @@ func (m Model) View() string {
 	}
 
 	// 1. Top Menu Bar (Height = 1)
+	if m.Width > 0 && m.MenuBar != nil && m.MenuBar.Width != m.Width {
+		m.MenuBar.SetWidth(m.Width)
+	}
 	menuView := m.MenuBar.Render()
 
 	// 2. Middle Content (Height = Height - 2)
@@ -348,6 +351,7 @@ Editor & Buffer:
   • Ctrl+/          : Toggle Komentar Baris Otomatis
   • Shift+Alt+Panah : Seleksi Teks per Kata (Word Jump Block)
   • Shift+Panah     : Seleksi Teks per Karakter / Baris
+  • Alt/Ctrl+Panah  : Lompat Kata (Word Jump Kiri / Kanan)
   • Alt/Ctrl+Bcksp  : Hapus 1 Kata ke Belakang (atau Hapus Seleksi)
   • Ctrl+Shift+D    : Tambah kursor pada occurrence berikutnya
   • Ctrl+Alt+Up/Dn  : Tambah kursor di baris atas / bawah

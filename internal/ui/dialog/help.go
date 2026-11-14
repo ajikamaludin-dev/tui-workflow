@@ -53,6 +53,10 @@ func NewHelpDialog() *HelpDialog {
 		"  • Tab / Shift+Tab   : Ekspansi Snippet / Lompat Tab-Stop / Indentasi",
 		"  • Ctrl+Space        : Pemicu Autocomplete Sugesti LSP & Auto-Import",
 		"  • Ctrl+/            : Toggle Komentar Baris Otomatis",
+		"  • Shift+Alt+Panah   : Seleksi Teks per Kata (Word Jump Block)",
+		"  • Shift+Panah       : Seleksi Teks per Karakter / Baris",
+		"  • Alt/Ctrl+Panah    : Lompat Kata (Word Jump Kiri / Kanan)",
+		"  • Alt/Ctrl+Bcksp    : Hapus 1 Kata ke Belakang (atau Hapus Seleksi)",
 		"  • Ctrl+Shift+D      : Tambah kursor pada occurrence berikutnya",
 		"  • Ctrl+Alt+Up/Down  : Tambah kursor di baris atas / bawah",
 		"  • Esc               : Gabung multi-cursor / bersihkan seleksi",
@@ -102,6 +106,8 @@ func NewHelpDialog() *HelpDialog {
 		"  • Ctrl+Shift+\\ / Ctrl+T : Buka Tab Terminal Shell Baru",
 		"  • Ctrl+\\ / Ctrl+` / F6  : Alihkan Fokus Terminal / Sidebar",
 		"  • Alt+W / Ctrl+Shift+W  : Tutup Tab Terminal Aktif",
+		"  • Alt/Ctrl+Panah         : Lompat Kata Kursor Shell CLI (Readline)",
+		"  • Alt/Ctrl+Bcksp         : Hapus 1 Kata ke Belakang di Shell CLI",
 		"  • Mouse Wheel            : Scroll Riwayat Terminal",
 	}
 

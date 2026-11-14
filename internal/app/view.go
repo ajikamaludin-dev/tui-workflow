@@ -137,6 +137,24 @@ func (m Model) View() tea.View {
 	return v
 }
 
+// sidebarFooterTabWidths splits total into three near-equal button widths.
+// Any remainder columns go to the leftmost buttons (diff at most 1 col).
+func sidebarFooterTabWidths(total int) (int, int, int) {
+	if total <= 0 {
+		return 0, 0, 0
+	}
+	base := total / 3
+	rem := total % 3
+	w0, w1, w2 := base, base, base
+	if rem > 0 {
+		w0++
+	}
+	if rem > 1 {
+		w1++
+	}
+	return w0, w1, w2
+}
+
 func (m Model) renderSidebar(width, height int) string {
 	// 1. Top Title Header (Row 1 in terminal)
 	var title string
@@ -174,31 +192,25 @@ func (m Model) renderSidebar(width, height int) string {
 	refreshRow = ansi.Truncate(refreshRow, width-1, "")
 
 	// 3. Bottom Tabs Footer (Row Height-2 in terminal)
+	// Three equal-width, full-sidebar-width buttons with centered text.
 	tabActive := ui.CurrentTheme.SidebarTabActive.Padding(0, 0)
 	tabInactive := ui.CurrentTheme.SidebarTabInactive.Padding(0, 0)
 
-	var tabFiles, tabGit, tabSearch string
-	if m.SidebarView == SidebarFiles {
-		tabFiles = tabActive.Render(" 1:Files ")
-	} else {
-		tabFiles = tabInactive.Render(" 1:Files ")
-	}
-	if m.SidebarView == SidebarGit {
-		tabGit = tabActive.Render(" 2:Git ")
-	} else {
-		tabGit = tabInactive.Render(" 2:Git ")
-	}
-	if m.SidebarView == SidebarSearch {
-		tabSearch = tabActive.Render(" 3:Search ")
-	} else {
-		tabSearch = tabInactive.Render(" 3:Search ")
+	innerWidth := width - 1
+	wFiles, wGit, wSearch := sidebarFooterTabWidths(innerWidth)
+	renderTab := func(active bool, label string, w int) string {
+		style := tabInactive
+		if active {
+			style = tabActive
+		}
+		return style.Width(w).Align(lipgloss.Center).MaxHeight(1).Render(label)
 	}
 
+	tabFiles := renderTab(m.SidebarView == SidebarFiles, "Files", wFiles)
+	tabGit := renderTab(m.SidebarView == SidebarGit, "Git", wGit)
+	tabSearch := renderTab(m.SidebarView == SidebarSearch, "Search", wSearch)
+
 	footerTabs := tabFiles + tabGit + tabSearch
-	footerLen := lipgloss.Width(footerTabs)
-	if footerLen < width-1 {
-		footerTabs += strings.Repeat(" ", width-1-footerLen)
-	}
 	footerTabs = ui.CurrentTheme.SidebarHeaderStyle.Width(width - 1).MaxHeight(1).Render(footerTabs)
 	footerTabs = ansi.Truncate(footerTabs, width-1, "")
 

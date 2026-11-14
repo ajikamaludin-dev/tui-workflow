@@ -2,7 +2,6 @@ package app
 
 import (
 	tea "charm.land/bubbletea/v2"
-	"charm.land/lipgloss/v2"
 	"fmt"
 	"path/filepath"
 	"time"
@@ -149,11 +148,10 @@ func (m Model) handleSidebarRow2Click(msg tea.MouseMsg, mouse tea.Mouse, isClick
 
 func (m Model) handleSidebarBottomTabsClick(msg tea.MouseMsg, mouse tea.Mouse, isClick bool) (tea.Model, tea.Cmd, bool) {
 	// Row Height-2: Sidebar bottom tabs click (📁 Files | 🌿 Git | 🔍 Search)
+	// Button widths must match sidebarFooterTabWidths in view.go.
 	if mouse.Y == m.Height-2 && m.SidebarVisible && mouse.X < m.SidebarWidth && isClick && mouse.Button == tea.MouseLeft {
 		m.Focus = FocusSidebar
-		filesTabW := lipgloss.Width(" 1:Files ")
-		gitTabW := lipgloss.Width(" 2:Git ")
-		searchTabW := lipgloss.Width(" 3:Search ")
+		filesTabW, gitTabW, searchTabW := sidebarFooterTabWidths(m.SidebarWidth - 1)
 		if mouse.X >= 0 && mouse.X < filesTabW {
 			m.SidebarView = SidebarFiles
 		} else if mouse.X >= filesTabW && mouse.X < filesTabW+gitTabW {

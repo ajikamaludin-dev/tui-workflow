@@ -109,7 +109,7 @@ func NewDarkTheme() Theme {
 
 	t.SidebarTabActive = lipgloss.NewStyle().
 		Padding(0, 1).
-		Background(t.BgSidebar).
+		Background(t.Accent).
 		Foreground(t.FgHighlight).
 		Bold(true)
 

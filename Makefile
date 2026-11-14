@@ -3,7 +3,7 @@
 
 SHELL := /bin/bash
 
-BINARY      ?= tui-workflow
+BINARY      ?= workflow
 BIN_DIR     ?= bin
 INSTALL_DIR ?= $(HOME)/.local/bin
 

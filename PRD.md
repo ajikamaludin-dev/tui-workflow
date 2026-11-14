@@ -79,7 +79,7 @@ Layout terminal dibagi menjadi 4 zona: Baris 0 (Top Menu), Kolom 1 (Sidebar: Fil
      - `Quick Open File...` (`Ctrl+p`) ➔ Buka Quick Open workspace switcher.
      - `Find in Current File...` (`Ctrl+f`) ➔ Buka Find bar buffer aktif.
      - `Find & Replace...` (`Ctrl+h`) ➔ Buka Find & Replace bar buffer aktif.
-     - `Find in Files (Global)...` (`F4`) ➔ Buka pencarian global di workspace.
+     - `Search & Replace (Sidebar)...` (`F4`) ➔ Buka & fokus sidebar Search & Replace (input Find/Replace/Path/Exclude + hasil per-file; Global Search modal dihapus).
      - `Go to Line...` (`Ctrl+g`) ➔ Lompat ke baris buffer aktif.
    - `[ Setting ]` (`Alt+t`):
      - `Toggle Sidebar` (`Ctrl+b`) ➔ Sembunyikan / tampilkan sidebar.
@@ -98,6 +98,8 @@ Layout terminal dibagi menjadi 4 zona: Baris 0 (Top Menu), Kolom 1 (Sidebar: Fil
 ### 4.2. Sidebar Column 1: Multi-View (Files, Git & Search)
 Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: `[ 📁 Files ]`, `[ 🌿 Git ]`, dan `[ 🔍 Search ]`.
 - Beralih tampilan via keyboard: `Alt+1` (Files) / `Alt+2` (Git) / `Alt+3` (Search & Replace), atau klik mouse pada tab footer di baris bawah.
+- Search & Replace sidebar (VSCode-style): input Find & Replace multi-baris (wrap), field opsional Path (scope folder dalam workspace) dan Exclude (glob gitignore-style, kosong = default ignore `.git`/`node_modules`/`vendor` + `.gitignore`), toggle `[Aa]` case-sensitive (`Alt+C`), `[ab|]` whole-word (`Alt+W`), `[.*]` regex (`Alt+X`). Hasil dikelompokkan per-file dengan tombol `[Replace]` per-file, penggantian match terpilih via `Alt+Enter`, per-file via `Alt+Shift+Enter`, dan "Replace All" global dengan modal konfirmasi. Pencarian berjalan asinkron (debounce ~300 ms) dan tidak memblokir UI.
+- Replace: file yang terbuka di tab diganti melalui buffer (mendukung undo); file lain ditulis langsung ke disk dengan permission asli dipertahankan. Penghitungan berbasis occurrence (bukan jumlah file).
 
 #### A. View 1: File Explorer (Tree View & CRUD)
 1. **Hierarchical Tree & Navigasi:**
@@ -423,7 +425,10 @@ tui-workflow/
 │   ├── logger/
 │   │   └── logger.go            # Debug logging facility
 │   ├── search/
-│   │   └── search.go            # Global workspace text search & replace view
+│   │   ├── engine.go            # Shared query engine (literal/regex, case, whole-word)
+│   │   ├── walk.go              # Async workspace walker (guards, include/exclude globs)
+│   │   ├── view.go              # VSCode-style sidebar Search view (grouped results, per-file replace)
+│   │   └── job.go               # Replace jobs & confirmation tokens
 │   └── terminal/
 │       └── terminal.go          # Embedded PTY terminal subshell runner
 │   ├── lsp/

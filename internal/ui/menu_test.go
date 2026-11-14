@@ -98,11 +98,11 @@ func TestMenuBarMouseClick(t *testing.T) {
 		t.Errorf("Expected action 'search.palette', got %q (handled=%v)", action, handled)
 	}
 
-	// 6. Click on Search menu item 7 "Find in Files (Global)" at Y = 9
+	// 6. Click on Search menu item 7 "Search & Replace (Sidebar)" at Y = 9
 	mb.Toggle(2)
 	action, handled = mb.HandleMouse(tea.MouseClickMsg{X: searchCat.StartX + 2, Y: 9, Button: tea.MouseLeft})
-	if !handled || action != "search.global" {
-		t.Errorf("Expected action 'search.global', got %q (handled=%v)", action, handled)
+	if !handled || action != "view.search" {
+		t.Errorf("Expected action 'view.search', got %q (handled=%v)", action, handled)
 	}
 
 	// 7. Re-open File menu and click outside dropdown

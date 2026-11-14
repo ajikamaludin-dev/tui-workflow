@@ -8,6 +8,7 @@ import (
 	"tui-workflow/internal/config"
 	"tui-workflow/internal/editor"
 	"tui-workflow/internal/git"
+	"tui-workflow/internal/search"
 	"tui-workflow/internal/ui/dialog"
 )
 
@@ -303,7 +304,30 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 		}
 
 	case "search.global":
-		m.openGlobalSearch()
+		m.openSearchSidebar()
+
+	case "search.toggle_case":
+		if m.SearchView != nil {
+			m.SearchView.CaseSensitive = !m.SearchView.CaseSensitive
+			m.SearchView.DoSearch()
+		}
+
+	case "search.toggle_word":
+		if m.SearchView != nil {
+			m.SearchView.WholeWord = !m.SearchView.WholeWord
+			m.SearchView.DoSearch()
+		}
+
+	case "search.toggle_regex":
+		if m.SearchView != nil {
+			m.SearchView.Regex = !m.SearchView.Regex
+			m.SearchView.DoSearch()
+		}
+
+	case "search.replace_all":
+		nm, cmd := m.handleSearchReplaceRequest(search.ReplaceRequest{Scope: search.ReplaceScopeAll})
+		_ = nm
+		return cmd
 
 	case "view.focus":
 		m.toggleFocus()

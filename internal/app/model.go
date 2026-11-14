@@ -42,7 +42,6 @@ type Model struct {
 	Switcher          *dialog.BufferSwitcher
 	QuickOpen         *dialog.QuickOpen
 	CommandPalette    *dialog.CommandPalette
-	GlobalSearch      *dialog.GlobalSearch
 	FindBar           *dialog.FindBar
 	BranchSwitcher    *dialog.BranchSwitcher
 	AISettingsDialog  *dialog.AISettingsDialog
@@ -159,7 +158,6 @@ func NewModelWithPath(targetPath string, explicitArg bool) (Model, error) {
 		Switcher:           dialog.NewBufferSwitcher(),
 		QuickOpen:          dialog.NewQuickOpen(),
 		CommandPalette:     dialog.NewCommandPalette(),
-		GlobalSearch:       dialog.NewGlobalSearch(),
 		FindBar:            dialog.NewFindBar(),
 		BranchSwitcher:     dialog.NewBranchSwitcher(),
 		AISettingsDialog:   dialog.NewAISettingsDialog(),

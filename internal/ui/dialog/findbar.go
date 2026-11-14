@@ -20,14 +20,17 @@ const (
 
 // FindBar represents an in-editor floating search and replace bar.
 type FindBar struct {
-	Active       bool
-	IsReplace    bool
-	FocusField   FindBarFocus
-	Input        textinput.Model
-	ReplaceInput textinput.Model
-	MatchCurrent int
-	MatchTotal   int
-	Width        int
+	Active         bool
+	IsReplace      bool
+	FocusField     FindBarFocus
+	Input          textinput.Model
+	ReplaceInput   textinput.Model
+	MatchCurrent   int
+	MatchTotal     int
+	Width          int
+	QueryCase      bool
+	QueryWholeWord bool
+	QueryRegex     bool
 }
 
 // NewFindBar initializes a new FindBar.
@@ -107,6 +110,15 @@ func (f *FindBar) Update(msg tea.Msg) (action string, closed bool, cmd tea.Cmd) 
 		case "esc":
 			f.Close()
 			return "close", true, nil
+		case "alt+c":
+			f.QueryCase = !f.QueryCase
+			return "change", false, nil
+		case "alt+w":
+			f.QueryWholeWord = !f.QueryWholeWord
+			return "change", false, nil
+		case "alt+x":
+			f.QueryRegex = !f.QueryRegex
+			return "change", false, nil
 		case "tab":
 			if f.IsReplace {
 				if f.FocusField == FindFocusInput {
@@ -275,6 +287,14 @@ func (f *FindBar) Render() string {
 		Foreground(ui.CurrentTheme.Accent).
 		Bold(true)
 
+	badgeOn := lipgloss.NewStyle().
+		Background(ui.CurrentTheme.BgTopMenu).
+		Foreground(ui.CurrentTheme.Accent).
+		Bold(true)
+	badgeOff := lipgloss.NewStyle().
+		Background(ui.CurrentTheme.BgTopMenu).
+		Foreground(ui.CurrentTheme.FgSecondary)
+
 	closeBtnStyle := lipgloss.NewStyle().
 		Background(ui.CurrentTheme.BgTopMenu).
 		Foreground(ui.CurrentTheme.Red).
@@ -285,9 +305,22 @@ func (f *FindBar) Render() string {
 	btnPrev := btnStyle.Render("[↑] ")
 	btnClose := closeBtnStyle.Render("[×] ")
 
+	renderBadge := func(label string, on bool) string {
+		if on {
+			return badgeOn.Render(label)
+		}
+		return badgeOff.Render(label)
+	}
+	badgeCase := renderBadge(" [Aa]", f.QueryCase)
+	badgeWord := renderBadge(" [ab|]", f.QueryWholeWord)
+	badgeRegex := renderBadge(" [.*] ", f.QueryRegex)
+
 	row1 := lipgloss.JoinHorizontal(
 		lipgloss.Center,
 		f.Input.View(),
+		badgeCase,
+		badgeWord,
+		badgeRegex,
 		matchStyle.Render(matchStr),
 		btnNext,
 		btnPrev,

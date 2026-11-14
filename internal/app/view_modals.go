@@ -38,7 +38,10 @@ Search & Code Navigation:
  • F12 / Shift+F12 : Go to Definition / Find References
  • Ctrl+F / Ctrl+H : Find / Find & Replace in Buffer
  • Ctrl+G : Go to Line Number
- • F4 : Global Search Across Workspace
+ • F4 : Search & Replace Sidebar (focus Find input)
+ • Alt+C / Alt+W / Alt+X : Toggle Case / Whole-Word / Regex (Find Bar & Search Sidebar)
+ • Alt+Enter / Alt+Shift+Enter : Replace selected match / all matches in file (Search Sidebar)
+ • Alt+3 → Tab : Cycle Find → Replace → Path → Exclude → results list
  • Ctrl+O : Open File from Disk (File Picker)
  • Ctrl+K, Ctrl+K : Open Directory / Folder in Workspace
 

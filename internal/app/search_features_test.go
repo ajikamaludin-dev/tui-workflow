@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+
+	"tui-workflow/internal/search"
 )
 
 func TestSearchFeaturesIntegration(t *testing.T) {
@@ -72,27 +74,28 @@ func TestSearchFeaturesIntegration(t *testing.T) {
 		t.Errorf("expected buffer search query cleared")
 	}
 
-	// 3. Test Global Search (Ctrl+Shift+F)
-	m.openGlobalSearch()
-	if m.GlobalSearch == nil || !m.GlobalSearch.Active {
-		t.Fatalf("expected GlobalSearch to be active")
+	// 3. Test Sidebar Search (F4) — replaces removed Global Search modal
+	m.openSearchSidebar()
+	if m.SidebarView != SidebarSearch {
+		t.Fatalf("expected sidebar to switch to Search")
+	}
+	if m.SearchView == nil {
+		t.Fatalf("expected SearchView to exist")
 	}
 
-	m.GlobalSearch.Filter.SetValue("find_me_token")
-	m.GlobalSearch.PerformSearch()
-	if len(m.GlobalSearch.Matches) != 2 {
-		t.Fatalf("expected 2 global search matches, got %d", len(m.GlobalSearch.Matches))
+	m.SearchView.FindInput.SetValue("find_me_token")
+	m.SearchView.DoSearch()
+	if len(m.SearchView.Matches) != 2 {
+		t.Fatalf("expected 2 sidebar search matches, got %d", len(m.SearchView.Matches))
 	}
 
-	// Select first match and press Enter
+	m.SearchView.FocusField = search.FocusMatchList
+	m.SearchView.Selected = 0
 	newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = newM.(Model)
-	if m.GlobalSearch.Active {
-		t.Errorf("expected GlobalSearch to be closed after enter")
-	}
 	activeTab = m.TabManager.ActiveTab()
 	if activeTab == nil {
-		t.Fatalf("expected active tab after global search enter")
+		t.Fatalf("expected active tab after search enter")
 	}
 	if activeTab.Buffer.CursorRow <= 0 {
 		t.Errorf("expected cursor row to jump to match, got %d", activeTab.Buffer.CursorRow)
@@ -139,15 +142,11 @@ func TestSearchFeaturesIntegration(t *testing.T) {
 	newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m = newM.(Model)
 
-	// 6. Test F4 triggers Global Search
-	newM, _ = m.Update(tea.KeyPressMsg{Code: []rune("f4")[len([]rune("f4"))-1], Text: "f4"}) // or key type F4
+	// 6. Test F4 opens Search sidebar
+	m.SidebarView = SidebarFiles
+	newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyF4})
 	m = newM.(Model)
-	if m.GlobalSearch == nil || !m.GlobalSearch.Active {
-		// Try Special key type for F4
-		newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyF4})
-		m = newM.(Model)
-	}
-	if m.GlobalSearch == nil || !m.GlobalSearch.Active {
-		t.Errorf("expected F4 to open Global Search")
+	if m.SidebarView != SidebarSearch {
+		t.Errorf("expected F4 to open Search sidebar, got %v", m.SidebarView)
 	}
 }

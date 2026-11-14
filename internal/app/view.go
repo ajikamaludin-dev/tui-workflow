@@ -58,15 +58,12 @@ func (m Model) View() tea.View {
 		baseView = overlayAt(baseView, dropBox, dropX, dropY, m.Width, m.Height)
 	}
 
-	// Overlay 2: Modals (QuickOpen, CommandPalette, GlobalSearch, GoToSymbol, Switcher, FilePicker, Input Dialog, Confirm Dialog, Help, or About)
+	// Overlay 2: Modals (QuickOpen, CommandPalette, GoToSymbol, Switcher, FilePicker, Input Dialog, Confirm Dialog, Help, or About)
 	if m.QuickOpen != nil && m.QuickOpen.Active {
 		modal := m.QuickOpen.Render()
 		baseView = overlayTopCenter(baseView, modal, m.Width, m.Height)
 	} else if m.CommandPalette != nil && m.CommandPalette.Active {
 		modal := m.CommandPalette.Render()
-		baseView = overlayTopCenter(baseView, modal, m.Width, m.Height)
-	} else if m.GlobalSearch != nil && m.GlobalSearch.Active {
-		modal := m.GlobalSearch.Render()
 		baseView = overlayTopCenter(baseView, modal, m.Width, m.Height)
 	} else if m.GoToSymbolActive {
 		modal := m.renderGoToSymbol()

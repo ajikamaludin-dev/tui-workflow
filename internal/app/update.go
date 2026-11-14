@@ -10,6 +10,7 @@ import (
 	"tui-workflow/internal/git"
 	"tui-workflow/internal/linter"
 	"tui-workflow/internal/lsp"
+	"tui-workflow/internal/search"
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -59,6 +60,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case sessionPersistMsg:
 		// best-effort persistence; avoid noisy errors
+		return m, nil
+
+	case search.DebounceMsg:
+		if m.SearchView != nil {
+			_, _, _, cmd := m.SearchView.Update(msg)
+			return m, cmd
+		}
+		return m, nil
+
+	case search.ReplaceRequest:
+		nm, cmd := m.handleSearchReplaceRequest(msg)
+		return nm, cmd
+
+	case search.ResultsMsg:
+		if m.SearchView != nil {
+			_, _, _, cmd := m.SearchView.Update(msg)
+			return m, cmd
+		}
 		return m, nil
 
 	case symbolIndexReadyMsg:
@@ -184,9 +203,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.CommandPalette != nil {
 			m.CommandPalette.SetWidth(m.modalWidth())
-		}
-		if m.GlobalSearch != nil {
-			m.GlobalSearch.SetWidth(m.modalWidth())
 		}
 		contentWidth := m.Width - m.SidebarWidth
 		if !m.SidebarVisible {

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 	"tui-workflow/internal/config"
+	"tui-workflow/internal/search"
 	"tui-workflow/internal/ui/dialog"
 )
 
@@ -65,7 +66,8 @@ func (m Model) handleModalMouse(msg tea.MouseMsg, mouse tea.Mouse, isClick bool)
 						m.StatusBar.ShowToast("1 match replaced", false, 1*time.Second)
 					}
 				case "replace_all":
-					count := tab.Buffer.ReplaceAll(m.FindBar.Input.Value(), m.FindBar.ReplaceInput.Value())
+					opts := search.Query{Pattern: m.FindBar.Input.Value(), CaseSensitive: m.FindBar.QueryCase, WholeWord: m.FindBar.QueryWholeWord, Regex: m.FindBar.QueryRegex}
+					count := tab.Buffer.ReplaceAllOptions(opts, m.FindBar.ReplaceInput.Value())
 					cur, tot := tab.Buffer.MatchInfo()
 					m.FindBar.SetMatches(cur, tot)
 					m.syncStatusBarWithActiveTab()
@@ -127,32 +129,6 @@ func (m Model) handleModalMouse(msg tea.MouseMsg, mouse tea.Mouse, isClick bool)
 						fullPath := filepath.Join(m.RootDir, relPath)
 						m.openFile(fullPath)
 					}
-				}
-				return m, nil, true
-			}
-		}
-		return m, nil, true
-	}
-
-	if m.GlobalSearch != nil && m.GlobalSearch.Active {
-		modalStr := m.GlobalSearch.Render()
-		modalW := lipgloss.Width(modalStr)
-		modalH := lipgloss.Height(modalStr)
-		startX := (m.Width - modalW) / 2
-		startY := (m.Height - modalH) / 3
-		if startY < 1 {
-			startY = 1
-		}
-		relX := mouse.X - startX
-		relY := mouse.Y - startY
-		isWheelUp := mouse.Button == tea.MouseWheelUp
-		isWheelDown := mouse.Button == tea.MouseWheelDown
-		if isClick || isWheelUp || isWheelDown {
-			relPath, lineNum, colNum, closed, handled := m.GlobalSearch.HandleMouse(relX, relY, isWheelUp, isWheelDown)
-			if handled {
-				if closed && relPath != "" {
-					fullPath := filepath.Join(m.RootDir, relPath)
-					m.openFileAt(fullPath, lineNum, colNum)
 				}
 				return m, nil, true
 			}

@@ -12,6 +12,7 @@ import (
 	"tui-workflow/internal/editor"
 	"tui-workflow/internal/explorer"
 	"tui-workflow/internal/git"
+	"tui-workflow/internal/search"
 	"tui-workflow/internal/ui/dialog"
 )
 
@@ -254,6 +255,20 @@ func (m *Model) handleConfirmConfirmed() tea.Cmd {
 		}
 		m.pendingGitHunkPath = ""
 		m.pendingGitHunkIndex = 0
+
+	case dialog.ConfirmReplace:
+		job, ok := m.ConfirmDialog.Payload.(search.ReplaceJob)
+		m.ConfirmDialog.Payload = nil
+		if !ok {
+			m.StatusBar.ShowToast("Replace request expired or invalid", true, 3*time.Second)
+			return nil
+		}
+		occ, files, err := executeReplaceJob(m, job)
+		if err != nil {
+			m.StatusBar.ShowToast("Replace error: "+err.Error(), true, 3*time.Second)
+			return nil
+		}
+		m.StatusBar.ShowToast(fmt.Sprintf("Replaced %d occurrence(s) in %d file(s)", occ, files), false, 2*time.Second)
 	}
 	return nil
 }

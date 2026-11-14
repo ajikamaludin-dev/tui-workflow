@@ -122,3 +122,36 @@ func TestFindBarRenderDimensions(t *testing.T) {
 		t.Errorf("Expected match count in rendered output")
 	}
 }
+
+func TestFindBarToggles(t *testing.T) {
+	fb := NewFindBar()
+	fb.Open("test")
+
+	action, closed, _ := fb.Update(tea.KeyPressMsg{Code: 'c', Text: "c", Mod: tea.ModAlt})
+	if closed || action != "change" || !fb.QueryCase {
+		t.Errorf("Expected QueryCase=true and action 'change', got action=%q closed=%v case=%v", action, closed, fb.QueryCase)
+	}
+
+	action, _, _ = fb.Update(tea.KeyPressMsg{Code: 'w', Text: "w", Mod: tea.ModAlt})
+	if action != "change" || !fb.QueryWholeWord {
+		t.Errorf("Expected QueryWholeWord=true and action 'change', got action=%q word=%v", action, fb.QueryWholeWord)
+	}
+
+	action, _, _ = fb.Update(tea.KeyPressMsg{Code: 'x', Text: "x", Mod: tea.ModAlt})
+	if action != "change" || !fb.QueryRegex {
+		t.Errorf("Expected QueryRegex=true and action 'change', got action=%q regex=%v", action, fb.QueryRegex)
+	}
+
+	// toggle back off
+	fb.Update(tea.KeyPressMsg{Code: 'c', Text: "c", Mod: tea.ModAlt})
+	if fb.QueryCase {
+		t.Errorf("Expected QueryCase=false after second alt+c")
+	}
+
+	rendered := fb.Render()
+	for _, badge := range []string{"[Aa]", "[ab|]", "[.*]"} {
+		if !strings.Contains(rendered, badge) {
+			t.Errorf("Expected rendered findbar to contain badge %q, got %s", badge, rendered)
+		}
+	}
+}

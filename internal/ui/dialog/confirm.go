@@ -18,6 +18,7 @@ const (
 	ConfirmDiscardGitHunk
 	ConfirmAlert
 	ConfirmCloseTerminal
+	ConfirmReplace
 )
 
 type ConfirmDialog struct {
@@ -28,6 +29,7 @@ type ConfirmDialog struct {
 	TargetPath string
 	Selected   int // 0: Confirm, 1: Cancel, 2: Discard (for unsaved)
 	Width      int
+	Payload    interface{} // optional caller payload (e.g. replace snapshot)
 }
 
 func NewConfirmDialog() *ConfirmDialog {
@@ -53,6 +55,9 @@ func (d *ConfirmDialog) Open(t ConfirmDialogType, title, message, targetPath str
 	} else if t == ConfirmCloseTerminal {
 		d.Selected = 1
 		d.Width = 52
+	} else if t == ConfirmReplace {
+		d.Selected = 1
+		d.Width = 54
 	} else {
 		d.Selected = 1
 		d.Width = 48
@@ -209,7 +214,7 @@ func (d *ConfirmDialog) Render() string {
 	}
 
 	titleColor := ui.CurrentTheme.Red
-	if d.Type == ConfirmUnsavedChanges || d.Type == ConfirmExternalChange || d.Type == ConfirmAlert {
+	if d.Type == ConfirmUnsavedChanges || d.Type == ConfirmExternalChange || d.Type == ConfirmAlert || d.Type == ConfirmReplace {
 		titleColor = ui.CurrentTheme.Yellow
 	}
 
@@ -308,6 +313,10 @@ func (d *ConfirmDialog) Render() string {
 	} else {
 		btnConfirm := btnStyle
 		btnCancel := btnStyle
+		confirmLabel := "Delete"
+		if d.Type == ConfirmReplace {
+			confirmLabel = "Replace"
+		}
 
 		if d.Selected == 0 {
 			btnConfirm = btnConfirm.Background(ui.CurrentTheme.Red).Foreground(ui.CurrentTheme.FgHighlight).Bold(true)
@@ -317,7 +326,7 @@ func (d *ConfirmDialog) Render() string {
 
 		buttons = lipgloss.JoinHorizontal(
 			lipgloss.Center,
-			btnConfirm.Render("Delete"),
+			btnConfirm.Render(confirmLabel),
 			btnSep,
 			btnCancel.Render("Cancel"),
 		)

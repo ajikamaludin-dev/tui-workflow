@@ -4,6 +4,7 @@ import (
 	"strings"
 	"unicode"
 
+	"tui-workflow/internal/search"
 	"tui-workflow/internal/syntax"
 )
 
@@ -57,6 +58,9 @@ type Buffer struct {
 	SearchMatches         []MatchPos
 	ActiveMatchIdx        int
 	CenterCursorRequested bool
+	matchByLine           map[int][]int // row → indices into SearchMatches
+	matcher               *search.Matcher
+	lastQuery             search.Query
 
 	// Undo / Redo state
 	undoStack    []BufferSnapshot

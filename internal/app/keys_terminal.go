@@ -181,7 +181,7 @@ func (m Model) handleTerminalKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 		return m, nil, true
 
 	case "ctrl+shift+f", "ctrl+F", "f4":
-		m.openGlobalSearch()
+		m.openSearchSidebar()
 		return m, nil, true
 
 	case "ctrl+f":

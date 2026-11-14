@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 	"tui-workflow/internal/editor"
+	"tui-workflow/internal/search"
 	"tui-workflow/internal/ui"
 )
 
@@ -80,7 +81,7 @@ func (m Model) handleSearchKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) 
 		} else if tab != nil && tab.Buffer != nil {
 			switch action {
 			case "change":
-				tab.Buffer.SetSearchQuery(m.FindBar.Input.Value())
+				tab.Buffer.SetSearchOptions(search.Query{Pattern: m.FindBar.Input.Value(), CaseSensitive: m.FindBar.QueryCase, WholeWord: m.FindBar.QueryWholeWord, Regex: m.FindBar.QueryRegex})
 				cur, tot := tab.Buffer.MatchInfo()
 				m.FindBar.SetMatches(cur, tot)
 				m.syncStatusBarWithActiveTab()
@@ -102,7 +103,8 @@ func (m Model) handleSearchKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) 
 					m.StatusBar.ShowToast("1 match replaced", false, 1*time.Second)
 				}
 			case "replace_all":
-				count := tab.Buffer.ReplaceAll(m.FindBar.Input.Value(), m.FindBar.ReplaceInput.Value())
+				opts := search.Query{Pattern: m.FindBar.Input.Value(), CaseSensitive: m.FindBar.QueryCase, WholeWord: m.FindBar.QueryWholeWord, Regex: m.FindBar.QueryRegex}
+				count := tab.Buffer.ReplaceAllOptions(opts, m.FindBar.ReplaceInput.Value())
 				cur, tot := tab.Buffer.MatchInfo()
 				m.FindBar.SetMatches(cur, tot)
 				m.syncStatusBarWithActiveTab()
@@ -148,15 +150,6 @@ func (m Model) handleSearchKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) 
 		if closed && actionID != "" {
 			menuCmd := m.handleMenuAction(actionID)
 			return m, tea.Batch(cmd, menuCmd), true
-		}
-		return m, cmd, true
-	}
-	// 0.7. Global Search Handling if active
-	if m.GlobalSearch != nil && m.GlobalSearch.Active {
-		filePath, line, col, closed, cmd := m.GlobalSearch.Update(msg)
-		if closed && filePath != "" {
-			m.openFileAt(filePath, line, col)
-			m.Focus = FocusEditor
 		}
 		return m, cmd, true
 	}

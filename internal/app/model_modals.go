@@ -136,7 +136,11 @@ func (m *Model) openCommandPalette() {
 		{ID: "search.find_references", Title: "Find References", Category: "Search", Shortcut: "Shift+F12"},
 		{ID: "search.find", Title: "Find in Current File", Category: "Search", Shortcut: "Ctrl+F"},
 		{ID: "search.replace", Title: "Find & Replace in Current File", Category: "Search", Shortcut: "Ctrl+H"},
-		{ID: "search.global", Title: "Global Search in Workspace", Category: "Search", Shortcut: "Ctrl+Shift+F"},
+		{ID: "search.global", Title: "Search & Replace (Sidebar)", Category: "Search", Shortcut: "F4 / Ctrl+Shift+F"},
+		{ID: "search.toggle_case", Title: "Toggle Case-Sensitive Search", Category: "Search", Shortcut: "Alt+C"},
+		{ID: "search.toggle_word", Title: "Toggle Whole-Word Search", Category: "Search", Shortcut: "Alt+W"},
+		{ID: "search.toggle_regex", Title: "Toggle Regex Search", Category: "Search", Shortcut: "Alt+X"},
+		{ID: "search.replace_all", Title: "Replace All in Workspace", Category: "Search", Shortcut: ""},
 		{ID: "edit.goto_line", Title: "Go to Line / Column", Category: "Search", Shortcut: "Ctrl+G"},
 		{ID: "edit.add_next_occurrence", Title: "Add Next Occurrence (Multi-Cursor)", Category: "Edit", Shortcut: "Ctrl+Shift+D"},
 		{ID: "edit.add_cursor_above", Title: "Add Cursor Above", Category: "Edit", Shortcut: "Ctrl+Alt+Up"},
@@ -192,11 +196,14 @@ func (m *Model) openCommandPalette() {
 	m.CommandPalette.Open(commands)
 }
 
-func (m *Model) openGlobalSearch() {
-	if m.GlobalSearch != nil {
-		m.GlobalSearch.SetWidth(m.modalWidth())
+func (m *Model) openSearchSidebar() {
+	m.SidebarView = SidebarSearch
+	m.SidebarVisible = true
+	m.Focus = FocusSidebar
+	if m.SearchView != nil {
+		m.SearchView.DoSearch()
+		m.SearchView.FocusFind()
 	}
-	m.GlobalSearch.Open(m.RootDir)
 }
 
 func (m *Model) openFindBar() {

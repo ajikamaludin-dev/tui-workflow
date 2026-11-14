@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 	"tui-workflow/internal/editor"
+	"tui-workflow/internal/search"
 	"tui-workflow/internal/ui"
 	"tui-workflow/internal/ui/dialog"
 )
@@ -242,11 +243,19 @@ func (m Model) handleSidebarBodyClick(msg tea.MouseMsg, mouse tea.Mouse, isClick
 			}
 		} else if m.SidebarView == SidebarSearch && m.SearchView != nil {
 			relLine := mouse.Y - 3
-			filePath, line, col, _ := m.SearchView.HandleMouseClick(mouse.X, relLine)
-			if filePath != "" {
-				m.openFileAt(filePath, line, col)
+			act := m.SearchView.HandleMouseClick(mouse.X, relLine)
+			switch act.Kind {
+			case "open":
+				m.openFileAt(act.FilePath, act.LineNumber, act.ColNumber)
 				m.Focus = FocusEditor
+			case "replace-all":
+				nm, cmd := m.handleSearchReplaceRequest(search.ReplaceRequest{Scope: search.ReplaceScopeAll})
+				return nm, cmd, true
+			case "replace-file":
+				nm, cmd := m.handleSearchReplaceRequest(search.ReplaceRequest{Scope: search.ReplaceScopeFile, FilePath: act.FilePath})
+				return nm, cmd, true
 			}
+			// Other actions are applied inside the view (toggles, find button).
 		}
 		return m, nil, true
 	}

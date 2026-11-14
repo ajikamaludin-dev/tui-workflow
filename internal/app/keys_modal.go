@@ -121,6 +121,7 @@ func (m Model) handleModalKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
 				return m, cmd, true
 			}
 		} else if canceled {
+			m.ConfirmDialog.Payload = nil
 			if m.ConfirmDialog.Type == dialog.ConfirmAlert {
 				return m, nil, true
 			}

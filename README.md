@@ -103,6 +103,9 @@
 | `Alt + 1` | Beralih Sidebar ke Tampilan File Explorer |
 | `Alt + 2` | Beralih Sidebar ke Tampilan Git Source Control |
 | `Alt + 3` | Beralih Sidebar ke Tampilan Cari & Ganti (Search & Replace) |
+| `Alt + Enter` | Ganti match terpilih di Sidebar Search |
+| `Alt + Shift + Enter` | Ganti semua match pada file yang dipilih di Sidebar Search |
+| `Tab` / `Shift + Tab` | Siklus fokus: Find → Replace → Path → Exclude → daftar hasil |
 | `Alt + [` / `Alt + ]` | Persempit / Perlebar lebar Sidebar |
 | `Alt + F` | Buka Menu Top Bar **File** |
 | `Alt + E` | Buka Menu Top Bar **Edit** |
@@ -116,7 +119,7 @@
 | `Shift + F12` | Find References di seluruh workspace |
 | `Ctrl + O` | Buka File Baru dari Disk (File Picker modal) |
 | `Ctrl + K` | Buka Direktori / Folder Baru di Workspace |
-| `F4` | Cari Teks Global di Seluruh Workspace (Global Search modal) |
+| `F4` | Buka & Fokus Sidebar Search & Replace (menggantikan Global Search modal) |
 | `Alt + S` | Toggle Auto-Save on Focus Change (ON / OFF) |
 | `Alt + Z` | Toggle Soft-Wrap pada Editor |
 | `Alt + I` | Konfigurasi Model AI (OpenAI API Format: Provider URL, API Key, Model) |
@@ -135,6 +138,7 @@
 | `Ctrl + Y` / `Ctrl + Shift + Z` | Ulangi perubahan teks yang dibatalkan (Redo) |
 | `Ctrl + F` | Buka pencarian teks di buffer aktif (Find Bar) |
 | `Ctrl + H` | Buka pencarian dan penggantian teks di buffer aktif (Find & Replace) |
+| `Alt + C` / `Alt + W` / `Alt + X` | Toggle Case-Sensitive / Whole-Word / Regex (Find Bar & Sidebar Search) |
 | `Ctrl + G` | Lompat ke baris dan kolom tertentu (Go to Line / Column) |
 | `Ctrl + Space` | Pemicu Autocomplete Sugesti LSP & Auto-Import |
 | `Tab` / `Shift + Tab` | Ekspansi Snippet / Lompat Tab-Stop / Indentasi & Outdentasi 4 spasi |
@@ -306,7 +310,7 @@ tui-workflow/
 │   ├── logger/                  # Debug & event logger
 │   ├── markdown/
 │   │   └── renderer.go          # Glamour Markdown live preview dengan cache
-│   ├── search/                  # Global Workspace Search engine
+│   ├── search/                  # Search engine (engine.go), async walker & sidebar view
 │   ├── syntax/
 │   │   └── highlighter.go       # Chroma real-time tokenizer & detector
 │   ├── terminal/
@@ -317,10 +321,9 @@ tui-workflow/
 │       ├── dialog/
 │       │   ├── aisettings.go    # Modal konfigurasi endpoint AI
 │       │   ├── branch.go        # Modal Branch Switcher Git
-│       │   ├── confirm.go       # Modal konfirmasi (Delete & Unsaved changes)
+│       │   ├── confirm.go       # Modal konfirmasi (Delete & Unsaved changes & Replace)
 │       │   ├── filepicker.go    # Modal navigasi file picker
 │       │   ├── findbar.go       # Floating search & replace bar
-│       │   ├── globalsearch.go  # Modal pencarian teks global workspace
 │       │   ├── help.go          # Modal interaktif bantuan & panduan pintasan keyboard
 │       │   ├── input.go         # Modal input teks (New file, folder, rename)
 │       │   ├── normalize.go     # Normalisasi background ANSI modal dialog

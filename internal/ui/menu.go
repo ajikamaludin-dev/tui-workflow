@@ -53,6 +53,7 @@ func NewMenuBar() *MenuBar {
 				Items: []MenuItem{
 					{Label: "Undo", Shortcut: "Ctrl+Z", ActionID: "edit.undo"},
 					{Label: "Redo", Shortcut: "Ctrl+Y", ActionID: "edit.redo"},
+					{Label: "Trigger Completion", Shortcut: "Ctrl+Space", ActionID: "edit.lsp_completion"},
 					{Label: "Find...", Shortcut: "Ctrl+F", ActionID: "search.find"},
 					{Label: "Find & Replace...", Shortcut: "Ctrl+H", ActionID: "search.replace"},
 					{Label: "Go to Line...", Shortcut: "Ctrl+G", ActionID: "edit.goto_line"},
@@ -104,6 +105,7 @@ func NewMenuBar() *MenuBar {
 					{Label: "Toggle Soft Wrap", Shortcut: "Alt+Z", ActionID: "setting.softwrap"},
 					{Label: "Toggle Auto-Save", Shortcut: "Alt+S", ActionID: "setting.autosave"},
 					{Label: "Toggle Format on Save", Shortcut: "", ActionID: "setting.format_on_save"},
+					{Label: "Toggle Indent Rainbow", Shortcut: "", ActionID: "edit.indent_rainbow"},
 					{Label: "Toggle Hidden Files", Shortcut: ".", ActionID: "setting.hidden"},
 					{Label: "Switch Git Branch...", Shortcut: "Alt+B", ActionID: "git.branch_switcher"},
 					{Label: "AI Settings...", Shortcut: "Alt+I", ActionID: "setting.ai"},

@@ -20,7 +20,10 @@ import (
 	"tui-workflow/internal/explorer"
 	"tui-workflow/internal/formatter"
 	"tui-workflow/internal/git"
+	"tui-workflow/internal/linter"
+	"tui-workflow/internal/lsp"
 	"tui-workflow/internal/search"
+	"tui-workflow/internal/snippet"
 	"tui-workflow/internal/symbol"
 	"tui-workflow/internal/terminal"
 	"tui-workflow/internal/ui"
@@ -83,6 +86,12 @@ type Model struct {
 
 	// Ctrl+K chord (fold commands like Ctrl+K Ctrl+0)
 	ctrlKPending bool
+
+	// Intelligent Code Assistance Suite
+	LinterStore     *linter.Store
+	LSPManager      *lsp.Manager
+	CompletionPopup *lsp.CompletionPopup
+	SnippetSession  *snippet.Session
 }
 
 func NewModelWithPath(targetPath string, explicitArg bool) (Model, error) {
@@ -173,6 +182,9 @@ func NewModelWithPath(targetPath string, explicitArg bool) (Model, error) {
 		ClosingTabIdx:     -1,
 		ContextMenuTabIdx: -1,
 		SessionExplicitArg: explicitArg,
+		LinterStore:       linter.NewStore(),
+		LSPManager:        lsp.NewManager(rootDir),
+		CompletionPopup:   lsp.NewCompletionPopup(),
 	}
 	m.Explorer.ShowHidden = cfg.ShowHidden
 	m.StatusBar.AutoSave = cfg.AutoSave
@@ -272,6 +284,247 @@ func warmupQuickOpenCmd(qo *dialog.QuickOpen, rootDir string) tea.Cmd {
 		}
 		return quickOpenWarmupMsg{}
 	}
+}
+
+type lspCompletionResultMsg struct {
+	Items  []lsp.CompletionItem
+	X, Y   int
+	Prefix string
+}
+
+func (m Model) triggerLSPCompletionCmd() tea.Cmd {
+	_, cmd := m.handleCtrlSpace()
+	return cmd
+}
+
+func (m Model) handleCtrlSpace() (tea.Model, tea.Cmd) {
+	tab := m.TabManager.ActiveTab()
+	if tab == nil || tab.Buffer == nil {
+		return m, nil
+	}
+	buf := tab.Buffer
+	word, _ := buf.WordBeforeCursor()
+
+	gutterWidth := buf.GutterWidth()
+	sidebarW := 0
+	if m.SidebarVisible {
+		sidebarW = m.SidebarWidth
+	}
+	curX := sidebarW + gutterWidth + buf.CursorCol - buf.ScrollCol
+	curY := 2 + (buf.CursorRow - buf.ScrollRow) + 1
+	if curX < 0 {
+		curX = 0
+	}
+	if curX > m.Width-40 {
+		curX = m.Width - 40
+	}
+	if curY > m.Height-10 {
+		curY = curY - 10
+	}
+	if curY < 2 {
+		curY = 2
+	}
+
+	// 1. Build local completions immediately (<0.1ms)
+	localItems := lsp.BuildLocalCompletions(buf, tab.Path, m.SymbolIndex)
+	filtered := lsp.FilterCompletions(localItems, word)
+	if len(filtered) > 0 && m.CompletionPopup != nil {
+		m.CompletionPopup.SetItems(filtered, curX, curY, word)
+	}
+
+	// 2. Query LSP server asynchronously if available
+	ext := filepath.Ext(tab.Path)
+	if m.LSPManager != nil {
+		client, langID, err := m.LSPManager.GetClient(ext)
+		if client != nil && err == nil {
+			row := buf.CursorRow
+			col := buf.CursorCol
+			path := tab.Path
+			content := buf.Text()
+			return m, func() tea.Msg {
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+				defer cancel()
+				_ = client.DidOpen(path, langID, content)
+				items, err := client.Completion(ctx, path, row, col)
+				if err != nil || len(items) == 0 {
+					return nil
+				}
+				return lspCompletionResultMsg{
+					Items:  items,
+					X:      curX,
+					Y:      curY,
+					Prefix: word,
+				}
+			}
+		} else {
+			serverBin, _, _ := lsp.DetectLanguageServer(m.RootDir, ext)
+			if serverBin == "" {
+				m.StatusBar.ShowToast("Autocomplete lokal & snippet aktif (LSP server tidak ditemukan)", false, 2*time.Second)
+			}
+		}
+	}
+
+	if len(filtered) == 0 {
+		m.StatusBar.ShowToast("Tidak ada sugesti autocomplete", false, 1*time.Second)
+	}
+
+	return m, nil
+}
+
+func (m Model) handleTab() (tea.Model, tea.Cmd) {
+	tab := m.TabManager.ActiveTab()
+	if tab == nil || tab.Buffer == nil {
+		return m, nil
+	}
+	buf := tab.Buffer
+
+	// 1. If completion popup is active, accept current selection
+	if m.CompletionPopup != nil && m.CompletionPopup.Active {
+		selected := m.CompletionPopup.Selected()
+		m.CompletionPopup.Close()
+		if selected != nil {
+			_, startCol := buf.WordBeforeCursor()
+			if selected.Kind == lsp.CompletionKindSnippet {
+				if s := snippet.FindSnippet(selected.Label, tab.Path); s != nil {
+					startRow := buf.CursorRow
+					expanded := snippet.Expand(s, tab.Path)
+					buf.ReplaceWordBeforeCursor(startCol, expanded.Text)
+					m.SnippetSession = snippet.NewSession(startRow, startCol, expanded.TabStops)
+					if row, col, length, ok := m.SnippetSession.Current(); ok {
+						buf.CursorRow = row
+						buf.CursorCol = col
+						buf.CollapseCursors()
+						if length > 0 {
+							buf.SelectAnchorRow = row
+							buf.SelectAnchorCol = col
+							buf.CursorCol = col + length
+							buf.HasSelection = true
+						} else {
+							buf.ClearSelection()
+						}
+					}
+					idx, total := m.SnippetSession.Progress()
+					m.StatusBar.ShowToast(fmt.Sprintf("Snippet %s (%d/%d) | Tab/Shift+Tab | Esc: Selesai", s.Prefix, idx, total), false, 3*time.Second)
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+				}
+			}
+
+			insertText := selected.InsertText
+			if insertText == "" {
+				insertText = selected.Label
+			}
+			buf.ReplaceWordBeforeCursor(startCol, insertText)
+			if len(selected.AdditionalTextEdits) > 0 {
+				for _, edit := range selected.AdditionalTextEdits {
+					if edit.Range.Start.Line == 0 && edit.Range.Start.Character == 0 {
+						buf.InsertTopImport(edit.NewText)
+					}
+				}
+			}
+			m.syncStatusBarWithActiveTab()
+			return m, nil
+		}
+	}
+
+	// 2. If snippet session is active, advance to next tab-stop
+	if m.SnippetSession != nil && m.SnippetSession.Active {
+		if row, col, length, ok := m.SnippetSession.Next(); ok {
+			buf.CursorRow = row
+			buf.CursorCol = col
+			buf.CollapseCursors()
+			if length > 0 {
+				buf.SelectAnchorRow = row
+				buf.SelectAnchorCol = col
+				buf.CursorCol = col + length
+				buf.HasSelection = true
+			} else {
+				buf.ClearSelection()
+			}
+			idx, total := m.SnippetSession.Progress()
+			m.StatusBar.ShowToast(fmt.Sprintf("Tab-stop %d/%d (Tab / Shift+Tab | Esc: Selesai)", idx, total), false, 2*time.Second)
+			m.syncStatusBarWithActiveTab()
+			return m, nil
+		}
+	}
+
+	// 3. If buffer has selection, indent selection
+	if buf.HasSelection {
+		buf.IndentSelection()
+		m.syncStatusBarWithActiveTab()
+		return m, nil
+	}
+
+	// 4. Check if word before cursor is a snippet trigger
+	word, startCol := buf.WordBeforeCursor()
+	if word != "" {
+		if s := snippet.FindSnippet(word, tab.Path); s != nil {
+			startRow := buf.CursorRow
+			expanded := snippet.Expand(s, tab.Path)
+			buf.ReplaceWordBeforeCursor(startCol, expanded.Text)
+			m.SnippetSession = snippet.NewSession(startRow, startCol, expanded.TabStops)
+			if row, col, length, ok := m.SnippetSession.Current(); ok {
+				buf.CursorRow = row
+				buf.CursorCol = col
+				buf.CollapseCursors()
+				if length > 0 {
+					buf.SelectAnchorRow = row
+					buf.SelectAnchorCol = col
+					buf.CursorCol = col + length
+					buf.HasSelection = true
+				} else {
+					buf.ClearSelection()
+				}
+			}
+			idx, total := m.SnippetSession.Progress()
+			m.StatusBar.ShowToast(fmt.Sprintf("Snippet %s (%d/%d) | Tab/Shift+Tab | Esc: Selesai", s.Prefix, idx, total), false, 3*time.Second)
+			m.syncStatusBarWithActiveTab()
+			return m, nil
+		}
+	}
+
+	// 5. Default: insert 4 spaces
+	buf.InsertString("    ")
+	m.syncStatusBarWithActiveTab()
+	return m, nil
+}
+
+func (m Model) handleShiftTab() (tea.Model, tea.Cmd) {
+	tab := m.TabManager.ActiveTab()
+	if tab == nil || tab.Buffer == nil {
+		return m, nil
+	}
+	buf := tab.Buffer
+
+	// 1. If snippet session is active, go back to previous tab-stop
+	if m.SnippetSession != nil && m.SnippetSession.Active {
+		if row, col, length, ok := m.SnippetSession.Prev(); ok {
+			buf.CursorRow = row
+			buf.CursorCol = col
+			buf.CollapseCursors()
+			if length > 0 {
+				buf.SelectAnchorRow = row
+				buf.SelectAnchorCol = col
+				buf.CursorCol = col + length
+				buf.HasSelection = true
+			} else {
+				buf.ClearSelection()
+			}
+			idx, total := m.SnippetSession.Progress()
+			m.StatusBar.ShowToast(fmt.Sprintf("Tab-stop %d/%d (Tab / Shift+Tab | Esc: Selesai)", idx, total), false, 2*time.Second)
+			m.syncStatusBarWithActiveTab()
+			return m, nil
+		}
+	}
+
+	// 2. If buffer has selection, outdent selection
+	if buf.HasSelection {
+		buf.OutdentSelection()
+	} else {
+		buf.OutdentCurrentLine()
+	}
+	m.syncStatusBarWithActiveTab()
+	return m, nil
 }
 
 func (m *Model) triggerGitRefresh() tea.Cmd {
@@ -616,6 +869,49 @@ func (m Model) Init() tea.Cmd {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case linter.LintFinishedMsg:
+		if m.LinterStore != nil {
+			m.LinterStore.Set(msg.FilePath, msg.Diagnostics)
+		}
+		if tab := m.TabManager.ActiveTab(); tab != nil && tab.Buffer != nil && tab.Path == msg.FilePath {
+			if m.LinterStore != nil {
+				tab.Buffer.LineDiagnostics = m.LinterStore.LineDiagnostics(msg.FilePath)
+			}
+		}
+		m.syncStatusBarWithActiveTab()
+		return m, nil
+
+	case lspCompletionResultMsg:
+		if len(msg.Items) > 0 && m.CompletionPopup != nil {
+			curX := msg.X
+			curY := msg.Y
+			if curX < 0 {
+				curX = 0
+			}
+			if curX > m.Width-40 {
+				curX = m.Width - 40
+			}
+			if curY > m.Height-10 {
+				curY = curY - 10
+			}
+			if curY < 2 {
+				curY = 2
+			}
+			// Prepend matching local snippets to LSP items
+			var merged []lsp.CompletionItem
+			tab := m.TabManager.ActiveTab()
+			if tab != nil && tab.Buffer != nil {
+				local := lsp.BuildLocalCompletions(tab.Buffer, tab.Path, nil)
+				for _, it := range local {
+					if it.Kind == lsp.CompletionKindSnippet && (msg.Prefix == "" || strings.HasPrefix(strings.ToLower(it.Label), strings.ToLower(msg.Prefix))) {
+						merged = append(merged, it)
+					}
+				}
+			}
+			merged = append(merged, msg.Items...)
+			m.CompletionPopup.SetItems(merged, curX, curY, msg.Prefix)
+		}
+		return m, nil
 	case sessionPersistMsg:
 		// best-effort persistence; avoid noisy errors
 		return m, nil
@@ -1518,6 +1814,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			} else if tab != nil && tab.Buffer != nil {
 				buf := tab.Buffer
+
+				// Intercept terminal-specific KeyType signals for autocomplete and tab navigation
+				if msg.Type == tea.KeyCtrlAt || msg.Type == tea.KeyNull {
+					return m.handleCtrlSpace()
+				}
+				if msg.Type == tea.KeyShiftTab {
+					return m.handleShiftTab()
+				}
+
 				switch msg.String() {
 				case "ctrl+shift+i", "ctrl+shift+I", "alt+shift+f", "alt+F":
 					return m.triggerFormatCurrentBuffer()
@@ -1542,6 +1847,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						if m.SymbolIndex != nil {
 							m.SymbolIndex.UpdateFile(tab.Path)
 						}
+						m.syncStatusBarWithActiveTab()
+						return m, linter.RunLinterCmd(m.RootDir, tab.Path)
 					}
 					m.syncStatusBarWithActiveTab()
 					return m, nil
@@ -1609,6 +1916,53 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 
 				case "enter":
+					if m.CompletionPopup != nil && m.CompletionPopup.Active {
+						selected := m.CompletionPopup.Selected()
+						m.CompletionPopup.Close()
+						if selected != nil {
+							_, startCol := buf.WordBeforeCursor()
+							if selected.Kind == lsp.CompletionKindSnippet {
+								if s := snippet.FindSnippet(selected.Label, tab.Path); s != nil {
+									startRow := buf.CursorRow
+									expanded := snippet.Expand(s, tab.Path)
+									buf.ReplaceWordBeforeCursor(startCol, expanded.Text)
+									m.SnippetSession = snippet.NewSession(startRow, startCol, expanded.TabStops)
+									if row, col, length, ok := m.SnippetSession.Current(); ok {
+										buf.CursorRow = row
+										buf.CursorCol = col
+										buf.CollapseCursors()
+										if length > 0 {
+											buf.SelectAnchorRow = row
+											buf.SelectAnchorCol = col
+											buf.CursorCol = col + length
+											buf.HasSelection = true
+										} else {
+											buf.ClearSelection()
+										}
+									}
+									idx, total := m.SnippetSession.Progress()
+									m.StatusBar.ShowToast(fmt.Sprintf("Snippet %s (%d/%d) | Tab/Shift+Tab | Esc: Selesai", s.Prefix, idx, total), false, 3*time.Second)
+									m.syncStatusBarWithActiveTab()
+									return m, nil
+								}
+							}
+							insertText := selected.InsertText
+							if insertText == "" {
+								insertText = selected.Label
+							}
+							buf.ReplaceWordBeforeCursor(startCol, insertText)
+
+							if len(selected.AdditionalTextEdits) > 0 {
+								for _, edit := range selected.AdditionalTextEdits {
+									if edit.Range.Start.Line == 0 && edit.Range.Start.Character == 0 {
+										buf.InsertTopImport(edit.NewText)
+									}
+								}
+							}
+							m.syncStatusBarWithActiveTab()
+							return m, nil
+						}
+					}
 					buf.InsertNewline()
 					m.syncStatusBarWithActiveTab()
 					return m, nil
@@ -1624,22 +1978,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 
 				case "tab":
-					if buf.HasSelection {
-						buf.IndentSelection()
-					} else {
-						buf.InsertString("    ")
-					}
-					m.syncStatusBarWithActiveTab()
-					return m, nil
+					return m.handleTab()
 
-				case "shift+tab":
-					if buf.HasSelection {
-						buf.OutdentSelection()
-					} else {
-						buf.OutdentCurrentLine()
-					}
-					m.syncStatusBarWithActiveTab()
-					return m, nil
+				case "shift+tab", "backtab":
+					return m.handleShiftTab()
 
 				case "ctrl+/", "ctrl+_":
 					buf.ToggleLineComment(tab.CommentPrefix())
@@ -1647,13 +1989,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.StatusBar.ShowToast("Komentar dialihkan", false, 1*time.Second)
 					return m, nil
 
+				case "ctrl+space", "ctrl+@", "ctrl+ ", "c-space":
+					return m.handleCtrlSpace()
+
 				case "up":
+					if m.CompletionPopup != nil && m.CompletionPopup.Active {
+						m.CompletionPopup.MoveUp()
+						return m, nil
+					}
 					buf.ClearSelection()
 					buf.MoveUp()
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
 				case "down":
+					if m.CompletionPopup != nil && m.CompletionPopup.Active {
+						m.CompletionPopup.MoveDown()
+						return m, nil
+					}
 					buf.ClearSelection()
 					buf.MoveDown()
 					m.syncStatusBarWithActiveTab()
@@ -1775,7 +2128,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
-				case "esc":
+				case "esc", "escape":
+					if m.CompletionPopup != nil && m.CompletionPopup.Active {
+						m.CompletionPopup.Close()
+						return m, nil
+					}
+					if m.SnippetSession != nil && m.SnippetSession.Active {
+						m.SnippetSession.Cancel()
+						m.StatusBar.ShowToast("Snippet session selesai", false, 1*time.Second)
+						return m, nil
+					}
 					if buf.CursorCount() > 1 {
 						buf.CollapseCursors()
 						m.StatusBar.ShowToast("Cursor digabung", false, 1*time.Second)
@@ -2927,6 +3289,8 @@ func (m *Model) openCommandPalette() {
 		{ID: "edit.undo", Title: "Undo Text Change", Category: "Edit", Shortcut: "Ctrl+Z"},
 		{ID: "edit.redo", Title: "Redo Text Change", Category: "Edit", Shortcut: "Ctrl+Y"},
 		{ID: "edit.toggle_comment", Title: "Toggle Comment (Line / Selection)", Category: "Edit", Shortcut: "Ctrl+/"},
+		{ID: "edit.lsp_completion", Title: "Trigger LSP Completion & Auto-Import", Category: "Edit", Shortcut: "Ctrl+Space"},
+		{ID: "edit.indent_rainbow", Title: "Toggle Indent Rainbow Guide", Category: "Settings", Shortcut: ""},
 		{ID: "explorer.filter", Title: "Filter File Explorer", Category: "Explorer", Shortcut: "/"},
 
 		// View
@@ -3124,12 +3488,26 @@ func (m *Model) syncStatusBarWithActiveTab() {
 	if tab.Buffer != nil {
 		m.StatusBar.Line = tab.Buffer.CursorRow + 1
 		m.StatusBar.Col = tab.Buffer.CursorCol + 1
+
+		if m.LinterStore != nil {
+			if diag := m.LinterStore.DiagnosticAt(tab.Path, tab.Buffer.CursorRow+1); diag != nil {
+				m.StatusBar.ShowToast(fmt.Sprintf("[%s] %s: %s", diag.Source, diag.RuleID, diag.Message), diag.Severity == linter.SeverityError, 2*time.Second)
+			}
+		}
 	}
 
 	ext := strings.ToLower(filepath.Ext(tab.Path))
 	switch ext {
 	case ".go":
 		m.StatusBar.FileSyntax = "Go"
+	case ".js", ".mjs", ".cjs":
+		m.StatusBar.FileSyntax = "JavaScript"
+	case ".jsx":
+		m.StatusBar.FileSyntax = "React JSX"
+	case ".ts":
+		m.StatusBar.FileSyntax = "TypeScript"
+	case ".tsx":
+		m.StatusBar.FileSyntax = "React TSX"
 	case ".md", ".markdown":
 		m.StatusBar.FileSyntax = "Markdown"
 	case ".json":
@@ -3599,6 +3977,20 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 		var cmd tea.Cmd
 		*m, cmd = m.triggerFormatCurrentBuffer()
 		return cmd
+
+	case "edit.lsp_completion":
+		return m.triggerLSPCompletionCmd()
+
+	case "edit.indent_rainbow":
+		if tab := m.TabManager.ActiveTab(); tab != nil && tab.Buffer != nil {
+			tab.Buffer.IndentRainbow = !tab.Buffer.IndentRainbow
+			if tab.Buffer.IndentRainbow {
+				m.StatusBar.ShowToast("Indent Rainbow Diaktifkan", false, 2*time.Second)
+			} else {
+				m.StatusBar.ShowToast("Indent Rainbow Dimatikan", true, 2*time.Second)
+			}
+		}
+		return nil
 
 	case "setting.format_on_save":
 		if m.Config != nil {

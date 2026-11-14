@@ -1,6 +1,9 @@
 package editor
 
-import "sort"
+import (
+	"sort"
+	"strings"
+)
 
 // editCursor adalah salinan state satu cursor (primary atau extra) untuk diproses.
 type editCursor struct {
@@ -331,3 +334,74 @@ func (b *Buffer) WordAtCursor() string {
 	}
 	return string(b.Lines[sRow][sCol:eCol])
 }
+
+// WordBeforeCursor returns the identifier word immediately preceding the cursor,
+// along with its start column in the current line.
+func (b *Buffer) WordBeforeCursor() (string, int) {
+	if b.CursorRow < 0 || b.CursorRow >= len(b.Lines) {
+		return "", 0
+	}
+	line := b.Lines[b.CursorRow]
+	col := b.CursorCol
+	if col > len(line) {
+		col = len(line)
+	}
+	if col == 0 {
+		return "", 0
+	}
+	s := col
+	for s > 0 {
+		r := line[s-1]
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '$' {
+			s--
+		} else {
+			break
+		}
+	}
+	if s == col {
+		return "", col
+	}
+	return string(line[s:col]), s
+}
+
+// ReplaceWordBeforeCursor replaces the word before the cursor with replacement text.
+func (b *Buffer) ReplaceWordBeforeCursor(startCol int, replacement string) {
+	if b.CursorRow < 0 || b.CursorRow >= len(b.Lines) {
+		return
+	}
+	line := b.Lines[b.CursorRow]
+	col := b.CursorCol
+	if col > len(line) {
+		col = len(line)
+	}
+	b.pushUndo()
+	prefix := append([]rune{}, line[:startCol]...)
+	suffix := append([]rune{}, line[col:]...)
+
+	repLines := strings.Split(replacement, "\n")
+	if len(repLines) == 1 {
+		newLine := append(prefix, []rune(repLines[0])...)
+		newLine = append(newLine, suffix...)
+		b.Lines[b.CursorRow] = newLine
+		b.CursorCol = startCol + len([]rune(repLines[0]))
+	} else {
+		firstLine := append(prefix, []rune(repLines[0])...)
+		lastLine := append([]rune(repLines[len(repLines)-1]), suffix...)
+
+		newLines := make([][]rune, 0, len(b.Lines)+len(repLines)-1)
+		newLines = append(newLines, b.Lines[:b.CursorRow]...)
+		newLines = append(newLines, firstLine)
+		for i := 1; i < len(repLines)-1; i++ {
+			newLines = append(newLines, []rune(repLines[i]))
+		}
+		newLines = append(newLines, lastLine)
+		if b.CursorRow+1 < len(b.Lines) {
+			newLines = append(newLines, b.Lines[b.CursorRow+1:]...)
+		}
+		b.Lines = newLines
+		b.CursorRow += len(repLines) - 1
+		b.CursorCol = len([]rune(repLines[len(repLines)-1]))
+	}
+	b.markContentChanged()
+}
+

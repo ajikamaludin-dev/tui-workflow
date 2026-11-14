@@ -123,6 +123,12 @@ func (m Model) View() string {
 		baseView = overlayAt(baseView, menuStr, m.ContextMenu.X, m.ContextMenu.Y, m.Width, m.Height)
 	}
 
+	// Overlay 4: Autocomplete Popup
+	if m.CompletionPopup != nil && m.CompletionPopup.Active {
+		popupStr := m.CompletionPopup.Render(m.Width, m.Height)
+		baseView = overlayAt(baseView, popupStr, m.CompletionPopup.X, m.CompletionPopup.Y, m.Width, m.Height)
+	}
+
 	lines := strings.Split(baseView, "\n")
 	if len(lines) > m.Height {
 		baseView = strings.Join(lines[:m.Height], "\n")
@@ -337,7 +343,8 @@ Pencarian & Navigasi Kode:
 
 Editor & Buffer:
   • Ctrl+Z / Ctrl+Y : Undo / Redo Perubahan Teks
-  • Tab / Shift+Tab : Indent / Outdent 4 Karakter Spasi
+  • Tab / Shift+Tab : Ekspansi Snippet / Lompat Tab-Stop / Indentasi
+  • Ctrl+Space      : Pemicu Autocomplete Sugesti LSP & Auto-Import
   • Ctrl+/          : Toggle Komentar Baris Otomatis
   • Ctrl+Shift+D    : Tambah kursor pada occurrence berikutnya
   • Ctrl+Alt+Up/Dn  : Tambah kursor di baris atas / bawah

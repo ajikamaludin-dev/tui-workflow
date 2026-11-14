@@ -1,8 +1,12 @@
 package app
 
 import (
+	"context"
 	"fmt"
+	"path/filepath"
 	"time"
+
+	"tui-workflow/internal/lsp"
 )
 
 // identifierRe untuk validasi nama simbol yang sederhana.
@@ -22,6 +26,27 @@ func (m *Model) gotoDefinition() {
 		m.StatusBar.ShowToast("Cursor tidak berada di atas simbol", true, 2*time.Second)
 		return
 	}
+
+	// Coba query LSP terlebih dahulu bila server aktif
+	if m.LSPManager != nil {
+		ext := filepath.Ext(tab.Path)
+		if client, langID, err := m.LSPManager.GetClient(ext); client != nil && err == nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			defer cancel()
+			_ = client.DidOpen(tab.Path, langID, tab.Buffer.Text())
+			locs, err := client.Definition(ctx, tab.Path, tab.Buffer.CursorRow, tab.Buffer.CursorCol)
+			if err == nil && len(locs) > 0 && locs[0].URI != "" {
+				targetPath := lsp.URIToPath(locs[0].URI)
+				targetLine := locs[0].Range.Start.Line + 1
+				targetCol := locs[0].Range.Start.Character + 1
+				m.StatusBar.ShowToast(fmt.Sprintf("[LSP] Definisi '%s' → %s:%d", word, filepath.Base(targetPath), targetLine), false, 2*time.Second)
+				m.openFileAt(targetPath, targetLine, targetCol)
+				return
+			}
+		}
+	}
+
+	// Fallback ke in-memory symbol index
 	m.gotoDefinitionWord(word)
 }
 

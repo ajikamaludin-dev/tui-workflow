@@ -32,24 +32,34 @@ func TestSidebarMouseWheelScroll(t *testing.T) {
 	m.SidebarView = SidebarFiles
 
 	// 1. Test Wheel Down on Files view
-	m.Update(tea.MouseMsg{
-		X:      10,
-		Y:      5,
-		Button: tea.MouseButtonWheelDown,
-		Action: tea.MouseActionPress,
-	})
+	for i := 0; i < 15; i++ {
+		m.Update(tea.MouseMsg{
+			X:      10,
+			Y:      5,
+			Button: tea.MouseButtonWheelDown,
+			Action: tea.MouseActionPress,
+		})
+	}
+	_ = m.View()
 
 	if m.Explorer.ScrollOffset <= 0 {
-		t.Errorf("Expected Explorer.ScrollOffset > 0 after WheelDown, got %d", m.Explorer.ScrollOffset)
+		t.Errorf("Expected Explorer.ScrollOffset > 0 after multiple WheelDown, got %d", m.Explorer.ScrollOffset)
 	}
 
-	// Test Wheel Up on Files view
-	m.Update(tea.MouseMsg{
-		X:      10,
-		Y:      5,
-		Button: tea.MouseButtonWheelUp,
-		Action: tea.MouseActionPress,
-	})
+	// Test Wheel Up on Files view all the way back to top
+	for i := 0; i < 20; i++ {
+		m.Update(tea.MouseMsg{
+			X:      10,
+			Y:      5,
+			Button: tea.MouseButtonWheelUp,
+			Action: tea.MouseActionPress,
+		})
+	}
+	_ = m.View()
+
+	if m.Explorer.ScrollOffset != 0 {
+		t.Errorf("Expected Explorer.ScrollOffset == 0 after scrolling back up, got %d", m.Explorer.ScrollOffset)
+	}
 
 	// 2. Test Wheel on Git view
 	m.SidebarView = SidebarGit

@@ -82,21 +82,27 @@ type Buffer struct {
 
 	// Fold state (indent-based, hidden lines dilewati renderer)
 	Folded []FoldRegion
+
+	// Indent Rainbow state & diagnostics
+	IndentRainbow   bool
+	LineDiagnostics map[int]string
 }
 
 func NewBuffer(content string) *Buffer {
 	b := &Buffer{
-		Lines:        make([][]rune, 0),
-		CursorRow:    0,
-		CursorCol:    0,
-		ScrollRow:    0,
-		ScrollCol:    0,
-		SoftWrap:     true,
-		IsDirty:      false,
-		Highlighter:  syntax.NewHighlighter(),
-		cachedDirty:  true,
+		Lines:           make([][]rune, 0),
+		CursorRow:       0,
+		CursorCol:       0,
+		ScrollRow:       0,
+		ScrollCol:       0,
+		SoftWrap:        true,
+		IsDirty:         false,
+		Highlighter:     syntax.NewHighlighter(),
+		cachedDirty:     true,
 		cachedTextDirty: true,
-		maxUndoStack: 100,
+		maxUndoStack:    100,
+		IndentRainbow:   true,
+		LineDiagnostics: make(map[int]string),
 	}
 
 	normalized := strings.ReplaceAll(content, "\r\n", "\n")
@@ -117,6 +123,14 @@ func NewBuffer(content string) *Buffer {
 func (b *Buffer) markContentChanged() {
 	b.cachedDirty = true
 	b.cachedTextDirty = true
+}
+
+// InsertTopImport prepends an import line at the top of the buffer.
+func (b *Buffer) InsertTopImport(importLine string) {
+	importLine = strings.TrimRight(importLine, "\r\n")
+	b.Lines = append([][]rune{[]rune(importLine)}, b.Lines...)
+	b.CursorRow++
+	b.markContentChanged()
 }
 
 func (b *Buffer) Text() string {
@@ -1149,7 +1163,9 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 		if !vl.IsContinuation {
 			lineNum := vl.PhysicalLineIdx + 1
 			marker := " "
-			if end, ok := b.FoldableAt(vl.PhysicalLineIdx); ok {
+			if diag, hasDiag := b.LineDiagnostics[vl.PhysicalLineIdx]; hasDiag && diag != "" {
+				marker = diag
+			} else if end, ok := b.FoldableAt(vl.PhysicalLineIdx); ok {
 				if b.IsFoldedAt(vl.PhysicalLineIdx) {
 					marker = "▸"
 				} else {
@@ -1248,6 +1264,25 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 				}
 				textPart.WriteString(ui.CurrentTheme.SearchMatchStyle.Render(rStr))
 			} else {
+				// Indent Rainbow for leading indentation spaces
+				leadingSpaces := 0
+				if b.IndentRainbow && !vl.IsContinuation && physRow >= 0 && physRow < len(b.Lines) {
+					leadingSpaces, _ = CountLeadingSpaces(b.Lines[physRow])
+				}
+
+				if b.IndentRainbow && physCol < leadingSpaces && (r == ' ' || r == '\t') {
+					if activeStyle != "" {
+						textPart.WriteString("\x1b[0m")
+						activeStyle = ""
+					}
+					renderedIndent, isIndent := RenderIndentRune(physCol, leadingSpaces, r)
+					if isIndent {
+						textPart.WriteString(renderedIndent)
+						curVisualCol += rw
+						continue
+					}
+				}
+
 				syntaxStyle := ""
 				if physRow < len(b.cachedStyles) {
 					if b.cachedStyles[physRow] == nil && physRow < len(b.cachedRawLines) {

@@ -164,3 +164,93 @@ func TestTreeFiltering(t *testing.T) {
 		t.Errorf("Expected README.md to be restored after clearing filter")
 	}
 }
+
+func TestTreeScrollUpDown(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "tree_scroll_test_*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// Create 30 files
+	for i := 0; i < 30; i++ {
+		p := filepath.Join(tmpDir, filepath.Clean(string(rune('a'+(i%26)))+string(rune('0'+(i/26)))+".txt"))
+		_ = os.WriteFile(p, []byte("test"), 0644)
+	}
+
+	tree := NewTree(tmpDir)
+	if len(tree.FlatNodes) < 30 {
+		t.Fatalf("Expected at least 30 nodes, got %d", len(tree.FlatNodes))
+	}
+
+	height := 10
+	// 1. Initial render
+	_ = tree.Render(28, height, true)
+	if tree.ScrollOffset != 0 {
+		t.Errorf("Initial ScrollOffset should be 0, got %d", tree.ScrollOffset)
+	}
+
+	// 2. Scroll all the way down
+	for i := 0; i < 15; i++ {
+		tree.ScrollDown(3, height)
+		_ = tree.Render(28, height, true)
+	}
+
+	expectedMaxScroll := len(tree.FlatNodes) - height
+	if tree.ScrollOffset != expectedMaxScroll {
+		t.Errorf("Expected ScrollOffset at maxScroll %d, got %d", expectedMaxScroll, tree.ScrollOffset)
+	}
+
+	// 3. Scroll all the way back up
+	for i := 0; i < 15; i++ {
+		tree.ScrollUp(3)
+		_ = tree.Render(28, height, true)
+	}
+
+	if tree.ScrollOffset != 0 {
+		t.Errorf("Expected ScrollOffset to be 0 after scrolling back up, got %d", tree.ScrollOffset)
+	}
+
+	// 4. Select bottom node, scroll up all the way to 0, ensuring bottom node selection does not clamp scroll
+	tree.SelectedIndex = len(tree.FlatNodes) - 1
+	tree.ScrollOffset = expectedMaxScroll
+	for i := 0; i < 15; i++ {
+		tree.ScrollUp(3)
+		_ = tree.Render(28, height, true)
+	}
+	if tree.ScrollOffset != 0 {
+		t.Errorf("Expected ScrollOffset to be 0 even when bottom node is selected, got %d", tree.ScrollOffset)
+	}
+
+	// 5. Test keyboard navigation keeps selected node in view
+	tree.SelectedIndex = 0
+	tree.adjustScroll()
+	if tree.ScrollOffset != 0 {
+		t.Errorf("Expected ScrollOffset to be 0 after selecting node 0, got %d", tree.ScrollOffset)
+	}
+
+	// Move down past viewport height
+	for i := 0; i < 15; i++ {
+		tree.MoveDown()
+	}
+	_ = tree.Render(28, height, true)
+	if tree.SelectedIndex != 15 {
+		t.Errorf("Expected SelectedIndex 15, got %d", tree.SelectedIndex)
+	}
+	if tree.ScrollOffset > tree.SelectedIndex || tree.SelectedIndex >= tree.ScrollOffset+height {
+		t.Errorf("Expected SelectedIndex %d to be within viewport [%d, %d)", tree.SelectedIndex, tree.ScrollOffset, tree.ScrollOffset+height)
+	}
+
+	// Move up back to 0
+	for i := 0; i < 15; i++ {
+		tree.MoveUp()
+	}
+	_ = tree.Render(28, height, true)
+	if tree.SelectedIndex != 0 {
+		t.Errorf("Expected SelectedIndex 0, got %d", tree.SelectedIndex)
+	}
+	if tree.ScrollOffset != 0 {
+		t.Errorf("Expected ScrollOffset 0 after moving up to 0, got %d", tree.ScrollOffset)
+	}
+}
+

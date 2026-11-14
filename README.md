@@ -131,7 +131,8 @@
 | `Ctrl + F` | Buka pencarian teks di buffer aktif (Find Bar) |
 | `Ctrl + H` | Buka pencarian dan penggantian teks di buffer aktif (Find & Replace) |
 | `Ctrl + G` | Lompat ke baris dan kolom tertentu (Go to Line / Column) |
-| `Tab` / `Shift + Tab` | Indentasi / Outdentasi 4 spasi (mendukung seleksi multi-baris) |
+| `Ctrl + Space` | Pemicu Autocomplete Sugesti LSP & Auto-Import |
+| `Tab` / `Shift + Tab` | Ekspansi Snippet / Lompat Tab-Stop / Indentasi & Outdentasi 4 spasi |
 | `Ctrl + /` (`Ctrl + _`) | Toggle komentar baris atau blok seleksi otomatis sesuai bahasa |
 | `Ctrl + Shift + D` | Tambah kursor pada kemunculan kata berikutnya (Add Next Occurrence) |
 | `Ctrl + Alt + Up` / `Ctrl + Alt + Down` | Tambah kursor di baris atas / bawah |

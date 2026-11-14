@@ -22,6 +22,7 @@ type Tree struct {
 	MarqueeOffset int
 	FilterQuery   string
 	Matcher       *ignore.Matcher
+	LastHeight    int
 }
 
 func NewTree(rootPath string) *Tree {
@@ -43,6 +44,7 @@ func NewTree(rootPath string) *Tree {
 		ScrollOffset:  0,
 		ShowHidden:    true,
 		Matcher:       matcher,
+		LastHeight:    20,
 	}
 
 	_ = t.LoadChildren(t.RootNode)
@@ -161,6 +163,7 @@ func (t *Tree) ToggleExpand() {
 		_ = t.LoadChildren(node)
 	}
 	t.Flatten()
+	t.adjustScroll()
 }
 
 func (t *Tree) CollapseOrParent() {
@@ -221,7 +224,30 @@ func (t *Tree) restoreExpanded(node *Node, m map[string]bool) {
 }
 
 func (t *Tree) adjustScroll() {
-	// Scroll offset adjusted dynamically during render
+	height := t.LastHeight
+	if height <= 0 {
+		height = 20
+	}
+	if t.SelectedIndex < t.ScrollOffset {
+		t.ScrollOffset = t.SelectedIndex
+	} else if t.SelectedIndex >= t.ScrollOffset+height {
+		t.ScrollOffset = t.SelectedIndex - height + 1
+	}
+	maxScroll := len(t.FlatNodes) - height
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if t.ScrollOffset > maxScroll {
+		t.ScrollOffset = maxScroll
+	}
+	if t.ScrollOffset < 0 {
+		t.ScrollOffset = 0
+	}
+}
+
+// EnsureVisible ensures that the currently selected node is within the visible viewport.
+func (t *Tree) EnsureVisible() {
+	t.adjustScroll()
 }
 
 func (t *Tree) HandleClick(relativeLine int) (action string, node *Node) {
@@ -232,6 +258,7 @@ func (t *Tree) HandleClick(relativeLine int) (action string, node *Node) {
 
 	t.SelectedIndex = targetIdx
 	t.MarqueeOffset = 0
+	t.adjustScroll()
 	node = t.FlatNodes[targetIdx]
 
 	if node.IsDir {
@@ -265,9 +292,6 @@ func (t *Tree) ScrollUp(delta int) {
 	if t.ScrollOffset < 0 {
 		t.ScrollOffset = 0
 	}
-	if t.SelectedIndex < t.ScrollOffset {
-		t.SelectedIndex = t.ScrollOffset
-	}
 }
 
 func (t *Tree) ScrollDown(delta int, height int) {
@@ -279,12 +303,10 @@ func (t *Tree) ScrollDown(delta int, height int) {
 	if t.ScrollOffset > maxScroll {
 		t.ScrollOffset = maxScroll
 	}
-	if t.SelectedIndex < t.ScrollOffset {
-		t.SelectedIndex = t.ScrollOffset
-	}
 }
 
 func (t *Tree) Render(width, height int, focused bool) string {
+	t.LastHeight = height
 	if len(t.FlatNodes) == 0 {
 		return lipgloss.NewStyle().
 			Foreground(ui.CurrentTheme.FgSecondary).
@@ -292,13 +314,13 @@ func (t *Tree) Render(width, height int, focused bool) string {
 			Render("(Folder Kosong)")
 	}
 
-	// Ensure selected node is in viewport
-	if t.SelectedIndex < t.ScrollOffset {
-		t.ScrollOffset = t.SelectedIndex
-	} else if t.SelectedIndex >= t.ScrollOffset+height {
-		t.ScrollOffset = t.SelectedIndex - height + 1
+	maxScroll := len(t.FlatNodes) - height
+	if maxScroll < 0 {
+		maxScroll = 0
 	}
-
+	if t.ScrollOffset > maxScroll {
+		t.ScrollOffset = maxScroll
+	}
 	if t.ScrollOffset < 0 {
 		t.ScrollOffset = 0
 	}

@@ -93,6 +93,7 @@ func NewDarkTheme() Theme {
 
 	t.DropdownItemStyle = lipgloss.NewStyle().
 		Padding(0, 1).
+		Background(t.BgTopMenu).
 		Foreground(t.FgPrimary)
 
 	t.SidebarStyle = lipgloss.NewStyle().

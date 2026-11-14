@@ -275,13 +275,18 @@ func (b *BranchSwitcher) Render() string {
 		Padding(0, 1)
 	hint := hintStyle.Render(" [↑/↓:Select Enter:Switch Esc:Cancel] ")
 
+	dividerStyle := lipgloss.NewStyle().
+		Foreground(ui.CurrentTheme.BorderColor).
+		Background(ui.CurrentTheme.BgTopMenu)
+	divider := dividerStyle.Render(strings.Repeat("─", b.Width))
+
 	body := lipgloss.JoinVertical(
 		lipgloss.Left,
 		header,
 		searchBox,
-		strings.Repeat("─", b.Width),
+		divider,
 		lipgloss.JoinVertical(lipgloss.Left, rows...),
-		strings.Repeat("─", b.Width),
+		divider,
 		hint,
 	)
 

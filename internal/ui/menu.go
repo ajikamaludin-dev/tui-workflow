@@ -328,19 +328,28 @@ func (m *MenuBar) RenderDropdown() (string, int, int) {
 	var lines []string
 
 	maxLabelLen := 0
+	maxShortcutLen := 0
 	for _, it := range cat.Items {
 		if len(it.Label) > maxLabelLen {
 			maxLabelLen = len(it.Label)
 		}
+		if len(it.Shortcut) > maxShortcutLen {
+			maxShortcutLen = len(it.Shortcut)
+		}
 	}
 
+	// Note: lipgloss v2 reflows text when it exceeds the style's Width,
+	// so rows are built manually and padded with explicit background styles.
+	baseStyle := lipgloss.NewStyle().Background(CurrentTheme.BgTopMenu).Foreground(CurrentTheme.FgPrimary)
+	selectedStyle := lipgloss.NewStyle().Background(CurrentTheme.Accent).Foreground(CurrentTheme.FgHighlight).Bold(true)
+
 	for i, it := range cat.Items {
-		padding := strings.Repeat(" ", maxLabelLen-len(it.Label)+3)
-		itemStr := it.Label + padding + it.Shortcut
+		itemStr := it.Label + strings.Repeat(" ", maxLabelLen-len(it.Label)+3) +
+			it.Shortcut + strings.Repeat(" ", maxShortcutLen-len(it.Shortcut))
 		if i == m.SelectedItem {
-			lines = append(lines, CurrentTheme.TopMenuActiveItem.Render(" "+itemStr+" "))
+			lines = append(lines, selectedStyle.Render(" "+itemStr+" "))
 		} else {
-			lines = append(lines, CurrentTheme.DropdownItemStyle.Render(" "+itemStr+" "))
+			lines = append(lines, baseStyle.Render(" "+itemStr+" "))
 		}
 	}
 

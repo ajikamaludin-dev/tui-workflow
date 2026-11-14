@@ -787,6 +787,8 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 	aiBtnWidth := ansi.StringWidth(aiBtnStr)
 	gv.AIButtonStartX = (width - 2) - aiBtnWidth - 2
 
+	// lipgloss v2: Width() is the TOTAL rendered width (border included),
+	// so the border style spans the full `width` to match every other row.
 	inputWidth := width - 2
 	if inputWidth < 8 {
 		inputWidth = 8
@@ -802,7 +804,7 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 	inputBorder := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
-		Width(inputWidth)
+		Width(width)
 
 	commitRender := inputBorder.Render(gv.CommitInput.View())
 	commitLines := strings.Split(commitRender, "\n")
@@ -825,7 +827,7 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 	currentY += len(commitLines)
 
 	// Buttons: Dynamic fullwidth button (Commit vs Push vs Loading)
-	btnW := width - 2
+	btnW := width - 1
 	if btnW < 10 {
 		btnW = 10
 	}
@@ -871,7 +873,7 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 	if len(gv.Staged) > 0 {
 		stagedBtn = "[-] "
 	}
-	availSpace := (width - 1) - ansi.StringWidth(stagedTitle) - ansi.StringWidth(stagedBtn)
+	availSpace := width - ansi.StringWidth(stagedTitle) - ansi.StringWidth(stagedBtn)
 	if availSpace < 0 {
 		availSpace = 0
 	}
@@ -892,7 +894,7 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 				badge := formatBadge(item.Status)
 				btn := "[-]"
 				prefix := fmt.Sprintf(" %s %s ", badge, btn)
-				availWidth := (width - 1) - ansi.StringWidth(prefix)
+				availWidth := width - ansi.StringWidth(prefix)
 				if availWidth < 0 {
 					availWidth = 0
 				}
@@ -903,7 +905,7 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 				if isSelected {
 					rowStyle = rowStyle.Background(ui.CurrentTheme.Accent).Foreground(ui.CurrentTheme.FgHighlight).Bold(true)
 				}
-				lines = append(lines, rowStyle.Render(truncateOrPad(lineText, width-1)))
+				lines = append(lines, rowStyle.Render(truncateOrPad(lineText, width)))
 				gv.ItemClickMap[currentY] = GitClickTarget{
 					Type:  ClickItemStaged,
 					Index: i,
@@ -919,7 +921,7 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 						info = fmt.Sprintf("   Hunk %d/%d  [u]nstage  [ [ / ] ]", gv.selectedHunkIdx(true)+1, len(hunks))
 					}
 					hintStyle := lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgSecondary)
-					lines = append(lines, hintStyle.Render(truncateOrPad(info, width-1)))
+					lines = append(lines, hintStyle.Render(truncateOrPad(info, width)))
 					gv.ItemClickMap[currentY] = GitClickTarget{Type: ClickNone}
 					currentY++
 				}
@@ -941,7 +943,7 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 	if len(gv.Changes) > 0 {
 		changesBtn = "[+] "
 	}
-	availSpace = (width - 1) - ansi.StringWidth(changesTitle) - ansi.StringWidth(changesBtn)
+	availSpace = width - ansi.StringWidth(changesTitle) - ansi.StringWidth(changesBtn)
 	if availSpace < 0 {
 		availSpace = 0
 	}
@@ -961,7 +963,7 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 				badge := formatBadge(item.Status)
 				btn := "[+] [x]"
 				prefix := fmt.Sprintf(" %s %s ", badge, btn)
-				availWidth := (width - 1) - ansi.StringWidth(prefix)
+				availWidth := width - ansi.StringWidth(prefix)
 				if availWidth < 0 {
 					availWidth = 0
 				}
@@ -972,7 +974,7 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 				if isSelected {
 					rowStyle = rowStyle.Background(ui.CurrentTheme.Accent).Foreground(ui.CurrentTheme.FgHighlight).Bold(true)
 				}
-				lines = append(lines, rowStyle.Render(truncateOrPad(lineText, width-1)))
+				lines = append(lines, rowStyle.Render(truncateOrPad(lineText, width)))
 				gv.ItemClickMap[currentY] = GitClickTarget{
 					Type:  ClickItemChanges,
 					Index: i,
@@ -988,7 +990,7 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 						info = fmt.Sprintf("   Hunk %d/%d  [s]tage  [x]discard  [ [ / ] ]", gv.selectedHunkIdx(false)+1, len(hunks))
 					}
 					hintStyle := lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgSecondary)
-					lines = append(lines, hintStyle.Render(truncateOrPad(info, width-1)))
+					lines = append(lines, hintStyle.Render(truncateOrPad(info, width)))
 					gv.ItemClickMap[currentY] = GitClickTarget{Type: ClickNone}
 					currentY++
 				}
@@ -1020,7 +1022,7 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 				isSelected := isFocused && gv.FocusArea == GitFocusHistory && gv.HistoryIdx == i
 				hashBadge := lipgloss.NewStyle().Foreground(ui.CurrentTheme.Yellow).Render(commit.Hash)
 				prefix := fmt.Sprintf(" %s ", hashBadge)
-				availWidth := (width - 1) - ansi.StringWidth(prefix)
+				availWidth := width - ansi.StringWidth(prefix)
 				if availWidth < 0 {
 					availWidth = 0
 				}
@@ -1031,7 +1033,7 @@ func (gv *GitView) Render(width, height int, isFocused bool) string {
 				if isSelected {
 					rowStyle = rowStyle.Background(ui.CurrentTheme.Accent).Foreground(ui.CurrentTheme.FgHighlight).Bold(true)
 				}
-				lines = append(lines, rowStyle.Render(truncateOrPad(lineText, width-1)))
+				lines = append(lines, rowStyle.Render(truncateOrPad(lineText, width)))
 				gv.ItemClickMap[currentY] = GitClickTarget{
 					Type:  ClickItemHistory,
 					Index: i,

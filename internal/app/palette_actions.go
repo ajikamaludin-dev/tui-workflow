@@ -134,7 +134,6 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 
 	case "setting.sidebar":
 		m.SidebarVisible = !m.SidebarVisible
-		m.syncTabDimensions()
 
 	case "view.sidebar_narrow":
 		m.adjustSidebarWidth(-2)

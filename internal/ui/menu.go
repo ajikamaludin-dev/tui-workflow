@@ -237,8 +237,8 @@ func (m *MenuBar) HandleMouse(msg tea.MouseMsg) (action string, handled bool) {
 		return "", false
 	}
 
-	// Click on Row 0 or Row 1 (Menu bar items, height = 2)
-	if msg.Y == 0 || msg.Y == 1 {
+	// Click on Row 0 (Menu bar items)
+	if msg.Y == 0 {
 		for i, cat := range m.Categories {
 			if msg.X >= cat.StartX && msg.X <= cat.EndX {
 				m.Toggle(i)
@@ -312,37 +312,10 @@ func (m *MenuBar) Render() string {
 		} else if barLen > m.Width {
 			renderedBar = ansi.Truncate(renderedBar, m.Width, "")
 		}
+		return CurrentTheme.TopMenuStyle.Width(m.Width).MaxHeight(1).Render(renderedBar)
 	}
-	row1 := CurrentTheme.TopMenuStyle.Width(m.Width).MaxHeight(1).Render(renderedBar)
 
-	// Row 2: Sub-bar / indicator row (height = 2)
-	var row2 string
-	if m.ActiveMenu >= 0 && m.ActiveMenu < len(m.Categories) {
-		cat := m.Categories[m.ActiveMenu]
-		prefix := ""
-		if cat.StartX > 0 {
-			prefix = strings.Repeat(" ", cat.StartX)
-		}
-		activeLen := cat.EndX - cat.StartX + 1
-		if activeLen < 1 {
-			activeLen = 1
-		}
-		activeBar := strings.Repeat("▔", activeLen)
-		suffix := ""
-		if m.Width > cat.EndX+1 {
-			suffix = strings.Repeat(" ", m.Width-cat.EndX-1)
-		}
-		row2 = CurrentTheme.TopMenuStyle.Render(prefix) +
-			CurrentTheme.TopMenuActiveItem.Render(activeBar) +
-			CurrentTheme.TopMenuStyle.Render(suffix)
-	} else {
-		if m.Width > 0 {
-			row2 = CurrentTheme.TopMenuStyle.Width(m.Width).MaxHeight(1).Render(strings.Repeat(" ", m.Width))
-		}
-	}
-	row2 = ansi.Truncate(row2, m.Width, "")
-
-	return row1 + "\n" + row2
+	return CurrentTheme.TopMenuStyle.MaxHeight(1).Render(renderedBar)
 }
 
 func (m *MenuBar) RenderDropdown() (string, int, int) {
@@ -372,5 +345,5 @@ func (m *MenuBar) RenderDropdown() (string, int, int) {
 
 	content := strings.Join(lines, "\n")
 	box := CurrentTheme.DropdownStyle.Render(content)
-	return box, cat.StartX, 2
+	return box, cat.StartX, 1
 }

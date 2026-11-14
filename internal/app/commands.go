@@ -246,8 +246,11 @@ func waitForTerminalOutput(term *terminal.TerminalView) tea.Cmd {
 }
 
 func (m *Model) openNewTerminalTab() (Model, tea.Cmd) {
-	contentWidth := m.editorContentWidth()
-	bodyHeight := m.editorBodyHeight()
+	contentWidth := m.Width - m.SidebarWidth
+	if !m.SidebarVisible {
+		contentWidth = m.Width
+	}
+	bodyHeight := m.Height - 3 // Row 0: Menu, Row 1: Tab bar, Last row: Status bar
 	if contentWidth < 20 {
 		contentWidth = 80
 	}

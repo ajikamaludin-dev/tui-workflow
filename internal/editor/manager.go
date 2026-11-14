@@ -6,7 +6,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"tui-workflow/internal/git"
 	"tui-workflow/internal/terminal"
@@ -557,9 +556,7 @@ func (tm *TabManager) RenderTabBar(width int) string {
 	tm.ScrollRightEndX = -1
 
 	if len(tm.Tabs) == 0 {
-		emptyRow1 := ui.CurrentTheme.TabBarContainer.Width(width).MaxHeight(1).Render(" (No open files)")
-		emptyRow2 := ui.CurrentTheme.TabBarContainer.Width(width).MaxHeight(1).Render("")
-		return emptyRow1 + "\n" + emptyRow2
+		return ui.CurrentTheme.TabBarContainer.Width(width).MaxHeight(1).Render(" (No open files)")
 	}
 
 	var rightButton string
@@ -626,14 +623,12 @@ func (tm *TabManager) RenderTabBar(width int) string {
 	startIdx := tm.TabScrollOffset
 
 	var sb strings.Builder
-	var sb2 strings.Builder
 	currX := 0
 
 	if startIdx > 0 {
 		tm.ScrollLeftStartX = currX
 		tm.ScrollLeftEndX = currX + 1
 		sb.WriteString("< ")
-		sb2.WriteString("  ")
 		currX += 2
 	}
 
@@ -664,15 +659,6 @@ func (tm *TabManager) RenderTabBar(width int) string {
 		})
 
 		sb.WriteString(rt.Rendered)
-		if rt.Index == tm.ActiveIndex {
-			activeIndicator := strings.Repeat("━", rt.Width)
-			activeIndicatorStyle := lipgloss.NewStyle().
-				Foreground(ui.CurrentTheme.Accent).
-				Background(ui.CurrentTheme.BgPrimary)
-			sb2.WriteString(activeIndicatorStyle.Render(activeIndicator))
-		} else {
-			sb2.WriteString(ui.CurrentTheme.TabBarContainer.Render(strings.Repeat(" ", rt.Width)))
-		}
 		currX += rt.Width
 	}
 
@@ -680,37 +666,24 @@ func (tm *TabManager) RenderTabBar(width int) string {
 		tm.ScrollRightStartX = currX
 		tm.ScrollRightEndX = currX + 1
 		sb.WriteString(" >")
-		sb2.WriteString("  ")
 		currX += 2
 	}
 
 	barContent := sb.String()
 	barLen := ansi.StringWidth(barContent)
-	barContent2 := sb2.String()
-	barLen2 := ansi.StringWidth(barContent2)
-
 	if barLen < availWidth {
 		barContent += strings.Repeat(" ", availWidth-barLen)
-	}
-	if barLen2 < availWidth {
-		barContent2 += strings.Repeat(" ", availWidth-barLen2)
 	}
 
 	if rightButton != "" {
 		tm.MarkdownBtnStartX = availWidth
 		tm.MarkdownBtnEndX = availWidth + rightButtonWidth - 1
 		barContent += rightButton
-		barContent2 += strings.Repeat(" ", rightButtonWidth)
 	}
 
 	if ansi.StringWidth(barContent) > width {
 		barContent = ansi.Truncate(barContent, width, "")
 	}
-	if ansi.StringWidth(barContent2) > width {
-		barContent2 = ansi.Truncate(barContent2, width, "")
-	}
 
-	row1 := ui.CurrentTheme.TabBarContainer.Width(width).MaxHeight(1).Render(barContent)
-	row2 := ui.CurrentTheme.TabBarContainer.Width(width).MaxHeight(1).Render(barContent2)
-	return row1 + "\n" + row2
+	return ui.CurrentTheme.TabBarContainer.Width(width).MaxHeight(1).Render(barContent)
 }

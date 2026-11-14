@@ -10,7 +10,7 @@ Antarmuka `tui-workflow` dibagi secara deterministik menjadi 4 zona layout yang 
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────┐
-│ Row 0: Top Menu Bar (1 baris statis)                                  │
+│ Row 0: Top Menu Bar (1 baris statis)                                   │
 ├──────────────────────────┬─────────────────────────────────────────────┤
 │ Col 1: Sidebar (28 cols) │ Col 2: Editor Pane (lebar adaptif)          │
 │ • Header (1 baris)       │ • Tab Bar (1 baris statis)                  │
@@ -19,7 +19,7 @@ Antarmuka `tui-workflow` dibagi secara deterministik menjadi 4 zona layout yang 
 │   (Tinggi = Height - 5)  │    Tinggi Body = Height - 3)                │
 │ • Footer Tabs (1 baris)  │                                             │
 ├──────────────────────────┴─────────────────────────────────────────────┤
-│ Row Height-1: Status Bar (1 baris statis)                             │
+│ Row Height-1: Status Bar (1 baris statis)                              │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 

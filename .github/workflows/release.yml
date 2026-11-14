@@ -8,8 +8,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: go vet ./...
@@ -25,8 +25,8 @@ jobs:
       GOARCH: ${{ matrix.arch }}
       CGO_ENABLED: 0
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: Build
@@ -38,7 +38,7 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           tar -czf "workflow_${VERSION}_linux_${GOARCH}.tar.gz" -C dist workflow
           sha256sum "workflow_${VERSION}_linux_${GOARCH}.tar.gz" > "checksums-linux-${GOARCH}.txt"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: workflow-linux-${{ matrix.arch }}
           path: |
@@ -50,7 +50,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: workflow-linux-*
           merge-multiple: true

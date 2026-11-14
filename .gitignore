@@ -5,3 +5,4 @@
 .codebase-memory/
 *.log
 /docs/superpowers/
+.superpowers/

@@ -354,6 +354,7 @@ Atau download manual dari [Releases](https://github.com/ajikamaludin-dev/tui-wor
 - `--version` flag di main.go ditambahkan — keputusan saya (kecil, aditif) agar injeksi ldflags bisa diverifikasi `workflow --version`; user boleh menolak saat review.
 - Release notes via `--generate-notes` — tanpa CHANGELOG.md manual (usulan saya, tidak ditolak user).
 - Versioning: git tag = sumber kebenaran rilis; `internal/buildinfo.Version` = default dev (`0.2.0`); PRD `**Version:**` baris ikut di-sed oleh release.sh; README pakai badge shields github/v/release (auto-update).
+- Actions di-bump ke major terbaru ber-Node 24 (`checkout@v7`, `setup-go@v7`, `upload-artifact@v7`, `download-artifact@v8`) — user melaporkan warning "Node.js 20 is deprecated" (2026-11-15).
 - Script `scripts/release.sh` sengaja melakukan commit+tag+push dalam satu perintah — ini yang diminta user; agent tidak menjalankannya tanpa instruksi eksplisit.
 
 ## Blockers

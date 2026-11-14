@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strings"
 
+	"tui-workflow/internal/ignore"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -48,6 +50,7 @@ type SearchView struct {
 	Width        int
 	Height       int
 	TotalFound   int
+	matcher      *ignore.Matcher
 }
 
 // NewSearchView creates a new SearchView instance.
@@ -78,12 +81,14 @@ func NewSearchView(rootDir string) *SearchView {
 		Width:        28,
 		Height:       20,
 		TotalFound:   0,
+		matcher:      ignore.NewMatcher(rootDir),
 	}
 }
 
 // SetRootDir updates root workspace path.
 func (sv *SearchView) SetRootDir(dir string) {
 	sv.RootDir = dir
+	sv.matcher = ignore.NewMatcher(dir)
 	sv.DoSearch()
 }
 
@@ -107,9 +112,15 @@ func (sv *SearchView) DoSearch() {
 		}
 		name := d.Name()
 		if d.IsDir() {
-			if strings.HasPrefix(name, ".") || name == "node_modules" || name == "vendor" || name == "dist" || name == "bin" {
-				return filepath.SkipDir
+			if path != sv.RootDir {
+				if strings.HasPrefix(name, ".") || (sv.matcher != nil && sv.matcher.Matches(path, true)) {
+					return filepath.SkipDir
+				}
 			}
+			return nil
+		}
+
+		if strings.HasPrefix(name, ".") || (sv.matcher != nil && sv.matcher.Matches(path, false)) {
 			return nil
 		}
 
@@ -429,9 +440,15 @@ func (sv *SearchView) DoSearchWord(word string) {
 		}
 		name := d.Name()
 		if d.IsDir() {
-			if strings.HasPrefix(name, ".") || name == "node_modules" || name == "vendor" || name == "dist" || name == "bin" {
-				return filepath.SkipDir
+			if path != sv.RootDir {
+				if strings.HasPrefix(name, ".") || (sv.matcher != nil && sv.matcher.Matches(path, true)) {
+					return filepath.SkipDir
+				}
 			}
+			return nil
+		}
+
+		if strings.HasPrefix(name, ".") || (sv.matcher != nil && sv.matcher.Matches(path, false)) {
 			return nil
 		}
 

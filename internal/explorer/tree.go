@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"tui-workflow/internal/ignore"
+
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"tui-workflow/internal/ui"
@@ -19,6 +21,7 @@ type Tree struct {
 	ShowHidden    bool
 	MarqueeOffset int
 	FilterQuery   string
+	Matcher       *ignore.Matcher
 }
 
 func NewTree(rootPath string) *Tree {
@@ -31,6 +34,7 @@ func NewTree(rootPath string) *Tree {
 	rootNode := NewNode(cleanPath, rootName, true, 0)
 	rootNode.IsExpanded = true
 
+	matcher := ignore.NewMatcher(cleanPath)
 	t := &Tree{
 		RootPath:      cleanPath,
 		RootNode:      rootNode,
@@ -38,6 +42,7 @@ func NewTree(rootPath string) *Tree {
 		SelectedIndex: 0,
 		ScrollOffset:  0,
 		ShowHidden:    true,
+		Matcher:       matcher,
 	}
 
 	_ = t.LoadChildren(t.RootNode)
@@ -55,6 +60,9 @@ func (t *Tree) LoadChildren(parent *Node) error {
 	for _, entry := range entries {
 		childPath := filepath.Join(parent.Path, entry.Name())
 		childNode := NewNode(childPath, entry.Name(), entry.IsDir(), parent.Depth+1)
+		if t.Matcher != nil && t.Matcher.Matches(childPath, entry.IsDir()) {
+			childNode.IsIgnored = true
+		}
 		parent.Children = append(parent.Children, childNode)
 	}
 
@@ -371,7 +379,9 @@ func (t *Tree) Render(width, height int, focused bool) string {
 		} else {
 			style := lipgloss.NewStyle().
 				Foreground(ui.CurrentTheme.FgPrimary)
-			if node.IsDir {
+			if node.IsIgnored {
+				style = style.Foreground(ui.CurrentTheme.FgSecondary)
+			} else if node.IsDir {
 				style = style.Foreground(ui.CurrentTheme.FgHighlight).Bold(true)
 			} else if node.IsHidden {
 				style = style.Foreground(ui.CurrentTheme.FgSecondary)

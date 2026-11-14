@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"tui-workflow/internal/ignore"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -37,6 +39,7 @@ type GlobalSearch struct {
 	Width      int
 	MaxRows    int
 	TotalFound int
+	matcher    *ignore.Matcher
 }
 
 // NewGlobalSearch creates a new GlobalSearch instance.
@@ -63,6 +66,7 @@ func NewGlobalSearch() *GlobalSearch {
 func (gs *GlobalSearch) Open(rootDir string) {
 	gs.Active = true
 	gs.RootDir = rootDir
+	gs.matcher = ignore.NewMatcher(rootDir)
 	gs.Matches = make([]GlobalSearchMatch, 0)
 	gs.Selected = 0
 	gs.ScrollTop = 0
@@ -119,17 +123,15 @@ func (gs *GlobalSearch) PerformSearch() {
 		}
 		name := d.Name()
 		if d.IsDir() {
-			if (strings.HasPrefix(name, ".") && name != ".") ||
-				name == "node_modules" ||
-				name == "vendor" ||
-				name == "dist" ||
-				name == "build" {
-				return filepath.SkipDir
+			if path != gs.RootDir {
+				if strings.HasPrefix(name, ".") || (gs.matcher != nil && gs.matcher.Matches(path, true)) {
+					return filepath.SkipDir
+				}
 			}
 			return nil
 		}
 
-		if strings.HasPrefix(name, ".") {
+		if strings.HasPrefix(name, ".") || (gs.matcher != nil && gs.matcher.Matches(path, false)) {
 			return nil
 		}
 

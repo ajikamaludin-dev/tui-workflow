@@ -3,6 +3,7 @@ package git
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
@@ -48,6 +49,7 @@ type GitView struct {
 	IsLoading     bool
 	LoadingMsg    string
 	SpinnerFrame  int
+	LastRefresh   time.Time
 
 	AIButtonStartX int
 
@@ -80,7 +82,18 @@ type GitClickTarget struct {
 	Path  string
 }
 
+// NewGitView creates a new GitView and immediately refreshes status.
 func NewGitView(repo *Repo) *GitView {
+	return NewGitViewWithOpts(repo, false)
+}
+
+// NewGitViewLazy creates a new GitView without synchronous refresh, suitable for fast startup.
+func NewGitViewLazy(repo *Repo) *GitView {
+	return NewGitViewWithOpts(repo, true)
+}
+
+// NewGitViewWithOpts creates a new GitView with option to defer initial refresh.
+func NewGitViewWithOpts(repo *Repo, lazy bool) *GitView {
 	ta := textarea.New()
 	ta.Prompt = ""
 	ta.ShowLineNumbers = false
@@ -101,12 +114,48 @@ func NewGitView(repo *Repo) *GitView {
 		ItemClickMap: make(map[int]GitClickTarget),
 	}
 	gv.CommitInput.Focus()
-	gv.Refresh()
+	if !lazy {
+		gv.Refresh()
+	}
 	return gv
 }
 
-func (gv *GitView) Refresh() {
-	if gv.Repo == nil {
+// RefreshData holds the result of a git status refresh.
+type RefreshData struct {
+	Staged        []GitFileStatus
+	Changes       []GitFileStatus
+	History       []CommitInfo
+	UnpushedCount int
+	Err           error
+}
+
+// FetchRefreshData queries the repository for status, history, and unpushed count.
+// It is designed to be executed safely in a background goroutine.
+func FetchRefreshData(repo *Repo) RefreshData {
+	if repo == nil {
+		return RefreshData{}
+	}
+	staged, unstaged, err := repo.GetStatus()
+	history, _ := repo.GetHistory(10)
+	unpushed, _ := repo.GetUnpushedCount()
+	return RefreshData{
+		Staged:        staged,
+		Changes:       unstaged,
+		History:       history,
+		UnpushedCount: unpushed,
+		Err:           err,
+	}
+}
+
+// ApplyRefresh updates the GitView state with freshly fetched data.
+func (gv *GitView) ApplyRefresh(data RefreshData) {
+	if gv == nil {
+		return
+	}
+	gv.IsLoading = false
+	gv.LoadingMsg = ""
+	gv.LastRefresh = time.Now()
+	if data.Err != nil {
 		return
 	}
 
@@ -118,9 +167,10 @@ func (gv *GitView) Refresh() {
 		prevChangesPath = gv.Changes[gv.ChangesIdx].Path
 	}
 
-	staged, unstaged, _ := gv.Repo.GetStatus()
-	gv.Staged = staged
-	gv.Changes = unstaged
+	gv.Staged = data.Staged
+	gv.Changes = data.Changes
+	gv.History = data.History
+	gv.UnpushedCount = data.UnpushedCount
 
 	if prevStagedPath != "" {
 		for i, f := range gv.Staged {
@@ -138,12 +188,6 @@ func (gv *GitView) Refresh() {
 			}
 		}
 	}
-
-	history, _ := gv.Repo.GetHistory(10)
-	gv.History = history
-
-	unpushed, _ := gv.Repo.GetUnpushedCount()
-	gv.UnpushedCount = unpushed
 
 	if gv.StagedIdx >= len(gv.Staged) {
 		gv.StagedIdx = len(gv.Staged) - 1
@@ -165,6 +209,14 @@ func (gv *GitView) Refresh() {
 	if gv.HistoryIdx < 0 {
 		gv.HistoryIdx = 0
 	}
+}
+
+func (gv *GitView) Refresh() {
+	if gv.Repo == nil {
+		return
+	}
+	data := FetchRefreshData(gv.Repo)
+	gv.ApplyRefresh(data)
 }
 
 func (gv *GitView) SelectedStagedFile() *GitFileStatus {

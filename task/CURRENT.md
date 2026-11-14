@@ -16,6 +16,7 @@ priority:
 {Pendekatan teknis + daftar file yang akan dibuat/diubah. Sajikan ke user & tunggu approval sebelum coding.}
 
 ## Terminal & Layout Impact Analysis
+{Analisis dampak ke 4 zona layout, lebar terminal, ANSI handling, atau status bar. Jika tidak ada, tulis "No layout impact."}
 | Affected Zone | Risk | Mitigation |
 | ------------- | ---- | ---------- |
 | | | |

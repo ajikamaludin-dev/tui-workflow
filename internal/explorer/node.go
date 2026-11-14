@@ -13,6 +13,7 @@ type Node struct {
 	Depth      int
 	Children   []*Node
 	IsHidden   bool
+	IsIgnored  bool
 }
 
 func NewNode(path, name string, isDir bool, depth int) *Node {

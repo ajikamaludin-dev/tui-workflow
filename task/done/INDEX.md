@@ -20,3 +20,4 @@
 | 2026-11-13 | [2026-11-13 - Comprehensive UI-UX Refinement, Mouse Ergonomics, Resource Optimization and Documentation Sync](done/2026-11-13%20-%20Comprehensive%20UI-UX%20Refinement%2C%20Mouse%20Ergonomics%2C%20Resource%20Optimization%20and%20Documentation%20Sync.md) | done |
 | 2026-11-13 | [2026-11-13 - P0 - Workspace Session Persistence & Git Hunk-Level Diff Actions](done/2026-11-13%20-%20P0%20-%20Workspace%20Session%20Persistence%20%26%20Git%20Hunk-Level%20Diff%20Actions.md) | done |
 | 2026-11-14 | [2026-11-14 - VSCode-like Navigation, Multi-Cursor Edit & Fold-Unfold (Path B — Symbol Index)](done/2026-11-14%20-%20VSCode-like%20Navigation%2C%20Multi-Cursor%20Edit%20%26%20Fold-Unfold%20%28Path%20B%20%E2%80%94%20Symbol%20Index%29.md) | done |
+| 2026-11-14 | [2026-11-14 - Optimasi Performa Workspace Skala Besar (Zero-Lag & Async Engine)](done/2026-11-14%20-%20Optimasi%20Performa%20Workspace%20Skala%20Besar%20%28Zero-Lag%20%26%20Async%20Engine%29.md) | done |

@@ -125,7 +125,7 @@ func NewModelWithPath(targetPath string, explicitArg bool) (Model, error) {
 	repo, _ := git.OpenRepo(rootDir)
 	var gv *git.GitView
 	if repo != nil {
-		gv = git.NewGitView(repo)
+		gv = git.NewGitViewLazy(repo)
 	}
 
 	cfg, _ := config.LoadConfig()
@@ -173,9 +173,6 @@ func NewModelWithPath(targetPath string, explicitArg bool) (Model, error) {
 		ClosingTabIdx:     -1,
 		ContextMenuTabIdx: -1,
 		SessionExplicitArg: explicitArg,
-	}
-	if m.SymbolIndex != nil {
-		_ = m.SymbolIndex.Build()
 	}
 	m.Explorer.ShowHidden = cfg.ShowHidden
 	m.StatusBar.AutoSave = cfg.AutoSave
@@ -235,6 +232,58 @@ func gitLoadingTickCmd() tea.Cmd {
 	return tea.Tick(80*time.Millisecond, func(t time.Time) tea.Msg {
 		return gitLoadingTickMsg{}
 	})
+}
+
+type symbolIndexReadyMsg struct {
+	count int
+	err   error
+}
+
+func buildSymbolIndexCmd(ix *symbol.Index) tea.Cmd {
+	return func() tea.Msg {
+		if ix == nil {
+			return symbolIndexReadyMsg{count: 0, err: nil}
+		}
+		err := ix.Build()
+		return symbolIndexReadyMsg{count: ix.Count(), err: err}
+	}
+}
+
+type gitStatusResultMsg struct {
+	data git.RefreshData
+}
+
+func gitRefreshCmd(repo *git.Repo) tea.Cmd {
+	return func() tea.Msg {
+		if repo == nil {
+			return gitStatusResultMsg{data: git.RefreshData{}}
+		}
+		data := git.FetchRefreshData(repo)
+		return gitStatusResultMsg{data: data}
+	}
+}
+
+type quickOpenWarmupMsg struct{}
+
+func warmupQuickOpenCmd(qo *dialog.QuickOpen, rootDir string) tea.Cmd {
+	return func() tea.Msg {
+		if qo != nil && rootDir != "" {
+			qo.Warmup(rootDir)
+		}
+		return quickOpenWarmupMsg{}
+	}
+}
+
+func (m *Model) triggerGitRefresh() tea.Cmd {
+	if m.GitView == nil || m.GitRepo == nil {
+		return nil
+	}
+	if m.GitView.IsLoading {
+		return gitLoadingTickCmd()
+	}
+	m.GitView.IsLoading = true
+	m.GitView.LoadingMsg = "Memeriksa status git..."
+	return tea.Batch(gitRefreshCmd(m.GitRepo), gitLoadingTickCmd())
 }
 
 type gitPushResultMsg struct {
@@ -549,13 +598,43 @@ func fileWatchTickCmd() tea.Cmd {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(marqueeTickCmd(), fileWatchTickCmd())
+	var cmds []tea.Cmd
+	cmds = append(cmds, marqueeTickCmd(), fileWatchTickCmd())
+	if m.SymbolIndex != nil {
+		cmds = append(cmds, buildSymbolIndexCmd(m.SymbolIndex))
+	}
+	if m.GitRepo != nil && m.GitView != nil {
+		m.GitView.IsLoading = true
+		m.GitView.LoadingMsg = "Memeriksa status git..."
+		cmds = append(cmds, gitRefreshCmd(m.GitRepo), gitLoadingTickCmd())
+	}
+	if m.QuickOpen != nil && m.RootDir != "" {
+		cmds = append(cmds, warmupQuickOpenCmd(m.QuickOpen, m.RootDir))
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case sessionPersistMsg:
 		// best-effort persistence; avoid noisy errors
+		return m, nil
+
+	case symbolIndexReadyMsg:
+		return m, nil
+
+	case gitStatusResultMsg:
+		if m.GitView != nil {
+			m.GitView.ApplyRefresh(msg.data)
+			if m.GitRepo != nil {
+				if branch, err := m.GitRepo.GetBranchName(); err == nil {
+					m.StatusBar.Branch = branch
+				}
+			}
+		}
+		return m, nil
+
+	case quickOpenWarmupMsg:
 		return m, nil
 	case FileWatchTickMsg:
 		m.checkWatchedFiles()
@@ -1055,7 +1134,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "alt+2":
 			m.SidebarView = SidebarGit
 			if m.GitView != nil {
-				m.GitView.Refresh()
+				if time.Since(m.GitView.LastRefresh) > 2*time.Second && !m.GitView.IsLoading {
+					return m, m.triggerGitRefresh()
+				}
 			}
 			return m, nil
 
@@ -2404,8 +2485,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.Explorer.Refresh()
 					m.StatusBar.ShowToast("File explorer dimuat ulang", false, 2*time.Second)
 				} else if m.SidebarView == SidebarGit && m.GitView != nil {
-					m.GitView.Refresh()
-					m.StatusBar.ShowToast("Git status diperbarui", false, 2*time.Second)
+					return m, m.triggerGitRefresh()
 				} else if m.SidebarView == SidebarSearch && m.SearchView != nil {
 					m.SearchView.DoSearch()
 					m.StatusBar.ShowToast("Pencarian diperbarui", false, 2*time.Second)
@@ -2423,8 +2503,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.SidebarView = SidebarFiles
 				} else if msg.X >= filesTabW && msg.X < filesTabW+gitTabW {
 					m.SidebarView = SidebarGit
-					if m.GitView != nil {
-						m.GitView.Refresh()
+					if m.GitView != nil && time.Since(m.GitView.LastRefresh) > 2*time.Second && !m.GitView.IsLoading {
+						return m, m.triggerGitRefresh()
 					}
 				} else if msg.X >= filesTabW+gitTabW && msg.X < filesTabW+gitTabW+searchTabW {
 					m.SidebarView = SidebarSearch

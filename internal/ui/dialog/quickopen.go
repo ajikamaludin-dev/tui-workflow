@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 
+	"tui-workflow/internal/ignore"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -26,16 +28,20 @@ type QuickOpenItem struct {
 
 // QuickOpen provides a VS Code style Ctrl+P file switcher for both tabs and workspace files.
 type QuickOpen struct {
-	Active      bool
-	AllItems    []QuickOpenItem
-	Filtered    []QuickOpenItem
-	Selected    int
-	ScrollTop   int
-	Filter      textinput.Model
-	Width       int
-	MaxRows     int
-	RootDir     string
+	Active       bool
+	AllItems     []QuickOpenItem
+	Filtered     []QuickOpenItem
+	Selected     int
+	ScrollTop    int
+	Filter       textinput.Model
+	Width        int
+	MaxRows      int
+	RootDir      string
 	openTabPaths map[string]int
+
+	cachedFiles   []QuickOpenItem
+	cachedRootDir string
+	matcher       *ignore.Matcher
 }
 
 // NewQuickOpen creates a new QuickOpen instance.
@@ -60,6 +66,73 @@ func NewQuickOpen() *QuickOpen {
 	}
 }
 
+// InvalidateCache clears the cached workspace files list.
+func (q *QuickOpen) InvalidateCache() {
+	q.cachedFiles = nil
+	q.cachedRootDir = ""
+}
+
+// Warmup pre-populates the workspace file cache in background.
+func (q *QuickOpen) Warmup(rootDir string) {
+	if rootDir == "" {
+		return
+	}
+	q.scanWorkspaceFiles(rootDir)
+}
+
+func (q *QuickOpen) scanWorkspaceFiles(rootDir string) []QuickOpenItem {
+	if q.cachedRootDir == rootDir && q.cachedFiles != nil {
+		return q.cachedFiles
+	}
+
+	cleanRoot := filepath.Clean(rootDir)
+	matcher := ignore.NewMatcher(cleanRoot)
+	q.matcher = matcher
+	q.cachedRootDir = cleanRoot
+
+	var items []QuickOpenItem
+	count := 0
+	maxFiles := 10000
+
+	_ = filepath.WalkDir(cleanRoot, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || count >= maxFiles {
+			return nil
+		}
+		name := d.Name()
+		if d.IsDir() {
+			if path != cleanRoot {
+				if strings.HasPrefix(name, ".") || matcher.Matches(path, true) {
+					return filepath.SkipDir
+				}
+			}
+			return nil
+		}
+
+		if strings.HasPrefix(name, ".") || matcher.Matches(path, false) {
+			return nil
+		}
+
+		rel, relErr := filepath.Rel(cleanRoot, path)
+		if relErr != nil {
+			rel = path
+		}
+
+		items = append(items, QuickOpenItem{
+			TabIndex: -1,
+			Title:    name,
+			RelPath:  rel,
+			FullPath: filepath.Clean(path),
+			IsDirty:  false,
+			IsOpen:   false,
+		})
+		count++
+		return nil
+	})
+
+	q.cachedFiles = items
+	return items
+}
+
 // Open scans workspace files and populates open tabs.
 func (q *QuickOpen) Open(openTabs []SwitcherItem, activeIdx int, rootDir string) {
 	q.Active = true
@@ -75,65 +148,27 @@ func (q *QuickOpen) Open(openTabs []SwitcherItem, activeIdx int, rootDir string)
 				relPath = rel
 			}
 		}
-		q.openTabPaths[filepath.Clean(t.Path)] = t.Index
+		cleanPath := filepath.Clean(t.Path)
+		q.openTabPaths[cleanPath] = t.Index
 		q.AllItems = append(q.AllItems, QuickOpenItem{
 			TabIndex: t.Index,
 			Title:    t.Title,
 			RelPath:  relPath,
-			FullPath: t.Path,
+			FullPath: cleanPath,
 			IsDirty:  t.IsDirty,
 			IsOpen:   true,
 		})
 	}
 
-	// 2. Scan workspace files in background or fast walk
+	// 2. Add cached/scanned workspace files
 	if rootDir != "" {
-		count := 0
-		maxFiles := 5000
-		_ = filepath.WalkDir(rootDir, func(path string, d fs.DirEntry, err error) error {
-			if err != nil || count >= maxFiles {
-				return nil
+		workspaceFiles := q.scanWorkspaceFiles(rootDir)
+		for _, item := range workspaceFiles {
+			if _, exists := q.openTabPaths[item.FullPath]; exists {
+				continue
 			}
-			name := d.Name()
-			if d.IsDir() {
-				// Ignore hidden dirs, git, vendor, node_modules
-				if (strings.HasPrefix(name, ".") && name != ".") ||
-					name == "node_modules" ||
-					name == "vendor" ||
-					name == "dist" ||
-					name == "build" {
-					return filepath.SkipDir
-				}
-				return nil
-			}
-
-			// Skip hidden files
-			if strings.HasPrefix(name, ".") {
-				return nil
-			}
-
-			cleanPath := filepath.Clean(path)
-			// Skip if already in open tabs
-			if _, exists := q.openTabPaths[cleanPath]; exists {
-				return nil
-			}
-
-			rel, relErr := filepath.Rel(rootDir, path)
-			if relErr != nil {
-				rel = path
-			}
-
-			q.AllItems = append(q.AllItems, QuickOpenItem{
-				TabIndex: -1,
-				Title:    name,
-				RelPath:  rel,
-				FullPath: cleanPath,
-				IsDirty:  false,
-				IsOpen:   false,
-			})
-			count++
-			return nil
-		})
+			q.AllItems = append(q.AllItems, item)
+		}
 	}
 
 	q.Filter.SetValue("")

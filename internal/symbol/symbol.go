@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"tui-workflow/internal/ignore"
 )
 
 const MaxFileSize = 10 * 1024 * 1024 // 10 MB
@@ -63,6 +65,7 @@ type Index struct {
 	byName  map[string][]Symbol
 	byFile  map[string][]Symbol
 	rootDir string
+	matcher *ignore.Matcher
 }
 
 func NewIndex(rootDir string) *Index {
@@ -70,6 +73,7 @@ func NewIndex(rootDir string) *Index {
 		byName:  make(map[string][]Symbol),
 		byFile:  make(map[string][]Symbol),
 		rootDir: rootDir,
+		matcher: ignore.NewMatcher(rootDir),
 	}
 }
 
@@ -89,9 +93,15 @@ func (ix *Index) Build() error {
 			return nil
 		}
 		if d.IsDir() {
-			if path != ix.rootDir && (strings.HasPrefix(d.Name(), ".") || ignoredDirs[d.Name()]) {
-				return filepath.SkipDir
+			if path != ix.rootDir {
+				name := d.Name()
+				if strings.HasPrefix(name, ".") || ignoredDirs[name] || (ix.matcher != nil && ix.matcher.Matches(path, true)) {
+					return filepath.SkipDir
+				}
 			}
+			return nil
+		}
+		if ix.matcher != nil && ix.matcher.Matches(path, false) {
 			return nil
 		}
 		ix.addFile(path)
@@ -125,6 +135,10 @@ func (ix *Index) addFile(path string) {
 
 // UpdateFile mengindeks ulang satu file (dipanggil saat save/create/rename).
 func (ix *Index) UpdateFile(path string) {
+	if ix.matcher != nil && ix.matcher.Matches(path, false) {
+		ix.removeFile(path)
+		return
+	}
 	ix.removeFile(path)
 	ix.addFile(path)
 }

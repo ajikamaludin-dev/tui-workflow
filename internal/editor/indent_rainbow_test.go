@@ -3,6 +3,8 @@ package editor
 import (
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestCountLeadingSpaces(t *testing.T) {
@@ -44,6 +46,39 @@ func TestRenderIndentRune(t *testing.T) {
 	resErr, okErr := RenderIndentRune(0, 3, ' ')
 	if !okErr || !strings.Contains(resErr, " ") {
 		t.Errorf("RenderIndentRune(0, 3) want error highlight, got %q", resErr)
+	}
+
+	// Tab character indentation tests
+	resTab0, okTab0 := RenderIndentRune(0, 4, '\t')
+	if !okTab0 || !strings.Contains(resTab0, "│") || !strings.HasSuffix(resTab0, "   ") {
+		t.Errorf("RenderIndentRune(0, 4, '\\t') want vertical guide with 3 trailing spaces, got %q", resTab0)
+	}
+
+	resTab1, okTab1 := RenderIndentRune(4, 8, '\t')
+	if !okTab1 || !strings.Contains(resTab1, "│") || !strings.HasSuffix(resTab1, "   ") {
+		t.Errorf("RenderIndentRune(4, 8, '\\t') want level-1 vertical guide with 3 trailing spaces, got %q", resTab1)
+	}
+}
+
+func TestBuffer_IndentRainbow_TabRendering(t *testing.T) {
+	content := "package main\n\tvar a = 1\n\t\tif a > 0 {\n\t\t\treturn\n\t\t}"
+	buf := NewBuffer(content)
+	buf.IndentRainbow = true
+
+	rendered := buf.Render(80, 10, "main.go", false)
+	plain := ansi.Strip(rendered)
+
+	// In line 1 ("\tvar a = 1"), "var" must NOT directly follow "│" without spaces
+	if strings.Contains(plain, "│var") {
+		t.Errorf("Rendered buffer contains '│var' without spacing after indent guide")
+	}
+	if !strings.Contains(plain, "│   var") {
+		t.Errorf("Rendered buffer should contain '│   var', got:\n%s", plain)
+	}
+
+	// In line 2 ("\t\tif a > 0 {"), the space after 'if' must NOT be turned into a guide bar
+	if strings.Contains(plain, "if│") || strings.Contains(plain, "if |") {
+		t.Errorf("Rendered buffer corrupted space after 'if' with indent guide, got:\n%s", plain)
 	}
 }
 

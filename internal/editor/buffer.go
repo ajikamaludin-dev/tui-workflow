@@ -30,10 +30,10 @@ type BufferSnapshot struct {
 // extraCursor adalah cursor tambahan (multi-cursor) dengan selection sendiri.
 // Cursor utama (primary) tetap di Buffer.CursorRow/CursorCol + HasSelection.
 type extraCursor struct {
-	Row, Col         int
-	SelAnchorRow     int
-	SelAnchorCol     int
-	HasSelection     bool
+	Row, Col     int
+	SelAnchorRow int
+	SelAnchorCol int
+	HasSelection bool
 }
 
 // FoldRegion menyembunyikan baris (Start, End]; baris Start tetap terlihat
@@ -44,20 +44,20 @@ type FoldRegion struct {
 }
 
 type Buffer struct {
-	Lines        [][]rune
-	CursorRow    int
-	CursorCol    int
-	ScrollRow    int
-	ScrollCol    int
-	SoftWrap     bool
-	IsDirty      bool
-	Highlighter  *syntax.Highlighter
-	cachedHigh   []string
-	cachedStyles   [][]string
-	cachedRawLines []string
-	cachedPath   string
-	cachedDirty  bool
-	cachedText   string
+	Lines           [][]rune
+	CursorRow       int
+	CursorCol       int
+	ScrollRow       int
+	ScrollCol       int
+	SoftWrap        bool
+	IsDirty         bool
+	Highlighter     *syntax.Highlighter
+	cachedHigh      []string
+	cachedStyles    [][]string
+	cachedRawLines  []string
+	cachedPath      string
+	cachedDirty     bool
+	cachedText      string
 	cachedTextDirty bool
 
 	// Selection state
@@ -1327,6 +1327,20 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 			}
 			return false
 		}
+
+		leadingSpaces := 0
+		if b.IndentRainbow && !vl.IsContinuation && physRow >= 0 && physRow < len(b.Lines) {
+			leadingSpaces, _ = CountLeadingSpaces(b.Lines[physRow])
+		}
+
+		lineVisualCol := 0
+		if vl.StartCol > 0 && physRow >= 0 && physRow < len(b.Lines) {
+			pLine := b.Lines[physRow]
+			for i := 0; i < vl.StartCol && i < len(pLine); i++ {
+				lineVisualCol += runeVisualWidth(pLine[i], lineVisualCol)
+			}
+		}
+
 		for cIdx, r := range lineRunes {
 			physCol := vl.StartCol + cIdx
 			isCursor := vIdx == visualCursorRow && cIdx == visualCursorCol && focused
@@ -1334,7 +1348,7 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 			isSelected := b.IsSelected(physRow, physCol)
 			isMatch, isActiveMatch := b.MatchAt(physRow, physCol)
 
-			rw := runeVisualWidth(r, curVisualCol)
+			rw := runeVisualWidth(r, lineVisualCol)
 			var rStr string
 			if r == '\t' {
 				rStr = strings.Repeat(" ", rw)
@@ -1388,20 +1402,16 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 				textPart.WriteString(ui.CurrentTheme.SearchMatchStyle.Render(rStr))
 			} else {
 				// Indent Rainbow for leading indentation spaces
-				leadingSpaces := 0
-				if b.IndentRainbow && !vl.IsContinuation && physRow >= 0 && physRow < len(b.Lines) {
-					leadingSpaces, _ = CountLeadingSpaces(b.Lines[physRow])
-				}
-
-				if b.IndentRainbow && physCol < leadingSpaces && (r == ' ' || r == '\t') {
+				if b.IndentRainbow && lineVisualCol < leadingSpaces && (r == ' ' || r == '\t') {
 					if activeStyle != "" {
 						textPart.WriteString("\x1b[0m")
 						activeStyle = ""
 					}
-					renderedIndent, isIndent := RenderIndentRune(physCol, leadingSpaces, r)
+					renderedIndent, isIndent := RenderIndentRune(lineVisualCol, leadingSpaces, r)
 					if isIndent {
 						textPart.WriteString(renderedIndent)
 						curVisualCol += rw
+						lineVisualCol += rw
 						continue
 					}
 				}
@@ -1429,6 +1439,7 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 			}
 
 			curVisualCol += rw
+			lineVisualCol += rw
 		}
 
 		if activeStyle != "" {

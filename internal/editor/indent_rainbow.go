@@ -1,6 +1,8 @@
 package editor
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -40,25 +42,33 @@ func CountLeadingSpaces(runes []rune) (int, bool) {
 // RenderIndentRune renders a rune within the leading whitespace indentation zone.
 // If the indentation is misaligned (leadingSpaces % TabWidth != 0), it renders with error highlighting.
 // Otherwise it renders a color-coded vertical guide bar or space.
-func RenderIndentRune(physCol, leadingSpaces int, r rune) (string, bool) {
+func RenderIndentRune(visualCol, leadingSpaces int, r rune) (string, bool) {
 	if r != ' ' && r != '\t' {
 		return "", false
+	}
+	rw := 1
+	if r == '\t' {
+		rem := visualCol % TabWidth
+		rw = TabWidth - rem
 	}
 
 	// Indentation error guard: misaligned spaces
 	if leadingSpaces%TabWidth != 0 {
-		return indentErrorStyle.Render(" "), true
+		return indentErrorStyle.Render(strings.Repeat(" ", rw)), true
 	}
 
-	level := physCol / TabWidth
-	offset := physCol % TabWidth
+	level := visualCol / TabWidth
+	offset := visualCol % TabWidth
 	style := indentRainbowStyles[level%len(indentRainbowStyles)]
 
 	if offset == 0 {
+		if rw > 1 {
+			return style.Render("│") + strings.Repeat(" ", rw-1), true
+		}
 		return style.Render("│"), true
 	}
 
-	return " ", true
+	return strings.Repeat(" ", rw), true
 }
 
 // SetDiagnostic adds or clears a diagnostic marker for a physical line (0-based).

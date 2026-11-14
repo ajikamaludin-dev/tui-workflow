@@ -159,8 +159,22 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
    - Integrasi tokenisasi syntax highlighting real-time via `alecthomas/chroma/v2` saat teks diketik.
    - Line numbers gutter di sisi kiri dengan warna muted dan separator vertikal.
    - **Line Wrapping:** Fitur **Soft Wrap** aktif secara default (baris panjang melipat visual ke bawah tanpa menyisipkan karakter `\n` fisik).
+   - **Multi-Cursor Editing (VSCode-Style):**
+     - Menambah kursor pada kemunculan kata berikutnya via `Ctrl+Shift+D` (*Add Next Occurrence*).
+     - Menambah kursor di atas / bawah baris aktif via `Ctrl+Alt+Up` / `Ctrl+Alt+Down`.
+     - Menambah kursor bebas di posisi klik mouse via `Ctrl+Alt+Click`.
+     - Penggabungan multi-cursor kembali ke single primary cursor via tombol `Esc`.
+     - Operasi pengetikan karakter, penghapusan (`Backspace`/`Delete`), dan seleksi berlaku serentak pada semua kursor secara stabil (diurutkan bottom-to-top).
+   - **Code Folding (Indent-Based):**
+     - Melipat atau membuka blok kode berdasarkan indentasi baris via `za` atau `Ctrl+Shift+[` (fold) dan `Ctrl+Shift+]` (unfold).
+     - Melipat semua blok kode terluar via `Ctrl+K Ctrl+0` / `zM` (*Fold All*), dan membuka seluruh lipatan via `Ctrl+K Ctrl+J` / `zR` (*Unfold All*).
+     - Kolom 0 pada gutter nomor baris menampilkan penanda lipatan visual `▸` (blok terlipat) atau `▾` (blok terbuka) yang dapat diklik langsung dengan mouse untuk toggle fold/unfold.
+     - Baris tersembunyi (*hidden lines*) dilewati secara otomatis dalam rendering tampilan editor dan perhitungan posisi kursor.
 3. **Interaksi Mouse di Editor:**
    - Klik mouse di area buffer teks langsung memindahkan kursor ke posisi baris dan kolom yang diklik.
+   - `Alt+Click` pada simbol/kata: Melompat langsung ke definisi (*Go to Definition*).
+   - `Ctrl+Alt+Click`: Menambahkan multi-cursor di titik koordinat yang diklik.
+   - Klik pada marker kolom 0 gutter: Melipat atau membuka blok kode (*Toggle Fold*).
    - Mouse wheel (scroll up / down) menggeser viewport secara vertikal.
 
 #### C. Markdown Dual-Mode Viewer
@@ -212,6 +226,21 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
 4. **Window Resizing & Anti-Overflow:**
    - Sinkronisasi dimensi ukuran terminal via `TIOCSWINSZ` (`pty.Setsize`) dan `vt10x.Resize` saat resize terminal terjadi.
    - Pemotongan aman berbasis visual width (`ansi.Truncate`) menjamin output baris terminal tidak pernah meluap (*zero terminal scroll overflow*).
+
+#### G. Symbol Navigation & Code Intelligence (Path B — In-Memory Symbol Index)
+1. **In-Memory Symbol Index:**
+   - Pemindaian dan pengindeksan simbol seluruh workspace secara non-blocking saat workspace dimuat.
+   - Pembaruan inkremental otomatis (*zero stale state*) saat file disimpan, dibuat, diubah nama (*rename*), atau dihapus.
+   - Ekstraktor simbol berbasis parser/AST & regex ringan:
+     - **Go (`.go`):** AST parsing deklarasi fungsi, method (dengan receiver type), struct, interface, type alias, konstanta, dan variabel.
+     - **JavaScript / TypeScript / React (`.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, `.cjs`):** Functions, arrow functions, classes, interfaces, types, exported constants.
+     - **PHP (`.php`, `.phtml`):** Classes, interfaces, traits, functions, methods, constants, dan `define()`.
+     - **JSON (`.json`):** Keys bersarang (*nested keys*) hingga kedalaman **depth ≤ 10** sebagai simbol `KindKey`, termasuk jalur bertitik (*dotted path*).
+     - **Markdown (`.md`, `.markdown`):** Headings level 1–6 (`#{1,6}`) sebagai simbol `KindHeading`.
+2. **Alur Navigasi Simbol:**
+   - **Go to Definition (`F12` / `Alt+Click`):** Mengambil identitas simbol di bawah kursor, mencari di indeks simbol, dan melompat langsung ke file, baris, dan kolom target (membuka tab editor baru jika berada di file berbeda).
+   - **Find References (`Shift+F12`):** Mencari seluruh kemunculan simbol di seluruh workspace berbasis batas kata (*word-boundary*), menampilkan hasil di sidebar Search, dan memfokuskan daftar kecocokan untuk navigasi cepat.
+   - **Go to Symbol (`Ctrl+Shift+O`):** Dialog pencarian cepat simbol seluruh workspace dengan filter pencarian real-time dan navigasi instan.
 
 ### 4.4. Auto-Save & Dialog Unsaved Changes
 

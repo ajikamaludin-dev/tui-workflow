@@ -1,6 +1,7 @@
 package app
 
 import (
+	"sort"
 	"bytes"
 	"context"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 	"tui-workflow/internal/formatter"
 	"tui-workflow/internal/git"
 	"tui-workflow/internal/search"
+	"tui-workflow/internal/symbol"
 	"tui-workflow/internal/terminal"
 	"tui-workflow/internal/ui"
 	"tui-workflow/internal/ui/dialog"
@@ -54,6 +56,7 @@ type Model struct {
 	HelpDialog        *dialog.HelpDialog
 	AIClient          *ai.Client
 	SearchView        *search.SearchView
+	SymbolIndex       *symbol.Index
 	ContextMenu       *ui.ContextMenu
 	AutoSave          bool
 	SoftWrap          bool
@@ -70,6 +73,16 @@ type Model struct {
 	pendingGitHunkPath  string
 	pendingGitHunkIndex int
 	SessionDirtySave   bool
+
+	// Go To Symbol (Ctrl+Shift+O) modal state
+	GoToSymbolActive   bool
+	GoToSymbolQuery    string
+	GoToSymbolResults  []symbol.Symbol
+	GoToSymbolSelected int
+	GoToSymbolScroll   int
+
+	// Ctrl+K chord (fold commands like Ctrl+K Ctrl+0)
+	ctrlKPending bool
 }
 
 func NewModelWithPath(targetPath string, explicitArg bool) (Model, error) {
@@ -151,6 +164,7 @@ func NewModelWithPath(targetPath string, explicitArg bool) (Model, error) {
 		HelpDialog:        dialog.NewHelpDialog(),
 		AIClient:          ai.NewClient(),
 		SearchView:        search.NewSearchView(rootDir),
+		SymbolIndex:       symbol.NewIndex(rootDir),
 		ContextMenu:       ui.NewContextMenu(),
 		AutoSave:          cfg.AutoSave,
 		SoftWrap:          cfg.SoftWrap,
@@ -159,6 +173,9 @@ func NewModelWithPath(targetPath string, explicitArg bool) (Model, error) {
 		ClosingTabIdx:     -1,
 		ContextMenuTabIdx: -1,
 		SessionExplicitArg: explicitArg,
+	}
+	if m.SymbolIndex != nil {
+		_ = m.SymbolIndex.Build()
 	}
 	m.Explorer.ShowHidden = cfg.ShowHidden
 	m.StatusBar.AutoSave = cfg.AutoSave
@@ -277,6 +294,133 @@ func formatBufferCmd(tabID string, content string, filePath string, workspaceDir
 			ToolName: res.ToolName,
 		}
 	}
+}
+
+
+func (m *Model) openGoToSymbol() {
+	if m.SymbolIndex == nil {
+		m.StatusBar.ShowToast("Symbol index belum siap", true, 2*time.Second)
+		return
+	}
+	m.GoToSymbolActive = true
+	m.GoToSymbolQuery = ""
+	m.GoToSymbolSelected = 0
+	m.GoToSymbolScroll = 0
+	m.updateGoToSymbolResults()
+}
+
+func (m *Model) closeGoToSymbol() {
+	m.GoToSymbolActive = false
+	m.GoToSymbolQuery = ""
+	m.GoToSymbolResults = nil
+	m.GoToSymbolSelected = 0
+	m.GoToSymbolScroll = 0
+}
+
+func (m *Model) updateGoToSymbolResults() {
+	if m.SymbolIndex == nil {
+		m.GoToSymbolResults = nil
+		return
+	}
+	q := strings.ToLower(strings.TrimSpace(m.GoToSymbolQuery))
+	all := m.SymbolIndex.AllSymbols()
+	if q == "" {
+		m.GoToSymbolResults = append([]symbol.Symbol(nil), all...)
+	} else {
+		out := make([]symbol.Symbol, 0, len(all))
+		for _, s := range all {
+			name := strings.ToLower(s.Name)
+			path := strings.ToLower(filepath.Base(s.FilePath))
+			if strings.Contains(name, q) || strings.Contains(path, q) {
+				out = append(out, s)
+			}
+		}
+		m.GoToSymbolResults = out
+	}
+	sort.SliceStable(m.GoToSymbolResults, func(i, j int) bool {
+		ai, aj := m.GoToSymbolResults[i], m.GoToSymbolResults[j]
+		if q := strings.ToLower(strings.TrimSpace(m.GoToSymbolQuery)); q != "" {
+			pi := strings.HasPrefix(strings.ToLower(ai.Name), q)
+			pj := strings.HasPrefix(strings.ToLower(aj.Name), q)
+			if pi != pj {
+				return pi
+			}
+		}
+		if ai.Name != aj.Name {
+			return ai.Name < aj.Name
+		}
+		if ai.FilePath != aj.FilePath {
+			return ai.FilePath < aj.FilePath
+		}
+		return ai.Line < aj.Line
+	})
+	if m.GoToSymbolSelected >= len(m.GoToSymbolResults) {
+		m.GoToSymbolSelected = len(m.GoToSymbolResults) - 1
+	}
+	if m.GoToSymbolSelected < 0 {
+		m.GoToSymbolSelected = 0
+	}
+	if m.GoToSymbolSelected < m.GoToSymbolScroll {
+		m.GoToSymbolScroll = m.GoToSymbolSelected
+	}
+	maxRows := 12
+	if m.GoToSymbolSelected >= m.GoToSymbolScroll+maxRows {
+		m.GoToSymbolScroll = m.GoToSymbolSelected - maxRows + 1
+	}
+}
+
+func (m *Model) handleGoToSymbolKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "esc":
+		m.closeGoToSymbol()
+		return m, nil
+	case "up":
+		if m.GoToSymbolSelected > 0 {
+			m.GoToSymbolSelected--
+			if m.GoToSymbolSelected < m.GoToSymbolScroll {
+				m.GoToSymbolScroll = m.GoToSymbolSelected
+			}
+		}
+		return m, nil
+	case "down":
+		if m.GoToSymbolSelected < len(m.GoToSymbolResults)-1 {
+			m.GoToSymbolSelected++
+			maxRows := 12
+			if m.GoToSymbolSelected >= m.GoToSymbolScroll+maxRows {
+				m.GoToSymbolScroll = m.GoToSymbolSelected - maxRows + 1
+			}
+		}
+		return m, nil
+	case "enter":
+		if len(m.GoToSymbolResults) > 0 && m.GoToSymbolSelected >= 0 && m.GoToSymbolSelected < len(m.GoToSymbolResults) {
+			sel := m.GoToSymbolResults[m.GoToSymbolSelected]
+			m.closeGoToSymbol()
+			m.openFileAt(sel.FilePath, sel.Line, sel.Col)
+			m.Focus = FocusEditor
+			m.syncStatusBarWithActiveTab()
+		} else {
+			m.closeGoToSymbol()
+		}
+		return m, nil
+	case "backspace":
+		if len(m.GoToSymbolQuery) > 0 {
+			r := []rune(m.GoToSymbolQuery)
+			m.GoToSymbolQuery = string(r[:len(r)-1])
+			m.updateGoToSymbolResults()
+		}
+		return m, nil
+	}
+	if len(msg.Runes) > 0 && !msg.Alt {
+		m.GoToSymbolQuery += string(msg.Runes)
+		m.updateGoToSymbolResults()
+		return m, nil
+	}
+	if msg.String() == "space" {
+		m.GoToSymbolQuery += " "
+		m.updateGoToSymbolResults()
+		return m, nil
+	}
+	return m, nil
 }
 
 func (m *Model) triggerFormatCurrentBuffer() (Model, tea.Cmd) {
@@ -550,6 +694,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Ctrl+K chord (fold all/unfold all) - task requires Ctrl+K Ctrl+0 / Ctrl+K Ctrl+J
+		if m.ctrlKPending {
+			m.ctrlKPending = false
+			switch msg.String() {
+			case "ctrl+0", "0":
+				if tab := m.TabManager.ActiveTab(); tab != nil && tab.Buffer != nil && !tab.IsDiff && !(tab.Type == editor.TabMarkdown && tab.MarkdownPreview) {
+					tab.Buffer.FoldAll()
+					m.syncStatusBarWithActiveTab()
+					m.StatusBar.ShowToast("Fold all", false, 1500*time.Millisecond)
+				}
+				return m, nil
+			case "ctrl+j", "j", "ctrl+J":
+				if tab := m.TabManager.ActiveTab(); tab != nil && tab.Buffer != nil && !tab.IsDiff && !(tab.Type == editor.TabMarkdown && tab.MarkdownPreview) {
+					tab.Buffer.UnfoldAll()
+					m.syncStatusBarWithActiveTab()
+					m.StatusBar.ShowToast("Unfold all", false, 1500*time.Millisecond)
+				}
+				return m, nil
+			case "ctrl+k":
+				m.FilePicker.Open(dialog.PickerModeFolder, m.RootDir, m.Explorer.ShowHidden)
+				return m, nil
+			case "esc":
+				m.StatusBar.ShowToast("Ctrl+K chord dibatalkan", false, 1*time.Second)
+				return m, nil
+			default:
+				m.StatusBar.ShowToast("Ctrl+K chord: gunakan Ctrl+0/Ctrl+J (atau Ctrl+K untuk buka folder)", true, 2*time.Second)
+				return m, nil
+			}
+		}
+		// Go To Symbol modal handling (Ctrl+Shift+O)
+		if m.GoToSymbolActive {
+			return m.handleGoToSymbolKey(msg)
+		}
+
 		// 1. Context Menu Handling if active
 		if m.ContextMenu != nil && m.ContextMenu.Active {
 			switch msg.String() {
@@ -916,12 +1094,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
+		case "ctrl+shift+o", "ctrl+O":
+			m.openGoToSymbol()
+			return m, nil
 		case "ctrl+o":
 			m.FilePicker.Open(dialog.PickerModeFile, m.RootDir, m.Explorer.ShowHidden)
 			return m, nil
 
 		case "ctrl+k":
-			m.FilePicker.Open(dialog.PickerModeFolder, m.RootDir, m.Explorer.ShowHidden)
+			m.ctrlKPending = true
+			m.StatusBar.ShowToast("Ctrl+K: Ctrl+0 fold all, Ctrl+J unfold all, Ctrl+K buka folder", false, 2*time.Second)
 			return m, nil
 
 		case "ctrl+p":
@@ -1276,6 +1458,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.StatusBar.ShowToast("Error simpan: "+err.Error(), true, 3*time.Second)
 					} else {
 						m.StatusBar.ShowToast("Disimpan: "+tab.Name, false, 2*time.Second)
+						if m.SymbolIndex != nil {
+							m.SymbolIndex.UpdateFile(tab.Path)
+						}
 					}
 					m.syncStatusBarWithActiveTab()
 					return m, nil
@@ -1438,6 +1623,102 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case "pgdown":
 					buf.ClearSelection()
 					buf.MovePageDown(10)
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+
+				case "f12":
+					m.gotoDefinition()
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+
+				case "shift+f12", "Shift+F12":
+					m.findReferences()
+					return m, nil
+
+				case "ctrl+d", "ctrl+D":
+					m.addNextOccurrence()
+					return m, nil
+
+				case "ctrl+alt+down":
+					buf.AddCursorBelow()
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+
+				case "ctrl+alt+up":
+					buf.AddCursorAbove()
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+
+				case "ctrl+shift+[":
+					if buf.ToggleFold(buf.CursorRow) {
+						// if not on foldable, fold innermost enclosing? try fold at cursor line's block start by toggling current behavior: ToggleFold folds/unfolds at row or if folded region exists
+					}
+					// Better: fold current or containing block
+					if !buf.IsFoldedAt(buf.CursorRow) {
+						// try to fold block starting at/containing cursor by walking up
+						row := buf.CursorRow
+						folded := false
+						for r := row; r >= 0; r-- {
+							if end, ok := buf.FoldableAt(r); ok && r <= row && row <= end {
+								if !buf.IsFoldedAt(r) { buf.ToggleFold(r) }
+								folded = true
+								break
+							}
+						}
+						if !folded {
+							m.StatusBar.ShowToast("Tidak ada blok untuk dilipat", true, 1500*time.Millisecond)
+						}
+					} else {
+						// already folded at cursor anchor -> keep folded (no-op) or refold; ToggleFold would unfold
+					}
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+
+				case "ctrl+shift+]":
+					// unfold current/containing fold
+					unfolded := false
+					for _, fr := range append([]editor.FoldRegion(nil), buf.Folded...) {
+						if buf.CursorRow >= fr.Start && buf.CursorRow <= fr.End {
+							// unfold this region
+							idx := buf.FoldIndexAt(fr.Start)
+							if idx >= 0 { buf.Folded = append(buf.Folded[:idx], buf.Folded[idx+1:]...) }
+							unfolded = true
+							break
+						}
+					}
+					if !unfolded && buf.IsFoldedAt(buf.CursorRow) {
+						buf.ToggleFold(buf.CursorRow)
+						unfolded = true
+					}
+					if !unfolded { m.StatusBar.ShowToast("Tidak ada blok terlipat di kursor", true, 1500*time.Millisecond) }
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+
+				case "esc":
+					if buf.CursorCount() > 1 {
+						buf.CollapseCursors()
+						m.StatusBar.ShowToast("Cursor digabung", false, 1*time.Second)
+					} else if buf.HasSelection {
+						buf.ClearSelection()
+					}
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+
+				case "za":
+					if buf.ToggleFold(buf.CursorRow) {
+						m.syncStatusBarWithActiveTab()
+					} else {
+						m.StatusBar.ShowToast("Tidak ada blok untuk dilipat di baris ini", true, 2*time.Second)
+					}
+					return m, nil
+
+				case "zM":
+					buf.FoldAll()
+					m.syncStatusBarWithActiveTab()
+					return m, nil
+
+				case "zR":
+					buf.UnfoldAll()
 					m.syncStatusBarWithActiveTab()
 					return m, nil
 
@@ -1769,7 +2050,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Resizing Sidebar Handling
 		if m.SidebarVisible {
-			isAtBorder := (msg.X == m.SidebarWidth-1 || msg.X == m.SidebarWidth) && msg.Y >= 1 && msg.Y < m.Height-1
+			isAtBorder := msg.X == m.SidebarWidth-1 && msg.Y >= 1 && msg.Y < m.Height-1
 			if isAtBorder {
 				m.setMousePointer("col-resize")
 			}
@@ -1797,7 +2078,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Update mouse pointer shape: col-resize at border, text over editor, default elsewhere
-		if m.SidebarVisible && (msg.X == m.SidebarWidth-1 || msg.X == m.SidebarWidth) && msg.Y >= 1 && msg.Y < m.Height-1 {
+		if m.SidebarVisible && msg.X == m.SidebarWidth-1 && msg.Y >= 1 && msg.Y < m.Height-1 {
 			m.setMousePointer("col-resize")
 		} else if msg.X >= editorStartX && msg.Y >= 2 && msg.Y < m.Height-1 {
 			m.setMousePointer("text")
@@ -2257,16 +2538,58 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else if tab != nil && tab.Buffer != nil {
 					relY := msg.Y - 2
 					gutterW := tab.Buffer.GutterWidth()
-					textX := msg.X - editorStartX - gutterW
-					if textX < 0 {
-						textX = 0
-					}
+					relX := msg.X - editorStartX
+
 					textW := m.Width - editorStartX - gutterW
 					if textW < 10 {
 						textW = 10
 					}
+
+					physRow, _ := tab.Buffer.RowColFromVisual(relY, 0, textW)
+
+					// Gutter click (marker col 0, line number digits, or separator): toggle fold anchor baris itu
+					if relX >= 0 && relX < gutterW {
+						if _, ok := tab.Buffer.FoldableAt(physRow); ok || tab.Buffer.IsFoldedAt(physRow) {
+							tab.Buffer.ToggleFold(physRow)
+							m.syncStatusBarWithActiveTab()
+							return m, nil
+						}
+						// Gutter baris non-foldable: pindahkan kursor ke awal baris itu
+						tab.Buffer.CursorRow = physRow
+						tab.Buffer.CursorCol = 0
+						tab.Buffer.CollapseCursors()
+						tab.Buffer.ClearSelection()
+						m.syncStatusBarWithActiveTab()
+						return m, nil
+					}
+
+					textX := relX - gutterW
+					if textX < 0 {
+						textX = 0
+					}
+
 					physRow, physCol := tab.Buffer.RowColFromVisual(relY, textX, textW)
-					tab.Buffer.StartSelection(physRow, physCol)
+
+					// Klik pada fold badge di ujung baris terlipat: buka lipatan (unfold)
+					if tab.Buffer.IsFoldedAt(physRow) && physCol >= len(tab.Buffer.Lines[physRow]) {
+						tab.Buffer.ToggleFold(physRow)
+						m.syncStatusBarWithActiveTab()
+						return m, nil
+					}
+
+					switch {
+					case msg.Ctrl && msg.Alt:
+						tab.Buffer.AddCursor(physRow, physCol)
+					case msg.Alt:
+						tab.Buffer.CursorRow, tab.Buffer.CursorCol = physRow, physCol
+						tab.Buffer.CollapseCursors()
+						tab.Buffer.ClearSelection()
+						m.gotoDefinition()
+						m.syncStatusBarWithActiveTab()
+						return m, nil
+					default:
+						tab.Buffer.StartSelection(physRow, physCol)
+					}
 					m.syncStatusBarWithActiveTab()
 				}
 				return m, nil
@@ -2497,7 +2820,7 @@ func (m *Model) openCommandPalette() {
 		{ID: "file.format", Title: "Format Document", Category: "Edit", Shortcut: "Ctrl+Shift+I"},
 		{ID: "setting.format_on_save", Title: "Toggle Format on Save", Category: "Settings", Shortcut: ""},
 		{ID: "file.open", Title: "Open File", Category: "File", Shortcut: "Ctrl+O"},
-		{ID: "file.open_folder", Title: "Open Folder", Category: "File", Shortcut: "Ctrl+K"},
+		{ID: "file.open_folder", Title: "Open Folder", Category: "File", Shortcut: "Ctrl+K Ctrl+K"},
 		{ID: "file.save", Title: "Save File", Category: "File", Shortcut: "Ctrl+S"},
 		{ID: "file.close", Title: "Close Tab", Category: "File", Shortcut: "Ctrl+W"},
 		{ID: "tab.close_others", Title: "Close Other Tabs", Category: "File", Shortcut: ""},
@@ -2507,10 +2830,20 @@ func (m *Model) openCommandPalette() {
 		// Search & Navigation
 		{ID: "search.quick_open", Title: "Quick Open File (Workspace)", Category: "Search", Shortcut: "Ctrl+P"},
 		{ID: "search.palette", Title: "Command Palette", Category: "Search", Shortcut: "Ctrl+Shift+P / F1"},
+		{ID: "search.goto_symbol", Title: "Go to Symbol in Workspace", Category: "Search", Shortcut: "Ctrl+Shift+O"},
+		{ID: "search.goto_definition", Title: "Go to Definition", Category: "Search", Shortcut: "F12"},
+		{ID: "search.find_references", Title: "Find References", Category: "Search", Shortcut: "Shift+F12"},
 		{ID: "search.find", Title: "Find in Current File", Category: "Search", Shortcut: "Ctrl+F"},
 		{ID: "search.replace", Title: "Find & Replace in Current File", Category: "Search", Shortcut: "Ctrl+H"},
 		{ID: "search.global", Title: "Global Search in Workspace", Category: "Search", Shortcut: "Ctrl+Shift+F"},
 		{ID: "edit.goto_line", Title: "Go to Line / Column", Category: "Search", Shortcut: "Ctrl+G"},
+		{ID: "edit.add_next_occurrence", Title: "Add Next Occurrence (Multi-Cursor)", Category: "Edit", Shortcut: "Ctrl+Shift+D"},
+		{ID: "edit.add_cursor_above", Title: "Add Cursor Above", Category: "Edit", Shortcut: "Ctrl+Alt+Up"},
+		{ID: "edit.add_cursor_below", Title: "Add Cursor Below", Category: "Edit", Shortcut: "Ctrl+Alt+Down"},
+		{ID: "edit.fold", Title: "Fold Block", Category: "Edit", Shortcut: "Ctrl+Shift+["},
+		{ID: "edit.unfold", Title: "Unfold Block", Category: "Edit", Shortcut: "Ctrl+Shift+]"},
+		{ID: "edit.fold_all", Title: "Fold All", Category: "Edit", Shortcut: "Ctrl+K Ctrl+0"},
+		{ID: "edit.unfold_all", Title: "Unfold All", Category: "Edit", Shortcut: "Ctrl+K Ctrl+J"},
 		{ID: "edit.undo", Title: "Undo Text Change", Category: "Edit", Shortcut: "Ctrl+Z"},
 		{ID: "edit.redo", Title: "Redo Text Change", Category: "Edit", Shortcut: "Ctrl+Y"},
 		{ID: "edit.toggle_comment", Title: "Toggle Comment (Line / Selection)", Category: "Edit", Shortcut: "Ctrl+/"},
@@ -2650,6 +2983,10 @@ func (m *Model) openBranchSwitcher() {
 }
 
 func (m *Model) syncStatusBarWithActiveTab() {
+	m.StatusBar.CursorCount = 1
+	if tab := m.TabManager.ActiveTab(); tab != nil && tab.Buffer != nil {
+		m.StatusBar.CursorCount = tab.Buffer.CursorCount()
+	}
 	if m.GitRepo != nil {
 		if branch, err := m.GitRepo.GetBranchName(); err == nil {
 			m.StatusBar.Branch = branch
@@ -2746,6 +3083,9 @@ func (m *Model) handleInputConfirmed() {
 			m.StatusBar.ShowToast("Error: "+err.Error(), true, 3*time.Second)
 		} else {
 			m.Explorer.Refresh()
+			if m.SymbolIndex != nil {
+				m.SymbolIndex.UpdateFile(createdPath)
+			}
 			m.openFile(createdPath)
 			m.StatusBar.ShowToast("File dibuat: "+filepath.Base(createdPath), false, 2*time.Second)
 		}
@@ -2765,6 +3105,9 @@ func (m *Model) handleInputConfirmed() {
 			m.StatusBar.ShowToast("Error: "+err.Error(), true, 3*time.Second)
 		} else {
 			m.Explorer.Refresh()
+			if m.SymbolIndex != nil {
+				m.SymbolIndex.RenameFile(m.InputDialog.TargetPath, newPath)
+			}
 			m.StatusBar.ShowToast("Diubah ke: "+filepath.Base(newPath), false, 2*time.Second)
 		}
 
@@ -2862,6 +3205,9 @@ func (m *Model) handleConfirmConfirmed() tea.Cmd {
 			m.StatusBar.ShowToast("Error hapus: "+err.Error(), true, 3*time.Second)
 		} else {
 			m.Explorer.Refresh()
+			if m.SymbolIndex != nil {
+				m.SymbolIndex.RemoveFile(m.ConfirmDialog.TargetPath)
+			}
 			m.StatusBar.ShowToast("Berhasil dihapus: "+filepath.Base(m.ConfirmDialog.TargetPath), false, 2*time.Second)
 		}
 
@@ -3191,6 +3537,11 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 			m.StatusBar.ShowToast("Gagal simpan: "+err.Error(), true, 3*time.Second)
 		} else {
 			m.StatusBar.ShowToast("File disimpan", false, 2*time.Second)
+			if m.SymbolIndex != nil {
+				if t := m.TabManager.ActiveTab(); t != nil {
+					m.SymbolIndex.UpdateFile(t.Path)
+				}
+			}
 			m.syncStatusBarWithActiveTab()
 		}
 
@@ -3293,6 +3644,82 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 
 	case "explorer.filter":
 		m.InputDialog.Open(dialog.InputFilterExplorer, "Filter File Explorer", "Masukkan nama atau ekstensi file:", m.Explorer.FilterQuery)
+
+	case "search.goto_symbol":
+		m.openGoToSymbol()
+
+	case "search.goto_definition":
+		m.gotoDefinition()
+		m.syncStatusBarWithActiveTab()
+
+	case "search.find_references":
+		m.findReferences()
+
+	case "edit.add_next_occurrence":
+		tab := m.TabManager.ActiveTab()
+		if tab != nil && tab.Buffer != nil && (tab.Type == editor.TabMarkdown && !tab.MarkdownPreview || tab.Type == editor.TabFile) {
+			m.addNextOccurrence()
+		}
+
+	case "edit.add_cursor_above":
+		tab := m.TabManager.ActiveTab()
+		if tab != nil && tab.Buffer != nil && (tab.Type == editor.TabMarkdown && !tab.MarkdownPreview || tab.Type == editor.TabFile) {
+			tab.Buffer.AddCursorAbove()
+			m.syncStatusBarWithActiveTab()
+		}
+
+	case "edit.add_cursor_below":
+		tab := m.TabManager.ActiveTab()
+		if tab != nil && tab.Buffer != nil && (tab.Type == editor.TabMarkdown && !tab.MarkdownPreview || tab.Type == editor.TabFile) {
+			tab.Buffer.AddCursorBelow()
+			m.syncStatusBarWithActiveTab()
+		}
+
+	case "edit.fold":
+		tab := m.TabManager.ActiveTab()
+		if tab != nil && tab.Buffer != nil && (tab.Type == editor.TabMarkdown && !tab.MarkdownPreview || tab.Type == editor.TabFile) {
+			row := tab.Buffer.CursorRow
+			if !tab.Buffer.ToggleFold(row) {
+				for i := row - 1; i >= 0; i-- {
+					if end, ok := tab.Buffer.FoldableAt(i); ok && end >= row {
+						tab.Buffer.ToggleFold(i)
+						break
+					}
+				}
+			}
+			tab.Buffer.ClampCursor()
+			m.syncStatusBarWithActiveTab()
+		}
+
+	case "edit.unfold":
+		tab := m.TabManager.ActiveTab()
+		if tab != nil && tab.Buffer != nil && (tab.Type == editor.TabMarkdown && !tab.MarkdownPreview || tab.Type == editor.TabFile) {
+			row := tab.Buffer.CursorRow
+			for i := row; i >= 0; i-- {
+				if tab.Buffer.IsFoldedAt(i) {
+					tab.Buffer.ToggleFold(i)
+					break
+				}
+			}
+			tab.Buffer.ClampCursor()
+			m.syncStatusBarWithActiveTab()
+		}
+
+	case "edit.fold_all":
+		tab := m.TabManager.ActiveTab()
+		if tab != nil && tab.Buffer != nil && (tab.Type == editor.TabMarkdown && !tab.MarkdownPreview || tab.Type == editor.TabFile) {
+			tab.Buffer.FoldAll()
+			tab.Buffer.ClampCursor()
+			m.syncStatusBarWithActiveTab()
+		}
+
+	case "edit.unfold_all":
+		tab := m.TabManager.ActiveTab()
+		if tab != nil && tab.Buffer != nil && (tab.Type == editor.TabMarkdown && !tab.MarkdownPreview || tab.Type == editor.TabFile) {
+			tab.Buffer.UnfoldAll()
+			tab.Buffer.ClampCursor()
+			m.syncStatusBarWithActiveTab()
+		}
 
 	case "search.global":
 		m.openGlobalSearch()

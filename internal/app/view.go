@@ -1,6 +1,8 @@
 package app
 
 import (
+	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -56,7 +58,7 @@ func (m Model) View() string {
 		baseView = overlayAt(baseView, dropBox, dropX, dropY, m.Width, m.Height)
 	}
 
-	// Overlay 2: Modals (QuickOpen, CommandPalette, GlobalSearch, Switcher, FilePicker, Input Dialog, Confirm Dialog, Help, or About)
+	// Overlay 2: Modals (QuickOpen, CommandPalette, GlobalSearch, GoToSymbol, Switcher, FilePicker, Input Dialog, Confirm Dialog, Help, or About)
 	if m.QuickOpen != nil && m.QuickOpen.Active {
 		modal := m.QuickOpen.Render()
 		baseView = overlayTopCenter(baseView, modal, m.Width, m.Height)
@@ -65,6 +67,9 @@ func (m Model) View() string {
 		baseView = overlayTopCenter(baseView, modal, m.Width, m.Height)
 	} else if m.GlobalSearch != nil && m.GlobalSearch.Active {
 		modal := m.GlobalSearch.Render()
+		baseView = overlayTopCenter(baseView, modal, m.Width, m.Height)
+	} else if m.GoToSymbolActive {
+		modal := m.renderGoToSymbol()
 		baseView = overlayTopCenter(baseView, modal, m.Width, m.Height)
 	} else if m.Switcher.Active {
 		modal := m.Switcher.Render()
@@ -319,19 +324,26 @@ func renderHelpModal() string {
   • Alt+I           : Pengaturan AI Model (OpenAI API Format)
   • ? / Esc         : Buka Bantuan / Tutup Dialog Pop-up
 
-Pencarian & File:
+Pencarian & Navigasi Kode:
   • F1 / Ctrl+Shift+P : Buka Command Palette Lengkap
   • Ctrl+P          : Buka Cepat File Workspace (Quick Open)
-  • Ctrl+F          : Cari Teks di Buffer Editor
-  • Ctrl+H          : Cari & Ganti Teks di Buffer Editor
+  • Ctrl+Shift+O    : Go to Symbol (workspace)
+  • F12 / Shift+F12 : Go to Definition / Find References
+  • Ctrl+F / Ctrl+H : Cari / Cari & Ganti Teks di Buffer
   • Ctrl+G          : Lompat ke Nomor Baris (Go to Line)
   • F4              : Cari Teks Global di Seluruh Workspace
-  • Ctrl+O / Ctrl+K : Buka File / Buka Folder Baru
+  • Ctrl+O          : Buka File Baru dari Disk (File Picker)
+  • Ctrl+K, Ctrl+K  : Buka Direktori / Folder Baru di Workspace
 
 Editor & Buffer:
   • Ctrl+Z / Ctrl+Y : Undo / Redo Perubahan Teks
   • Tab / Shift+Tab : Indent / Outdent 4 Karakter Spasi
   • Ctrl+/          : Toggle Komentar Baris Otomatis
+  • Ctrl+Shift+D    : Tambah kursor pada occurrence berikutnya
+  • Ctrl+Alt+Up/Dn  : Tambah kursor di baris atas / bawah
+  • Ctrl+Shift+[ / ]: Fold / Unfold blok di kursor
+  • Ctrl+K Ctrl+0/J : Fold All / Unfold All
+  • Klik Gutter Fold: Toggle lipat blok (marker ▸/▾)
   • Ctrl+S / Ctrl+W : Simpan Buffer / Tutup Tab Aktif
   • Ctrl+Shift+I    : Format Dokumen Otomatis (via CLI)
   • Ctrl+M / Alt+M  : Toggle Pratinjau Markdown (Glamour)
@@ -485,4 +497,48 @@ func overlayTopCenter(base, modal string, totalW, totalH int) string {
 
 func placeCenter(base, modal string, totalW, totalH int) string {
 	return overlayCenter(base, modal, totalW, totalH)
+}
+
+
+func (m Model) renderGoToSymbol() string {
+	if !m.GoToSymbolActive {
+		return ""
+	}
+	width := 72
+	if m.Width > 0 && m.Width-8 < width {
+		width = m.Width - 8
+	}
+	if width < 40 {
+		width = 40
+	}
+	title := ui.CurrentTheme.TopMenuStyle.Bold(true).Render(" Go to Symbol (Ctrl+Shift+O) ")
+	queryLine := ui.CurrentTheme.StatusBarItemStyle.Render("❯ " + m.GoToSymbolQuery + "▌")
+	maxRows := 12
+	if len(m.GoToSymbolResults) == 0 {
+		body := ui.CurrentTheme.SidebarStyle.Render("  (tidak ada simbol)")
+		box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(ui.CurrentTheme.Accent).Padding(0, 1).Width(width).Render(title + "\n" + queryLine + "\n" + body)
+		return box
+	}
+	start := m.GoToSymbolScroll
+	if start < 0 { start = 0 }
+	end := start + maxRows
+	if end > len(m.GoToSymbolResults) { end = len(m.GoToSymbolResults) }
+	lines := make([]string, 0, end-start)
+	for i := start; i < end; i++ {
+		s := m.GoToSymbolResults[i]
+		rel := s.FilePath
+		if rp, err := filepath.Rel(m.RootDir, s.FilePath); err == nil {
+			rel = rp
+		}
+		label := fmt.Sprintf("%s  %s:%d", s.Name, rel, s.Line)
+		label = ansi.Truncate(label, width-4, "…")
+		if i == m.GoToSymbolSelected {
+			lines = append(lines, ui.CurrentTheme.TopMenuActiveItem.Render(" "+label+" "))
+		} else {
+			lines = append(lines, " "+label)
+		}
+	}
+	body := strings.Join(lines, "\n")
+	box := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(ui.CurrentTheme.Accent).Padding(0, 1).Width(width).Render(title + "\n" + queryLine + "\n" + body)
+	return box
 }

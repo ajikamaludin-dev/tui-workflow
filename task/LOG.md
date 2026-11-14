@@ -19,3 +19,4 @@
 | 2026-11-12 | Integrated PTY Terminal Tab | done | dev |
 | 2026-11-13 | Comprehensive UI-UX Refinement, Mouse Ergonomics, Resource Optimization and Documentation Sync | done | dev |
 | 2026-11-13 | P0 - Workspace/Session Persistence & Git Hunk-Level Diff Actions | done | dev |
+| 2026-11-14 | VSCode-like Navigation, Multi-Cursor Edit & Fold/Unfold (Path B — Symbol Index) | done | dev |

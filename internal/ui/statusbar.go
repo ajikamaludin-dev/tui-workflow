@@ -10,17 +10,18 @@ import (
 )
 
 type StatusBar struct {
-	AutoSave   bool
-	Branch     string
-	FilePath   string
-	Line       int
-	Col        int
-	FileSyntax string
-	Encoding   string
-	ToastMsg   string
-	ToastIsErr bool
-	ToastUntil time.Time
-	Width      int
+	AutoSave     bool
+	Branch       string
+	FilePath     string
+	Line         int
+	Col          int
+	FileSyntax   string
+	Encoding     string
+	ToastMsg     string
+	ToastIsErr   bool
+	ToastUntil   time.Time
+	Width        int
+	CursorCount  int
 }
 
 func NewStatusBar() *StatusBar {
@@ -129,7 +130,11 @@ func (s *StatusBar) Render() string {
 	} else {
 		fileInfo := CurrentTheme.StatusBarItemStyle.Render(s.FilePath)
 		posInfo := CurrentTheme.StatusBarItemStyle.Render(fmt.Sprintf("Ln %d, Col %d", s.Line, s.Col))
-		leftPart = autoSaveBadge + branchBadge + fileInfo + posInfo
+		cursorInfo := ""
+		if s.CursorCount > 1 {
+			cursorInfo = lipgloss.NewStyle().Foreground(CurrentTheme.Accent).Bold(true).Render(fmt.Sprintf(" %d cursors", s.CursorCount))
+		}
+		leftPart = autoSaveBadge + branchBadge + fileInfo + posInfo + cursorInfo
 	}
 
 	// Dynamic rightPart depending on available width

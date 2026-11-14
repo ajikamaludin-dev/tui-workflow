@@ -66,12 +66,23 @@
 - Klik tab editor untuk aktivasi dan tombol `[×]` untuk menutup tab.
 - Klik tombol `[+]` dan `[-]` pada Git sidebar.
 - Mouse wheel scrolling pada editor buffer, markdown preview, dan split diff view.
+- `Alt+Click` pada simbol untuk Go to Definition.
+- `Ctrl+Alt+Click` untuk menambah multi-cursor pada posisi klik.
+- Klik marker fold `▸`/`▾` di kolom 0 gutter untuk melipat/membuka blok kode.
 
 ### 8. 💻 Integrated Pseudo-Terminal (PTY) Tab
 - **Full PTY Shell:** Membuka sesi shell interaktif langsung di tab editor menggunakan `creack/pty` dan emulasi VT100/Xterm via `hinshun/vt10x`.
 - **Dukungan Coding Agent & TUI:** Berjalan mulus menjalankan TUI nested dan coding agent seperti `pi`, `claude`, `btop`, `git`, `python`, `node`.
 - **Zero Scroll Overflow:** Clamping visual width dengan `ansi.Truncate` menjamin render terminal tidak pernah meluap dari batas terminal.
 - **Isolasi Keystroke & Safe Teardown:** Aliran input raw terisolasi di tab terminal aktif tanpa konflik dengan editor; teardown bersih mematikan proses shell tanpa zombie process.
+
+### 9. 🧭 Navigasi Simbol, Multi-Cursor & Code Folding (Ala VS Code)
+- **In-Memory Symbol Index:** Pengindeksan simbol Go (AST), JavaScript/TypeScript/React (JSX/TSX), PHP, JSON (nested depth ≤ 10), dan Markdown headings tanpa dependensi LSP yang berat.
+- **Go to Definition (`F12` / `Alt+Click`):** Melompat langsung ke deklarasi fungsi, struct, class, method, konstanta, atau key JSON target.
+- **Find References (`Shift+F12`):** Mencari seluruh kemunculan simbol di seluruh workspace berbasis batas kata (*word-boundary*) dengan navigasi hasil instan.
+- **Go to Symbol (`Ctrl+Shift+O`):** Modal pencarian cepat seluruh simbol workspace dengan filter pencarian real-time.
+- **Multi-Cursor Editing (`Ctrl+Shift+D`, `Ctrl+Alt+Up/Down`, `Ctrl+Alt+Click`):** Mengedit teks secara serentak di berbagai titik kursor sekaligus; tekan `Esc` untuk kembali ke single cursor.
+- **Indent-Based Code Folding (`za`, `Ctrl+Shift+[ / ]`, `Ctrl+K Ctrl+0/J`, `zM`/`zR`):** Melipat dan membuka blok kode dengan marker gutter interaktif `▸` / `▾`.
 
 ---
 
@@ -96,6 +107,9 @@
 | `Alt + A` | Buka Menu Top Bar **About** |
 | `F1` / `Ctrl + Shift + P` | Buka Command Palette (semua perintah dan aksi) |
 | `Ctrl + P` | Quick Open File di Workspace |
+| `Ctrl + Shift + O` | Go to Symbol di seluruh workspace |
+| `F12` | Go to Definition (simbol di bawah kursor / Alt+Click) |
+| `Shift + F12` | Find References di seluruh workspace |
 | `Ctrl + O` | Buka File Baru dari Disk (File Picker modal) |
 | `Ctrl + K` | Buka Direktori / Folder Baru di Workspace |
 | `F4` | Cari Teks Global di Seluruh Workspace (Global Search modal) |
@@ -119,6 +133,13 @@
 | `Ctrl + G` | Lompat ke baris dan kolom tertentu (Go to Line / Column) |
 | `Tab` / `Shift + Tab` | Indentasi / Outdentasi 4 spasi (mendukung seleksi multi-baris) |
 | `Ctrl + /` (`Ctrl + _`) | Toggle komentar baris atau blok seleksi otomatis sesuai bahasa |
+| `Ctrl + Shift + D` | Tambah kursor pada kemunculan kata berikutnya (Add Next Occurrence) |
+| `Ctrl + Alt + Up` / `Ctrl + Alt + Down` | Tambah kursor di baris atas / bawah |
+| `Esc` | Satukan multi-cursor kembali ke single kursor / bersihkan seleksi |
+| `Ctrl + Shift + [` / `Ctrl + Shift + ]` | Fold / Unfold blok kode pada posisi kursor |
+| `za` | Toggle fold / unfold blok kode pada posisi kursor |
+| `Ctrl + K, Ctrl + 0` / `zM` | Fold All (lipat semua blok terluar) |
+| `Ctrl + K, Ctrl + J` / `zR` | Unfold All (buka seluruh lipatan) |
 | `Ctrl + M` / `Alt + M` | Toggle mode Live Markdown Preview (Glamour) vs Raw Editor |
 | `Ctrl + A` / `Ctrl + C` / `Ctrl + V` | Pilih Semua / Salin / Tempel Teks Clipboard |
 | `Panah` / `Home` / `End` | Navigasi kursor per karakter dan baris |

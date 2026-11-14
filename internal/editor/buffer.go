@@ -21,9 +21,26 @@ type VisualLine struct {
 }
 
 type BufferSnapshot struct {
-	Lines     [][]rune
-	CursorRow int
-	CursorCol int
+	Lines        [][]rune
+	CursorRow    int
+	CursorCol    int
+	ExtraCursors []extraCursor
+}
+
+// extraCursor adalah cursor tambahan (multi-cursor) dengan selection sendiri.
+// Cursor utama (primary) tetap di Buffer.CursorRow/CursorCol + HasSelection.
+type extraCursor struct {
+	Row, Col         int
+	SelAnchorRow     int
+	SelAnchorCol     int
+	HasSelection     bool
+}
+
+// FoldRegion menyembunyikan baris (Start, End]; baris Start tetap terlihat
+// dan diberi marker ▸. Fold berbasis indentasi, per-tab, tidak dipersistenkan.
+type FoldRegion struct {
+	Start int
+	End   int
 }
 
 type Buffer struct {
@@ -59,6 +76,12 @@ type Buffer struct {
 	maxUndoStack int
 	typingGroup  bool
 	inUndoRedo   bool
+
+	// Multi-cursor state (primary selalu ada di CursorRow/CursorCol)
+	ExtraCursors []extraCursor
+
+	// Fold state (indent-based, hidden lines dilewati renderer)
+	Folded []FoldRegion
 }
 
 func NewBuffer(content string) *Buffer {
@@ -180,6 +203,15 @@ func cloneRuneLines(lines [][]rune) [][]rune {
 	return res
 }
 
+func cloneExtraCursors(cs []extraCursor) []extraCursor {
+	if len(cs) == 0 {
+		return nil
+	}
+	out := make([]extraCursor, len(cs))
+	copy(out, cs)
+	return out
+}
+
 func (b *Buffer) endTypingGroup() {
 	b.typingGroup = false
 }
@@ -192,9 +224,10 @@ func (b *Buffer) pushUndo() {
 		b.maxUndoStack = 100
 	}
 	snap := BufferSnapshot{
-		Lines:     cloneRuneLines(b.Lines),
-		CursorRow: b.CursorRow,
-		CursorCol: b.CursorCol,
+		Lines:        cloneRuneLines(b.Lines),
+		CursorRow:    b.CursorRow,
+		CursorCol:    b.CursorCol,
+		ExtraCursors: cloneExtraCursors(b.ExtraCursors),
 	}
 	b.undoStack = append(b.undoStack, snap)
 	if len(b.undoStack) > b.maxUndoStack {
@@ -209,9 +242,10 @@ func (b *Buffer) Undo() bool {
 		return false
 	}
 	currSnap := BufferSnapshot{
-		Lines:     cloneRuneLines(b.Lines),
-		CursorRow: b.CursorRow,
-		CursorCol: b.CursorCol,
+		Lines:        cloneRuneLines(b.Lines),
+		CursorRow:    b.CursorRow,
+		CursorCol:    b.CursorCol,
+		ExtraCursors: cloneExtraCursors(b.ExtraCursors),
 	}
 	b.redoStack = append(b.redoStack, currSnap)
 	if len(b.redoStack) > b.maxUndoStack {
@@ -226,7 +260,9 @@ func (b *Buffer) Undo() bool {
 	b.Lines = cloneRuneLines(snap.Lines)
 	b.CursorRow = snap.CursorRow
 	b.CursorCol = snap.CursorCol
+	b.ExtraCursors = cloneExtraCursors(snap.ExtraCursors)
 	b.clampCursor()
+	b.clampExtraCursors()
 	b.ClearSelection()
 	b.IsDirty = true
 	b.markContentChanged()
@@ -240,9 +276,10 @@ func (b *Buffer) Redo() bool {
 		return false
 	}
 	currSnap := BufferSnapshot{
-		Lines:     cloneRuneLines(b.Lines),
-		CursorRow: b.CursorRow,
-		CursorCol: b.CursorCol,
+		Lines:        cloneRuneLines(b.Lines),
+		CursorRow:    b.CursorRow,
+		CursorCol:    b.CursorCol,
+		ExtraCursors: cloneExtraCursors(b.ExtraCursors),
 	}
 	b.undoStack = append(b.undoStack, currSnap)
 	if len(b.undoStack) > b.maxUndoStack {
@@ -257,7 +294,9 @@ func (b *Buffer) Redo() bool {
 	b.Lines = cloneRuneLines(snap.Lines)
 	b.CursorRow = snap.CursorRow
 	b.CursorCol = snap.CursorCol
+	b.ExtraCursors = cloneExtraCursors(snap.ExtraCursors)
 	b.clampCursor()
+	b.clampExtraCursors()
 	b.ClearSelection()
 	b.IsDirty = true
 	b.markContentChanged()
@@ -287,6 +326,15 @@ func (b *Buffer) insertRuneInternal(r rune) {
 }
 
 func (b *Buffer) InsertRune(r rune) {
+	if b.HasMultipleCursors() {
+		b.endTypingGroup()
+		b.pushUndo()
+		b.applyToAllCursors(func() { b.insertRuneInternal(r) })
+		if unicode.IsSpace(r) {
+			b.endTypingGroup()
+		}
+		return
+	}
 	if b.HasSelection {
 		b.endTypingGroup()
 		b.pushUndo()
@@ -327,6 +375,18 @@ func (b *Buffer) insertNewlineInternal() {
 func (b *Buffer) InsertString(s string) {
 	b.endTypingGroup()
 	b.pushUndo()
+	if b.HasMultipleCursors() {
+		b.applyToAllCursors(func() {
+			for _, r := range s {
+				if r == '\n' {
+					b.insertNewlineInternal()
+				} else {
+					b.insertRuneInternal(r)
+				}
+			}
+		})
+		return
+	}
 	if b.HasSelection {
 		b.deleteSelectionInternal()
 	}
@@ -342,6 +402,10 @@ func (b *Buffer) InsertString(s string) {
 func (b *Buffer) InsertNewline() {
 	b.endTypingGroup()
 	b.pushUndo()
+	if b.HasMultipleCursors() {
+		b.applyToAllCursors(b.insertNewlineInternal)
+		return
+	}
 	if b.HasSelection {
 		b.deleteSelectionInternal()
 	}
@@ -351,10 +415,18 @@ func (b *Buffer) InsertNewline() {
 func (b *Buffer) Backspace() {
 	b.endTypingGroup()
 	b.pushUndo()
+	if b.HasMultipleCursors() {
+		b.applyToAllCursors(b.backspaceInternal)
+		return
+	}
 	if b.HasSelection {
 		b.deleteSelectionInternal()
 		return
 	}
+	b.backspaceInternal()
+}
+
+func (b *Buffer) backspaceInternal() {
 	b.clampCursor()
 
 	if b.CursorCol > 0 {
@@ -391,10 +463,18 @@ func (b *Buffer) Backspace() {
 func (b *Buffer) Delete() {
 	b.endTypingGroup()
 	b.pushUndo()
+	if b.HasMultipleCursors() {
+		b.applyToAllCursors(b.deleteInternal)
+		return
+	}
 	if b.HasSelection {
 		b.deleteSelectionInternal()
 		return
 	}
+	b.deleteInternal()
+}
+
+func (b *Buffer) deleteInternal() {
 	b.clampCursor()
 
 	line := b.Lines[b.CursorRow]
@@ -422,6 +502,7 @@ func (b *Buffer) Delete() {
 
 func (b *Buffer) MoveLeft() {
 	b.endTypingGroup()
+	b.CollapseCursors()
 	if b.CursorCol > 0 {
 		b.CursorCol--
 	} else if b.CursorRow > 0 {
@@ -432,6 +513,7 @@ func (b *Buffer) MoveLeft() {
 
 func (b *Buffer) MoveRight() {
 	b.endTypingGroup()
+	b.CollapseCursors()
 	if b.CursorRow < len(b.Lines) {
 		if b.CursorCol < len(b.Lines[b.CursorRow]) {
 			b.CursorCol++
@@ -448,6 +530,7 @@ func isWordChar(r rune) bool {
 
 func (b *Buffer) MoveWordLeft() {
 	b.endTypingGroup()
+	b.CollapseCursors()
 	if b.CursorRow < 0 || b.CursorRow >= len(b.Lines) {
 		return
 	}
@@ -488,6 +571,7 @@ func (b *Buffer) MoveWordLeft() {
 
 func (b *Buffer) MoveWordRight() {
 	b.endTypingGroup()
+	b.CollapseCursors()
 	if b.CursorRow < 0 || b.CursorRow >= len(b.Lines) {
 		return
 	}
@@ -533,27 +617,37 @@ func (b *Buffer) MoveWordRight() {
 
 func (b *Buffer) MoveUp() {
 	b.endTypingGroup()
-	if b.CursorRow > 0 {
+	b.CollapseCursors()
+	for b.CursorRow > 0 {
 		b.CursorRow--
-		b.clampCol()
+		if !b.IsHiddenLine(b.CursorRow) {
+			break
+		}
 	}
+	b.clampCol()
 }
 
 func (b *Buffer) MoveDown() {
 	b.endTypingGroup()
-	if b.CursorRow < len(b.Lines)-1 {
+	b.CollapseCursors()
+	for b.CursorRow < len(b.Lines)-1 {
 		b.CursorRow++
-		b.clampCol()
+		if !b.IsHiddenLine(b.CursorRow) {
+			break
+		}
 	}
+	b.clampCol()
 }
 
 func (b *Buffer) MoveHome() {
 	b.endTypingGroup()
+	b.CollapseCursors()
 	b.CursorCol = 0
 }
 
 func (b *Buffer) MoveEnd() {
 	b.endTypingGroup()
+	b.CollapseCursors()
 	if b.CursorRow >= 0 && b.CursorRow < len(b.Lines) {
 		b.CursorCol = len(b.Lines[b.CursorRow])
 	}
@@ -561,6 +655,7 @@ func (b *Buffer) MoveEnd() {
 
 func (b *Buffer) MovePageUp(n int) {
 	b.endTypingGroup()
+	b.CollapseCursors()
 	b.CursorRow -= n
 	if b.CursorRow < 0 {
 		b.CursorRow = 0
@@ -570,6 +665,7 @@ func (b *Buffer) MovePageUp(n int) {
 
 func (b *Buffer) MovePageDown(n int) {
 	b.endTypingGroup()
+	b.CollapseCursors()
 	b.CursorRow += n
 	if b.CursorRow >= len(b.Lines) {
 		b.CursorRow = len(b.Lines) - 1
@@ -585,6 +681,7 @@ func (b *Buffer) clampCursor() {
 		b.CursorRow = len(b.Lines) - 1
 	}
 	b.clampCol()
+	b.clampExtraCursors()
 }
 
 func (b *Buffer) clampCol() {
@@ -818,18 +915,24 @@ func (b *Buffer) RowColFromVisual(relY, textX, textWidth int) (int, int) {
 		textX = 0
 	}
 	if !b.SoftWrap {
+		visible := make([]int, 0, len(b.Lines))
+		for i := range b.Lines {
+			if !b.IsHiddenLine(i) {
+				visible = append(visible, i)
+			}
+		}
 		vIdx := b.ScrollRow + relY
 		if vIdx < 0 {
 			vIdx = 0
 		}
-		if vIdx >= len(b.Lines) {
-			if len(b.Lines) == 0 {
+		if vIdx >= len(visible) {
+			if len(visible) == 0 {
 				return 0, 0
 			}
-			lastRow := len(b.Lines) - 1
+			lastRow := visible[len(visible)-1]
 			return lastRow, len(b.Lines[lastRow])
 		}
-		physRow := vIdx
+		physRow := visible[vIdx]
 		pLine := b.Lines[physRow]
 		curVis := 0
 		for c, r := range pLine {
@@ -877,6 +980,9 @@ func (b *Buffer) ComputeVisualLines(textWidth int) []VisualLine {
 
 	var vLines []VisualLine
 	for pIdx, pLine := range b.Lines {
+		if b.IsHiddenLine(pIdx) {
+			continue
+		}
 		if len(pLine) == 0 {
 			vLines = append(vLines, VisualLine{
 				PhysicalLineIdx: pIdx,
@@ -979,16 +1085,11 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 	// 4. Find visual cursor index
 	visualCursorRow := 0
 	visualCursorCol := 0
-	if !b.SoftWrap {
-		visualCursorRow = b.CursorRow
-		visualCursorCol = b.CursorCol - b.ScrollCol
-	} else {
-		for vIdx, vl := range vLines {
-			if vl.PhysicalLineIdx == b.CursorRow && b.CursorCol >= vl.StartCol && b.CursorCol <= vl.EndCol {
-				visualCursorRow = vIdx
-				visualCursorCol = b.CursorCol - vl.StartCol
-				break
-			}
+	for vIdx, vl := range vLines {
+		if vl.PhysicalLineIdx == b.CursorRow && b.CursorCol >= vl.StartCol && b.CursorCol <= vl.EndCol {
+			visualCursorRow = vIdx
+			visualCursorCol = b.CursorCol - vl.StartCol
+			break
 		}
 	}
 
@@ -1047,10 +1148,19 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 		var gutterText string
 		if !vl.IsContinuation {
 			lineNum := vl.PhysicalLineIdx + 1
+			marker := " "
+			if end, ok := b.FoldableAt(vl.PhysicalLineIdx); ok {
+				if b.IsFoldedAt(vl.PhysicalLineIdx) {
+					marker = "▸"
+				} else {
+					marker = "▾"
+					_ = end
+				}
+			}
 			if vl.PhysicalLineIdx == b.CursorRow && focused {
-				gutterText = gutterActiveStyle.Render(fmt.Sprintf(" %*d │ ", gutterDigits, lineNum))
+				gutterText = gutterActiveStyle.Render(fmt.Sprintf("%s%*d │ ", marker, gutterDigits, lineNum))
 			} else {
-				gutterText = gutterStyle.Render(fmt.Sprintf(" %*d │ ", gutterDigits, lineNum))
+				gutterText = gutterStyle.Render(fmt.Sprintf("%s%*d │ ", marker, gutterDigits, lineNum))
 			}
 		} else {
 			gutterText = gutterStyle.Render(fmt.Sprintf(" %*s ┊ ", gutterDigits, " "))
@@ -1063,9 +1173,25 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 		activeStyle := ""
 
 		curVisualCol := 0
+		secondaryCursorStyle := lipgloss.NewStyle().
+			Foreground(ui.CurrentTheme.FgHighlight).
+			Background(ui.CurrentTheme.Accent)
+		extraCursorHere := func(physCol int) bool {
+			if physRow < 0 || physRow >= len(b.Lines) {
+				return false
+			}
+			_ = physRow
+			for _, e := range b.ExtraCursors {
+				if e.Row == physRow && e.Col == physCol {
+					return true
+				}
+			}
+			return false
+		}
 		for cIdx, r := range lineRunes {
 			physCol := vl.StartCol + cIdx
 			isCursor := vIdx == visualCursorRow && cIdx == visualCursorCol && focused
+			isExtraCursor := !isCursor && focused && !b.HasSelection && extraCursorHere(physCol)
 			isSelected := b.IsSelected(physRow, physCol)
 			isMatch, isActiveMatch := b.MatchAt(physRow, physCol)
 
@@ -1089,6 +1215,19 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 					}
 				} else {
 					textPart.WriteString(cursorIBeamStyle.Render(rStr))
+				}
+			} else if isExtraCursor {
+				if activeStyle != "" {
+					textPart.WriteString("\x1b[0m")
+					activeStyle = ""
+				}
+				if r == '\t' {
+					textPart.WriteString(secondaryCursorStyle.Render(" "))
+					if rw > 1 {
+						textPart.WriteString(strings.Repeat(" ", rw-1))
+					}
+				} else {
+					textPart.WriteString(secondaryCursorStyle.Render(rStr))
 				}
 			} else if isSelected {
 				if activeStyle != "" {
@@ -1141,6 +1280,14 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 
 		if vIdx == visualCursorRow && focused && !b.HasSelection && visualCursorCol >= len(lineRunes) {
 			textPart.WriteString(cursorIBeamStyle.Render("│"))
+		}
+		if focused && !b.HasSelection {
+			for _, e := range b.ExtraCursors {
+				if e.Row == physRow && e.Col >= vl.StartCol+len(lineRunes) && e.Col <= vl.EndCol {
+					textPart.WriteString(secondaryCursorStyle.Render("│"))
+					break
+				}
+			}
 		}
 
 		plainTextLen := ansi.StringWidth(textPart.String())

@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -404,4 +405,86 @@ func (sv *SearchView) Render(width, height int, focused bool) string {
 	)
 
 	return body
+}
+
+// DoSearchWord mengisi Matches dengan semua kemunculan kata utuh (word-boundary,
+// case-insensitive). Dipakai untuk "Find References" (Shift+F12).
+func (sv *SearchView) DoSearchWord(word string) {
+	sv.FindInput.SetValue(word)
+	word = strings.TrimSpace(word)
+	if word == "" || sv.RootDir == "" {
+		sv.Matches = make([]SearchMatch, 0)
+		sv.TotalFound = 0
+		sv.Selected = 0
+		sv.ScrollTop = 0
+		return
+	}
+
+	re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(word) + `\b`)
+	var matches []SearchMatch
+
+	_ = filepath.WalkDir(sv.RootDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		name := d.Name()
+		if d.IsDir() {
+			if strings.HasPrefix(name, ".") || name == "node_modules" || name == "vendor" || name == "dist" || name == "bin" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		info, err := d.Info()
+		if err != nil || info.Size() > 10*1024*1024 || info.Size() == 0 {
+			return nil
+		}
+
+		f, err := os.Open(path)
+		if err != nil {
+			return nil
+		}
+		defer f.Close()
+
+		buf := make([]byte, 512)
+		n, err := f.Read(buf)
+		if err != nil && err != io.EOF {
+			return nil
+		}
+		if bytes.IndexByte(buf[:n], 0) != -1 {
+			return nil
+		}
+
+		_, _ = f.Seek(0, 0)
+		scanner := bufio.NewScanner(f)
+		lineNum := 1
+		relPath, _ := filepath.Rel(sv.RootDir, path)
+		if relPath == "" {
+			relPath = filepath.Base(path)
+		}
+
+		for scanner.Scan() {
+			lineText := scanner.Text()
+			loc := re.FindStringIndex(lineText)
+			if loc != nil {
+				matches = append(matches, SearchMatch{
+					FilePath:   path,
+					RelPath:    relPath,
+					LineNumber: lineNum,
+					ColNumber:  loc[0] + 1,
+					LineText:   strings.TrimSpace(lineText),
+				})
+				if len(matches) >= 500 {
+					return fmt.Errorf("limit reached")
+				}
+			}
+			lineNum++
+		}
+		return nil
+	})
+
+	sv.Matches = matches
+	sv.TotalFound = len(matches)
+	sv.Selected = 0
+	sv.ScrollTop = 0
 }

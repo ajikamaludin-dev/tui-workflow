@@ -68,13 +68,12 @@ Mulai sekarang, semua AI agent yang bekerja di repo ini berperan sebagai **Go & 
 - File Safety Guards: Penolakan file biner (null byte 512B) dan batas ukuran file maks 10 MB.
 - Git Source Control: Sidebar tab `[ 1:Files | 2:Git ]` (`Alt+1`/`Alt+2`), staging `[+]`/`[-]`, commit box (`Ctrl+Enter`), riwayat commit.
 - Side-by-Side Split Diff tab di editor pane (LCS diff, sinkronisasi scroll baris).
+- Intelligent Code Assistance: Indent Rainbow (visual nesting guide), Snippet Engine (ES7/React template expander), Linter Diagnostics Bridge (ESLint/Biome CLI), dan Generic LSP Client (JSON-RPC 2.0 stdio: Auto-import, suggestions popup, Go to Definition).
 - Mouse Support Penuh: Klik menu, sidebar tab, tree node, editor tab, stage button, dan mouse wheel scrolling.
 
 ### OUT — Jangan dikerjakan di v1:
 - Integrasi remote git (`git push`, `git pull`, `git fetch`, SSH keys auth).
-- Terminal multiplexer / embedded shell PTY di dalam editor pane.
-- LSP (Language Server Protocol) atau auto-complete engine kompleks.
-- Plugin system dinamis (Lua / WASM).
+- Plugin system dinamis eksternal (Lua / WASM dynamic extensions).
 - Vim modal keybindings (Vim mode).
 
 ---

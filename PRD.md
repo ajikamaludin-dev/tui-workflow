@@ -21,6 +21,8 @@
 | **Git Engine** | `github.com/go-git/go-git/v5` | v5.13+ | Pure Go Git implementation for status, diff, staging, commit, and log history |
 | **File System I/O** | Standard Library (`os`, `path/filepath`, `io`) | Go 1.24 | Safe cross-platform directory traversal and file I/O |
 | **PTY & Terminal Emulation** | `github.com/creack/pty`, `github.com/hinshun/vt10x` | v1.1+, v0.0+ | Pseudo-terminal allocation, shell process spawning, ANSI/VT100 screen emulation |
+| **Language Intelligence & LSP** | JSON-RPC 2.0 Client (`os/exec`, `bufio`, `encoding/json`) | Go 1.24 | Generic LSP client over stdio, diagnostics parser, auto-import, completion |
+| **Code Assistance** | Custom Indent Guide & Snippet Expander | Pure Go | Visual indentation tinting, nested block guidance, tab-stop template expansion |
 
 ---
 
@@ -242,6 +244,49 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
    - **Find References (`Shift+F12`):** Mencari seluruh kemunculan simbol di seluruh workspace berbasis batas kata (*word-boundary*), menampilkan hasil di sidebar Search, dan memfokuskan daftar kecocokan untuk navigasi cepat.
    - **Go to Symbol (`Ctrl+Shift+O`):** Dialog pencarian cepat simbol seluruh workspace dengan filter pencarian real-time dan navigasi instan.
 
+#### H. Intelligent Code Assistance & LSP Integration Suite
+Menghadirkan ergonomi pengembangan modern setara VS Code ke dalam terminal melalui kombinasi pure Go buffer decorators, asynchronous linter worker, dan generic LSP client.
+
+1. **Visual Indentation Guide & Indent Rainbow (`oderwat.indent-rainbow` Clone):**
+   - **Mekanisme Rendering:** Terintegrasi langsung pada pipeline rendering baris di `internal/editor/buffer.go` tanpa alokasi memori berulang (< 0.1 ms per frame).
+   - **Tingkat Indentasi & Siklus Warna:** Menghitung kedalaman indentasi `level = leading_spaces / tabSize`. Setiap level diberi warna ANSI latar/teks berputar (cycle palette 4–6 warna: contoh `#E5C07B`, `#61AFEF`, `#C678DD`, `#98C379` dengan tint lembut).
+   - **Deteksi Kesalahan Indentasi (Error Guard):** Jika spasi awal tidak habis dibagi `tabSize` (`leading_spaces % tabSize != 0`) atau terdapat kombinasi tab dan spasi ilegal, blok indentasi disorot dengan warna peringatan merah tegas (`#E06C75`).
+   - **Toggle Configuration:** Dapat diaktifkan/dinonaktifkan melalui config atau menu `[Setting] ➔ Toggle Indent Rainbow`.
+
+2. **React & Component Snippet Expander (`dsznajder.es7-react-js-snippets` Clone):**
+   - **Katalog Snippet Bawaan:** Mendukung ekspansi cepat boilerplate komponen React/JS/TS:
+     - `rafce`: *React Arrow Function Component with Export*.
+     - `rfce`: *React Function Component with Export*.
+     - `rcc`: *React Class Component*.
+     - `useState`, `useEffect`, `useCallback`, `useMemo`: Scaffolding deklarasi React hooks lengkap.
+   - **Alur Interaksi:** Mengetik prefix kata kunci lalu menekan `Tab` atau `Enter` secara instan menggantikan prefix dengan template snippet.
+   - **Tab-Stop Navigation:** Mendukung penanda posisi `$1`, `$2`, ..., `$0`. Tombol `Tab` melompat ke tab-stop berikutnya, dan `Shift+Tab` kembali ke tab-stop sebelumnya.
+   - **Transformasi Dinamis:** Nama komponen otomatis disesuaikan dengan nama file aktif (contoh file `UserProfile.jsx` otomatis menghasilkan nama komponen `UserProfile`).
+
+3. **Workspace Linter & Diagnostics Bridge (`dbaeumer.vscode-eslint` Clone):**
+   - **Asynchronous Execution:** Background worker via `tea.Cmd` mengeksekusi CLI linter proyek (`npx eslint --format json` atau `biome lint --reporter=json`) secara non-blocking saat buffer disimpan (`Ctrl+S`) atau setelah jeda pengetikan (debounced 500 ms).
+   - **Gutter Indicators:** Menampilkan visual dot pada gutter nomor baris di editor pane:
+     - `●` (Merah): Error kritis / syntax / rules pelanggaran keras.
+     - `▲` (Kuning): Warning / deprecated / code style warning.
+     - `ℹ` (Biru): Information / hint diagnostik.
+   - **Status Bar Integration:** Ketika kursor berada pada baris yang memiliki masalah diagnostik, pesan linter detail (beserta nama rule, misal `react-hooks/rules-of-hooks`) ditampilkan di status bar bawah dan dipotong aman via `ansi.Truncate`.
+   - **Auto-Fix on Save:** Opsi eksekusi otomatis `eslint --fix` / `biome check --write` saat format document atau simpan file.
+
+4. **Generic LSP Client Engine (Language Server Protocol Client):**
+   - **Protokol & Konektivitas:** Mengimplementasikan klien JSON-RPC 2.0 ringan murni Go melalui komunikasi STDIN/STDOUT terhadap language server lokal yang terpasang di sistem pengguna (contoh: `typescript-language-server --stdio`, `biome lsp`, `gopls`, `pyright-langserver --stdio`).
+   - **Siklus Hidup Server (Lifecycle):** Otomatis mendeteksi jenis file dan menjalankan server terkait: mengirim request `initialize`, `initialized`, `textDocument/didOpen`, sinkronisasi perubahan dokumen `textDocument/didChange`, dan `textDocument/didClose`.
+   - **Floating Autocomplete / Suggestion Popup:**
+     - Dipicu saat mengetik karakter identifier atau karakter pemicu (`.`, `<`, `/`, `@`, dsb.).
+     - Menampilkan floating popup menu tepat di bawah posisi kursor aktif dengan batas visual layar teruji (*zero flicker & safe screen boundary clamping*).
+     - Menampilkan ikon jenis item (Function `󰊕`, Variable `󰫧`, Component `󰡱`, Keyword `󰌆`).
+     - Navigasi pilihan via panah `Up` / `Down`, konfirmasi pemilihan via `Enter` atau `Tab`, pembatalan via `Esc`.
+   - **Auto-Import on Completion Resolve:**
+     - Ketika pengguna memilih item autocomplete yang belum di-import, klien mengirim `completionItem/resolve`.
+     - Mengambil `additionalTextEdits` dari language server dan menerapkan manipulasi edit secara otomatis pada baris `import` di bagian atas buffer tanpa merusak posisi kursor aktif.
+   - **LSP Go to Definition (`F12` / `Alt+Click`):**
+     - Mengirim request `textDocument/definition` ke language server untuk resolusi tipe, import kompleks, HOC, dan node modules.
+     - Terintegrasi mulus dengan In-Memory Symbol Index (Path B) sebagai mekanisme fallback instan jika server LSP belum siap atau tidak tersedia.
+
 ### 4.4. Auto-Save & Dialog Unsaved Changes
 
 #### A. Auto-Save on Focus Change
@@ -373,6 +418,16 @@ tui-workflow/
 │   │   └── search.go            # Global workspace text search & replace view
 │   └── terminal/
 │       └── terminal.go          # Embedded PTY terminal subshell runner
+│   ├── lsp/
+│   │   ├── client.go            # JSON-RPC 2.0 stdio client & server process lifecycle
+│   │   ├── protocol.go          # LSP types (InitializeParams, CompletionItem, Location, etc.)
+│   │   └── completion.go        # Floating autocomplete popup model & view
+│   ├── snippet/
+│   │   ├── engine.go            # Snippet expander engine & tab-stop tracker
+│   │   └── catalog.go           # Embedded React/JS/TS/Go snippet definitions
+│   └── linter/
+│       ├── bridge.go            # Asynchronous CLI linter worker (ESLint, Biome)
+│       └── diagnostic.go        # Diagnostic marker structures & gutter overlay
 ├── docs/
 │   └── architecture.md
 ├── PRD.md
@@ -416,6 +471,11 @@ tui-workflow/
   - Unit test untuk file operations, buffer manipulation, git status parser.
   - Benchmarking rendering performance pada terminal besar.
   - Edge case testing: rapid resize, empty repository, permission errors.
+- **Fase 7: Intelligent Code Assistance & LSP Integration Suite**
+  - Implementasi Indent Rainbow pada rendering buffer dengan pemetaan palet warna bertingkat dan deteksi error spasi.
+  - Implementasi Snippet Engine berbasis tab-stop navigation untuk boilerplate React & JS.
+  - Implementasi Asynchronous Linter Bridge (ESLint/Biome CLI) dengan gutter indicators (`●`/`▲`) dan status bar warning.
+  - Implementasi Generic LSP Client (JSON-RPC 2.0 stdio) untuk floating suggestion popup, auto-import on completion resolve, dan LSP-backed Go to Definition.
 
 ---
 

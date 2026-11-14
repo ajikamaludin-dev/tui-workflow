@@ -14,6 +14,11 @@ import (
 
 const SessionSchemaVersion = 1
 
+// SessionIndexFileName is the standalone index file mapping workspaces to
+// their session files. It is intentionally kept out of config.json so that
+// session bookkeeping never rewrites user preferences.
+const SessionIndexFileName = "session-index.json"
+
 type SessionTab struct {
 	Path            string `json:"path"`
 	Type            string `json:"type"` // file|markdown
@@ -94,6 +99,111 @@ func ensureSessionIndex(idx *SessionIndex) *SessionIndex {
 	return idx
 }
 
+func sessionIndexFilePath() (string, error) {
+	dir, err := GetConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, SessionIndexFileName), nil
+}
+
+// loadSessionIndex reads the standalone session index, migrating the legacy
+// embedded "session_index" key from config.json once if needed.
+func loadSessionIndex() (*SessionIndex, error) {
+	dir, err := GetConfigDir()
+	if err != nil {
+		return nil, err
+	}
+	idxPath := filepath.Join(dir, SessionIndexFileName)
+	data, err := os.ReadFile(idxPath)
+	if errors.Is(err, os.ErrNotExist) {
+		legacy, lErr := migrateSessionIndexFromConfig()
+		if lErr == nil {
+			return legacy, nil
+		}
+		return ensureSessionIndex(nil), nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var idx SessionIndex
+	if err := json.Unmarshal(data, &idx); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", idxPath, err)
+	}
+	return ensureSessionIndex(&idx), nil
+}
+
+func saveSessionIndex(idx *SessionIndex) error {
+	if idx == nil {
+		return nil
+	}
+	idx = ensureSessionIndex(idx)
+	idxPath, err := sessionIndexFilePath()
+	if err != nil {
+		return err
+	}
+	dir := filepath.Dir(idxPath)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(idx, "", "  ")
+	if err != nil {
+		return err
+	}
+	return atomicWriteFile(idxPath, data, 0o600)
+}
+
+// migrateSessionIndexFromConfig moves the legacy embedded "session_index" key
+// out of config.json into session-index.json once. It rewrites config.json
+// preserving every other key; if that fails it leaves config.json untouched
+// and reports the error so the caller never clobbers user preferences.
+func migrateSessionIndexFromConfig() (*SessionIndex, error) {
+	cfgPath, err := GetConfigPath()
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(cfgPath)
+	if errors.Is(err, os.ErrNotExist) {
+		idx := ensureSessionIndex(nil)
+		if err := saveSessionIndex(idx); err != nil {
+			return nil, err
+		}
+		return idx, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("parse %s: %w", cfgPath, err)
+	}
+	legacyRaw, ok := raw["session_index"]
+	if !ok {
+		idx := ensureSessionIndex(nil)
+		if err := saveSessionIndex(idx); err != nil {
+			return nil, err
+		}
+		return idx, nil
+	}
+	var idx SessionIndex
+	if err := json.Unmarshal(legacyRaw, &idx); err != nil {
+		return nil, fmt.Errorf("parse embedded session_index: %w", err)
+	}
+	idx = *ensureSessionIndex(&idx)
+	if err := saveSessionIndex(&idx); err != nil {
+		return nil, err
+	}
+	delete(raw, "session_index")
+	rewritten, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	if err := atomicWriteFile(cfgPath, rewritten, 0o600); err != nil {
+		return nil, err
+	}
+	return &idx, nil
+}
+
 func sessionFilePathForRoot(root string) (string, string, error) {
 	dir, err := GetConfigDir()
 	if err != nil {
@@ -105,11 +215,10 @@ func sessionFilePathForRoot(root string) (string, string, error) {
 
 func LoadWorkspaceSession(root string) (*WorkspaceSession, error) {
 	root = canonicalRoot(root)
-	cfg, err := LoadConfig()
+	idx, err := loadSessionIndex()
 	if err != nil {
 		return nil, err
 	}
-	idx := ensureSessionIndex(cfg.SessionIndex)
 	entry, ok := idx.Workspaces[root]
 	dir, _ := GetConfigDir()
 
@@ -189,18 +298,14 @@ func LoadWorkspaceSession(root string) (*WorkspaceSession, error) {
 	// self-heal index if file found via fallback path
 	if dir != "" && foundPath != "" {
 		_ = os.MkdirAll(dir, 0o755)
-		if cfg.SessionIndex == nil {
-			cfg.SessionIndex = &SessionIndex{Version: SessionSchemaVersion, Workspaces: map[string]SessionIndexEntry{}}
-		}
-		cfg.SessionIndex = ensureSessionIndex(cfg.SessionIndex)
-		cfg.SessionIndex.Workspaces[root] = SessionIndexEntry{
+		idx.Workspaces[root] = SessionIndexEntry{
 			File:    filepath.Base(foundPath),
 			RootDir: root,
 			SavedAt: sess.SavedAt,
 			Version: sess.Version,
 		}
-		pruneSessionIndex(cfg.SessionIndex, dir)
-		_ = SaveConfig(cfg)
+		pruneSessionIndex(idx, dir)
+		_ = saveSessionIndex(idx)
 	}
 	return &sess, nil
 }
@@ -234,19 +339,18 @@ func SaveWorkspaceSession(root string, sess *WorkspaceSession) error {
 		return err
 	}
 
-	cfg, err := LoadConfig()
-	if err != nil {
-		cfg = DefaultConfig()
+	idx, idxErr := loadSessionIndex()
+	if idxErr != nil {
+		return idxErr
 	}
-	cfg.SessionIndex = ensureSessionIndex(cfg.SessionIndex)
-	cfg.SessionIndex.Workspaces[root] = SessionIndexEntry{
+	idx.Workspaces[root] = SessionIndexEntry{
 		File:    fileName,
 		RootDir: root,
 		SavedAt: sess.SavedAt,
 		Version: sess.Version,
 	}
-	pruneSessionIndex(cfg.SessionIndex, dir)
-	return SaveConfig(cfg)
+	pruneSessionIndex(idx, dir)
+	return saveSessionIndex(idx)
 }
 
 func pruneSessionIndex(idx *SessionIndex, dir string) {

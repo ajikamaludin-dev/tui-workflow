@@ -285,7 +285,7 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
 
 
 ### 4.6. Workspace/Session Persistence (P0, Metadata-only)
-1. **Storage (D1):** `~/.config/tui-workflow/config.json` sebagai index config/session (mapping root kanonik workspace → entry). Setiap workspace memiliki file session terpisah `~/.config/tui-workflow/session-<id>.json` (versioned, atomic write, deterministic, backward-compatible).
+1. **Storage (D1):** `~/.config/tui-workflow/config.json` menyimpan preferensi user saja (AI, autosave, dsb.). Index session (mapping root kanonik workspace → entry) dipisahkan ke `~/.config/tui-workflow/session-index.json`; pada pemakaian pertama setelah perubahan ini, kunci `session_index` legacy di `config.json` dimigrasikan otomatis ke `session-index.json` sekali jalan. Setiap workspace memiliki file session terpisah `~/.config/tui-workflow/session-<id>.json` (versioned, atomic write, deterministic, backward-compatible).
 2. **Data (D2):** Hanya metadata UI/workspace: tab file/markdown path-backed valid, active tab, cursor/scroll, status preview markdown, visibilitas/lebar/view sidebar, dan focus. Tidak menyimpan isi buffer dirty, PTY terminal, atau diff transien.
 3. **Startup Priority (D3):** Jika argumen CLI path eksplisit diberikan → restore session diutamakan. Tanpa argumen → restore session workspace terakhir; fallback ke perilaku default sebelumnya (termasuk auto-open `PRD.md` bila relevan) secara deterministik dan tanpa regresi.
 4. **Keamanan/Validasi:** File yang tidak ada, biner, atau >10MB dilewati saat restore dengan fallback non-blocking. Persist dilakukan saat event relevan (switch/close tab, resize/sidebar/focus, save, exit) dengan debounce.

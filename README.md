@@ -42,7 +42,7 @@
 - **Viewport Scrolling:** Navigasi scrolling preview via keyboard maupun mouse wheel.
 
 ### 4. 💾 Workspace/Session Persistence (P0)
-- **Session per Workspace:** Menyimpan dan memulihkan sesi kerja per root workspace secara deterministik (index di `~/.config/tui-workflow/config.json`, state per-workspace di `~/.config/tui-workflow/sessions/*.json`).
+- **Session per Workspace:** Menyimpan dan memulihkan sesi kerja per root workspace secara deterministik (index di `~/.config/tui-workflow/session-index.json`, state per-workspace di `~/.config/tui-workflow/session-<id>.json`). Preferensi user disimpan terpisah di `~/.config/tui-workflow/config.json`.
 - **State Dipulihkan:** Tab file/markdown path-backed valid, tab aktif, posisi kursor/scroll, mode preview markdown, visibilitas/lebar/view sidebar, dan fokus. Buffer dirty tidak diserialisasi.
 - **Prioritas Startup (CLI):** Argumen path eksplisit diprioritaskan; tanpa argumen, sesi workspace terakhir dipulihkan dengan fallback perilaku lama secara aman (skip file non-valid >10MB/biner/hilang tanpa crash).
 

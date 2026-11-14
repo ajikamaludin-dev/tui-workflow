@@ -34,7 +34,7 @@ func (m Model) handleCtrlSpace() (tea.Model, tea.Cmd) {
 		sidebarW = m.SidebarWidth
 	}
 	curX := sidebarW + gutterWidth + buf.CursorCol - buf.ScrollCol
-	curY := 2 + (buf.CursorRow - buf.ScrollRow) + 1
+	curY := 4 + (buf.CursorRow - buf.ScrollRow) + 1
 	if curX < 0 {
 		curX = 0
 	}
@@ -44,8 +44,8 @@ func (m Model) handleCtrlSpace() (tea.Model, tea.Cmd) {
 	if curY > m.Height-10 {
 		curY = curY - 10
 	}
-	if curY < 2 {
-		curY = 2
+	if curY < 4 {
+		curY = 4
 	}
 
 	// 1. Build local completions immediately (<0.1ms)
@@ -653,6 +653,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	case "ctrl+b":
 		m.SidebarVisible = !m.SidebarVisible
+		m.syncTabDimensions()
 		return m, nil
 
 	case "ctrl+e", "f6":
@@ -976,7 +977,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.syncStatusBarWithActiveTab()
 				return m, nil
 			case "down", "j":
-				tab.DiffView.ScrollDown(1, m.Height-3)
+				tab.DiffView.ScrollDown(1, m.Height-5)
 				m.syncStatusBarWithActiveTab()
 				return m, nil
 			case "pgup":
@@ -984,7 +985,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.syncStatusBarWithActiveTab()
 				return m, nil
 			case "pgdown":
-				tab.DiffView.ScrollDown(10, m.Height-3)
+				tab.DiffView.ScrollDown(10, m.Height-5)
 				m.syncStatusBarWithActiveTab()
 				return m, nil
 			case "home":
@@ -992,11 +993,11 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.syncStatusBarWithActiveTab()
 				return m, nil
 			case "n", "]":
-				tab.DiffView.NextHunk(m.Height - 3)
+				tab.DiffView.NextHunk(m.Height - 5)
 				m.syncStatusBarWithActiveTab()
 				return m, nil
 			case "N", "[":
-				tab.DiffView.PrevHunk(m.Height - 3)
+				tab.DiffView.PrevHunk(m.Height - 5)
 				m.syncStatusBarWithActiveTab()
 				return m, nil
 			case "s", "+":
@@ -1020,7 +1021,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.syncStatusBarWithActiveTab()
 				return m, nil
 			case "down", "j":
-				tab.MarkdownViewer.ScrollDown(1, m.Height-3)
+				tab.MarkdownViewer.ScrollDown(1, m.Height-5)
 				m.syncStatusBarWithActiveTab()
 				return m, nil
 			case "pgup":
@@ -1028,7 +1029,7 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.syncStatusBarWithActiveTab()
 				return m, nil
 			case "pgdown":
-				tab.MarkdownViewer.ScrollDown(10, m.Height-3)
+				tab.MarkdownViewer.ScrollDown(10, m.Height-5)
 				m.syncStatusBarWithActiveTab()
 				return m, nil
 			case "home":

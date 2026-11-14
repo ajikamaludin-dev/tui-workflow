@@ -21,14 +21,14 @@ func (m Model) View() string {
 		return RenderTooSmallWarning(m.Width, m.Height)
 	}
 
-	// 1. Top Menu Bar (Height = 1)
+	// 1. Top Menu Bar (Height = 2)
 	if m.Width > 0 && m.MenuBar != nil && m.MenuBar.Width != m.Width {
 		m.MenuBar.SetWidth(m.Width)
 	}
 	menuView := m.MenuBar.Render()
 
-	// 2. Middle Content (Height = Height - 2)
-	contentHeight := m.Height - 2
+	// 2. Middle Content (Height = Height - 3: 2 for Menu, 1 for Status Bar)
+	contentHeight := m.Height - 3
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
@@ -117,7 +117,7 @@ func (m Model) View() string {
 		if findX < editorStartX+1 {
 			findX = editorStartX + 1
 		}
-		baseView = overlayAt(baseView, barStr, findX, 1, m.Width, m.Height)
+		baseView = overlayAt(baseView, barStr, findX, 2, m.Width, m.Height)
 	}
 
 	// Overlay 3: Context Menu
@@ -133,9 +133,15 @@ func (m Model) View() string {
 	}
 
 	lines := strings.Split(baseView, "\n")
-	if len(lines) > m.Height {
-		baseView = strings.Join(lines[:m.Height], "\n")
+	for i, l := range lines {
+		if ansi.StringWidth(l) > m.Width {
+			lines[i] = ansi.Truncate(l, m.Width, "")
+		}
 	}
+	if len(lines) > m.Height {
+		lines = lines[:m.Height]
+	}
+	baseView = strings.Join(lines, "\n")
 
 	return baseView
 }
@@ -176,36 +182,68 @@ func (m Model) renderSidebar(width, height int) string {
 		Render(refreshBtn)
 	refreshRow = ansi.Truncate(refreshRow, width-1, "")
 
-	// 3. Bottom Tabs Footer (Row Height-2 in terminal)
+	// 3. Bottom Tabs Footer (Height = 2, 2x size)
 	tabActive := ui.CurrentTheme.SidebarTabActive.Padding(0, 0)
 	tabInactive := ui.CurrentTheme.SidebarTabInactive.Padding(0, 0)
 
 	var tabFiles, tabGit, tabSearch string
+	var indFiles, indGit, indSearch string
+
+	activeIndStyle := lipgloss.NewStyle().
+		Foreground(ui.CurrentTheme.Accent).
+		Background(ui.CurrentTheme.BgSidebar)
+
+	inactiveIndStyle := lipgloss.NewStyle().
+		Foreground(ui.CurrentTheme.BorderColor).
+		Background(ui.CurrentTheme.BgTopMenu)
+
+	filesW := lipgloss.Width(" 1:Files ")
+	gitW := lipgloss.Width(" 2:Git ")
+	searchW := lipgloss.Width(" 3:Search ")
+
 	if m.SidebarView == SidebarFiles {
 		tabFiles = tabActive.Render(" 1:Files ")
+		indFiles = activeIndStyle.Render(strings.Repeat("━", filesW))
 	} else {
 		tabFiles = tabInactive.Render(" 1:Files ")
+		indFiles = inactiveIndStyle.Render(strings.Repeat(" ", filesW))
 	}
 	if m.SidebarView == SidebarGit {
 		tabGit = tabActive.Render(" 2:Git ")
+		indGit = activeIndStyle.Render(strings.Repeat("━", gitW))
 	} else {
 		tabGit = tabInactive.Render(" 2:Git ")
+		indGit = inactiveIndStyle.Render(strings.Repeat(" ", gitW))
 	}
 	if m.SidebarView == SidebarSearch {
 		tabSearch = tabActive.Render(" 3:Search ")
+		indSearch = activeIndStyle.Render(strings.Repeat("━", searchW))
 	} else {
 		tabSearch = tabInactive.Render(" 3:Search ")
+		indSearch = inactiveIndStyle.Render(strings.Repeat(" ", searchW))
 	}
 
-	footerTabs := tabFiles + tabGit + tabSearch
-	footerLen := lipgloss.Width(footerTabs)
-	if footerLen < width-1 {
-		footerTabs += strings.Repeat(" ", width-1-footerLen)
-	}
-	footerTabs = ui.CurrentTheme.SidebarHeaderStyle.Width(width - 1).MaxHeight(1).Render(footerTabs)
-	footerTabs = ansi.Truncate(footerTabs, width-1, "")
+	footerRow1 := tabFiles + tabGit + tabSearch
+	footerRow2 := indFiles + indGit + indSearch
 
-	bodyHeight := height - 3
+	row1Len := lipgloss.Width(footerRow1)
+	if row1Len < width-1 {
+		footerRow1 += strings.Repeat(" ", width-1-row1Len)
+	}
+	row2Len := lipgloss.Width(footerRow2)
+	if row2Len < width-1 {
+		footerRow2 += strings.Repeat(" ", width-1-row2Len)
+	}
+
+	footerRow1 = ui.CurrentTheme.SidebarHeaderStyle.Width(width - 1).MaxHeight(1).Render(footerRow1)
+	footerRow1 = ansi.Truncate(footerRow1, width-1, "")
+
+	footerRow2 = ui.CurrentTheme.SidebarHeaderStyle.Width(width - 1).MaxHeight(1).Render(footerRow2)
+	footerRow2 = ansi.Truncate(footerRow2, width-1, "")
+
+	footerTabs := footerRow1 + "\n" + footerRow2
+
+	bodyHeight := height - 4
 	if bodyHeight < 1 {
 		bodyHeight = 1
 	}
@@ -256,7 +294,7 @@ func (m Model) renderSidebar(width, height int) string {
 	colContent := headerRow + "\n" + refreshRow + "\n" + body + "\n" + footerTabs
 
 	borderStyle := ui.CurrentTheme.SidebarStyle.
-		Width(width).
+		Width(width - 1).
 		Height(height)
 
 	if m.Focus == FocusSidebar {
@@ -267,11 +305,14 @@ func (m Model) renderSidebar(width, height int) string {
 }
 
 func (m Model) renderEditor(width, height int) string {
-	// 1. Tab Bar
+	// 1. Tab Bar (Height = 2)
 	tabBar := m.TabManager.RenderTabBar(width)
 
-	// 2. Editor Body
-	bodyHeight := height - 1
+	// 2. Editor Body (Remaining height)
+	bodyHeight := height - 2
+	if bodyHeight < 1 {
+		bodyHeight = 1
+	}
 	var body string
 
 	activeTab := m.TabManager.ActiveTab()

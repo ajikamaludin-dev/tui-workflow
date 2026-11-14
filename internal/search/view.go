@@ -18,17 +18,19 @@ import (
 // Every input is a rounded-border box (like the git commit box): focus color
 // is the theme accent, idle color is the dim border color.
 const (
-	rowFindTop      = 0
-	rowFindBottom   = 3 // Find box spans rows 0–3 (border + 2 lines + border)
-	rowToggle       = 4
-	rowReplaceTop   = 5
+	rowFindTop       = 0
+	rowFindBottom    = 3 // Find box spans rows 0–3 (border + 2 lines + border)
+	rowToggle        = 4
+	rowReplaceTop    = 5
 	rowReplaceBottom = 8
-	rowScopeTop     = 9  // Path/Exclude box spans rows 9–12
-	rowPath         = 10
-	rowExclude      = 11
-	rowScopeBottom  = 12
-	rowButtons      = 13
-	rowListStart    = 14
+	rowPath          = 9  // Path box spans rows 9–11
+	rowPathBottom    = 11
+	rowExclude       = 12 // Exclude box spans rows 12–14
+	rowExcludeBottom = 14
+	rowButtons       = 15
+	rowSpacer        = 16
+	rowSeparator     = 17
+	rowListStart     = 18
 )
 
 const debounceDuration = 300 * time.Millisecond
@@ -541,22 +543,26 @@ func (sv *SearchView) HandleMouseClick(relX, relY int) MouseAction {
 		sv.FocusField = FocusReplaceInput
 		sv.syncFocus()
 		return MouseAction{Kind: "focus-replace"}
-	case relY >= rowScopeTop && relY <= rowPath:
+	case relY >= rowPath && relY <= rowPathBottom:
 		sv.FocusField = FocusPathInput
 		sv.syncFocus()
 		return MouseAction{Kind: "focus-path"}
-	case relY == rowExclude || relY == rowScopeBottom:
+	case relY >= rowExclude && relY <= rowExcludeBottom:
 		sv.FocusField = FocusExcludeInput
 		sv.syncFocus()
 		return MouseAction{Kind: "focus-exclude"}
 	case relY == rowButtons:
-		if relX >= 1 && relX <= 6 {
+		halfLeft := (width - 1) / 2
+		switch {
+		case relX < halfLeft:
 			sv.DoSearch()
 			return MouseAction{Kind: "find"}
-		}
-		if relX >= 8 && relX <= 21 {
+		case relX == halfLeft:
+			return MouseAction{Kind: "ignore"} // gap between the buttons
+		default:
 			return MouseAction{Kind: "replace-all"}
 		}
+	case relY == rowSpacer || relY == rowSeparator:
 		return MouseAction{Kind: "ignore"}
 	case relY >= rowListStart:
 		rows := sv.allRows()
@@ -600,7 +606,7 @@ func (sv *SearchView) Render(width, height int, focused bool) string {
 	sv.Height = height
 
 	setWidth := func(t *textarea.Model) {
-		w := width - 1
+		w := width - 2
 		if w < 8 {
 			w = 8
 		}
@@ -611,10 +617,27 @@ func (sv *SearchView) Render(width, height int, focused bool) string {
 	setWidth(&sv.PathInput)
 	setWidth(&sv.ExcludeInput)
 
-	rowFind := sv.FindInput.View()
-	rowReplace := sv.ReplaceInput.View()
-	rowPath := sv.PathInput.View()
-	rowExclude := sv.ExcludeInput.View()
+	// Every input is wrapped in a rounded border box — the git commit box look.
+	bordered := func(inner string, active bool) string {
+		borderColor := ui.CurrentTheme.BorderColor
+		if active {
+			borderColor = ui.CurrentTheme.Accent
+		}
+		return lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(borderColor).
+			Width(width).
+			Render(inner)
+	}
+	findActive := sv.FocusField == FocusFindInput
+	replaceActive := sv.FocusField == FocusReplaceInput
+	pathActive := sv.FocusField == FocusPathInput
+	excludeActive := sv.FocusField == FocusExcludeInput
+
+	rowFind := bordered(sv.FindInput.View(), findActive)
+	rowReplace := bordered(sv.ReplaceInput.View(), replaceActive)
+	rowPath := bordered(sv.PathInput.View(), pathActive)
+	rowExclude := bordered(sv.ExcludeInput.View(), excludeActive)
 
 	// Toggle chips + right-aligned counter
 	chip := func(label string, on bool) string {
@@ -642,11 +665,22 @@ func (sv *SearchView) Render(width, height int, focused bool) string {
 		chipsRow = chips + strings.Repeat(" ", pad) + counter
 	}
 
-	btnStyle := lipgloss.NewStyle().Foreground(ui.CurrentTheme.Accent).Bold(true)
-	countStyle := lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgSecondary)
-	buttonsRow := " " + btnStyle.Render("[Find]") + "  " + btnStyle.Render("[Replace All]")
+	// Commit-style solid buttons (like the git Commit button): filled accent
+	// background, bold highlight text, centered.
+	commitBtnStyle := lipgloss.NewStyle().
+		Bold(true).
+		Background(ui.CurrentTheme.Accent).
+		Foreground(ui.CurrentTheme.FgHighlight)
+	halfLeft := (width - 1) / 2
+	halfRight := width - 1 - halfLeft
+	findBtn := commitBtnStyle.Width(halfLeft).Align(lipgloss.Center).Render("Find")
+	replaceAllBtn := commitBtnStyle.Width(halfRight).Align(lipgloss.Center).Render("Replace All")
+	buttonsRow := findBtn + " " + replaceAllBtn
 
-	sep := strings.Repeat("─", width)
+	spacerRow := strings.Repeat(" ", width)
+	sepRow := lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgSecondary).Render(strings.Repeat("─", width))
+
+	countStyle := lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgSecondary)
 
 	listH := sv.listHeight()
 	sv.adjustScroll()
@@ -665,7 +699,9 @@ func (sv *SearchView) Render(width, height int, focused bool) string {
 	sb.WriteString("\n")
 	sb.WriteString(buttonsRow)
 	sb.WriteString("\n")
-	sb.WriteString(sep)
+	sb.WriteString(spacerRow)
+	sb.WriteString("\n")
+	sb.WriteString(sepRow)
 	sb.WriteString("\n")
 
 	if sv.ErrMsg != "" {
@@ -699,16 +735,17 @@ func (sv *SearchView) Render(width, height int, focused bool) string {
 			vRows++
 			if row.isHeader {
 				g := sv.groups[row.group]
+				replaceBtn := commitBtnStyle.Render(" Replace ")
+				btnW := ansi.StringWidth(" Replace ")
 				left := fmt.Sprintf(" ▸ %s (%d)", g.RelPath, len(g.Indices))
-				right := "[Replace]"
-				left = ansi.Truncate(left, width-len(right)-2, "…")
-				pad := width - ansi.StringWidth(left) - len(right) - 1
+				left = ansi.Truncate(left, width-btnW-2, "…")
+				pad := width - ansi.StringWidth(left) - btnW - 1
 				if pad < 1 {
 					pad = 1
 				}
 				sb.WriteString(ansi.Truncate(left, width, "") +
 					strings.Repeat(" ", pad) +
-					lipgloss.NewStyle().Foreground(ui.CurrentTheme.Accent).Bold(true).Render("[Replace]"))
+					replaceBtn)
 				continue
 			}
 			m := sv.Matches[row.matchIdx]

@@ -46,8 +46,8 @@ func TestViewGroupsMatchesByFile(t *testing.T) {
 	if !strings.Contains(rendered, "b/two.txt") || !strings.Contains(rendered, "(1)") {
 		t.Errorf("Expected group header for b/two.txt with (1), got:\n%s", rendered)
 	}
-	if !strings.Contains(rendered, "[Replace]") {
-		t.Errorf("Expected per-file [Replace] button in render, got:\n%s", rendered)
+	if !strings.Contains(rendered, " Replace ") {
+		t.Errorf("Expected per-file Replace button in render, got:\n%s", rendered)
 	}
 }
 
@@ -203,7 +203,7 @@ func TestViewPerFileReplaceButtonHitTest(t *testing.T) {
 
 	// Render at a known size; list starts at row 9 (2+1+2+1+1+1+1).
 	_ = sv.Render(40, 24, true)
-	act := sv.HandleMouseClick(40-2, 9)
+	act := sv.HandleMouseClick(40-2, 18)
 	if act.Kind != "replace-file" {
 		t.Fatalf("Expected replace-file action on header [Replace], got %+v", act)
 	}
@@ -219,11 +219,11 @@ func TestViewFindReplaceAllButtonHitTest(t *testing.T) {
 	sv.FindInput.SetValue("foo")
 	sv.DoSearch()
 	_ = sv.Render(40, 24, true)
-	act := sv.HandleMouseClick(2, 7)
+	act := sv.HandleMouseClick(2, 15)
 	if act.Kind != "find" {
 		t.Errorf("Expected find action on [Find] button, got %+v", act)
 	}
-	act = sv.HandleMouseClick(12, 7)
+	act = sv.HandleMouseClick(25, 15)
 	if act.Kind != "replace-all" {
 		t.Errorf("Expected replace-all action on [Replace All] button, got %+v", act)
 	}
@@ -236,9 +236,9 @@ func TestViewToggleHitTest(t *testing.T) {
 	sv.FindInput.SetValue("foo")
 	sv.DoSearch()
 	_ = sv.Render(40, 24, true)
-	act := sv.HandleMouseClick(2, 2)
+	act := sv.HandleMouseClick(2, 4)
 	if act.Kind != "toggle-case" {
-		t.Errorf("Expected toggle-case at x=2,y=2, got %+v", act)
+		t.Errorf("Expected toggle-case at x=2,y=4, got %+v", act)
 	}
 }
 

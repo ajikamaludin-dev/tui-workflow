@@ -495,16 +495,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.GlobalSearch != nil {
 			m.GlobalSearch.SetWidth(m.modalWidth())
 		}
-		contentWidth := m.Width - m.SidebarWidth
-		if !m.SidebarVisible {
-			contentWidth = m.Width
-		}
-		bodyHeight := m.Height - 3
-		for _, tab := range m.TabManager.Tabs {
-			if tab.Type == editor.TabTerminal && tab.TerminalView != nil {
-				tab.TerminalView.Resize(contentWidth, bodyHeight)
-			}
-		}
+		m.syncTabDimensions()
 		return m, nil
 
 	case TerminalOutputMsg:
@@ -574,6 +565,36 @@ func (m *Model) setSidebarWidth(width int) {
 		if m.Config != nil {
 			m.Config.SidebarWidth = width
 			_ = config.SaveConfig(m.Config)
+		}
+		m.syncTabDimensions()
+	}
+}
+
+func (m *Model) editorBodyHeight() int {
+	h := m.Height - 5
+	if h < 2 {
+		h = 2
+	}
+	return h
+}
+
+func (m *Model) editorContentWidth() int {
+	if m.SidebarVisible {
+		w := m.Width - m.SidebarWidth
+		if w < 10 {
+			w = 10
+		}
+		return w
+	}
+	return m.Width
+}
+
+func (m *Model) syncTabDimensions() {
+	contentWidth := m.editorContentWidth()
+	bodyHeight := m.editorBodyHeight()
+	for _, tab := range m.TabManager.Tabs {
+		if tab.Type == editor.TabTerminal && tab.TerminalView != nil {
+			tab.TerminalView.Resize(contentWidth, bodyHeight)
 		}
 	}
 }

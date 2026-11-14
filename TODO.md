@@ -1,3 +1,5 @@
 - [ ] sebelum close terminal bisa pastikan cek tidak ada proses yang berjalan di terminal itu atau berikan warn baik close terminal ataupun juga close editor 
 - [ ] ubah menu keyboard shortcut dari setting ke about
 - [ ] search keyword dan juga git hunk selalu ditampilkan di bagian bawah untuk keyword yang di temukan dibawah saya ingin ini di tampilkan secara center vertical
+- [ ] ubah shortcut untuk `command pallate` F1 ke `ctrl + .` apakah bisa ?
+- [ ] shortcut `ctrl+shift+\` tidak membuka terminal 

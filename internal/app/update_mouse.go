@@ -333,7 +333,7 @@ func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	// Resizing Sidebar Handling
 	if m.SidebarVisible {
-		isAtBorder := msg.X == m.SidebarWidth-1 && msg.Y >= 1 && msg.Y < m.Height-1
+		isAtBorder := msg.X == m.SidebarWidth-1 && msg.Y >= 2 && msg.Y < m.Height-1
 		if isAtBorder {
 			m.setMousePointer("col-resize")
 		}
@@ -368,7 +368,7 @@ func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 				if m.SidebarVisible {
 					editorStartX = m.SidebarWidth
 				}
-				if msg.Y == 1 && msg.X >= editorStartX {
+				if (msg.Y == 2 || msg.Y == 3) && msg.X >= editorStartX {
 					relX := msg.X - editorStartX
 					targetTab := m.TabManager.FindTabAt(relX)
 					if targetTab >= 0 && targetTab != m.DraggingTabIdx {
@@ -400,9 +400,9 @@ func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Update mouse pointer shape: col-resize at border, text over editor, default elsewhere
-	if m.SidebarVisible && msg.X == m.SidebarWidth-1 && msg.Y >= 1 && msg.Y < m.Height-1 {
+	if m.SidebarVisible && msg.X == m.SidebarWidth-1 && msg.Y >= 2 && msg.Y < m.Height-1 {
 		m.setMousePointer("col-resize")
-	} else if msg.X >= editorStartX && msg.Y >= 2 && msg.Y < m.Height-1 {
+	} else if msg.X >= editorStartX && msg.Y >= 4 && msg.Y < m.Height-1 {
 		m.setMousePointer("text")
 	} else {
 		m.setMousePointer("default")
@@ -410,8 +410,8 @@ func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	// Right-click handling
 	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonRight {
-		// Tab Bar right-click (Row 1, X >= editorStartX)
-		if msg.Y == 1 && msg.X >= editorStartX {
+		// Tab Bar right-click (Rows 2 and 3, X >= editorStartX)
+		if (msg.Y == 2 || msg.Y == 3) && msg.X >= editorStartX {
 			relX := msg.X - editorStartX
 			clickedTabIdx := m.TabManager.FindTabAt(relX)
 			if clickedTabIdx >= 0 && clickedTabIdx < m.TabManager.Count() {
@@ -852,12 +852,12 @@ func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		// Click inside editor buffer area (Row 2 to Height-2, X >= editorStartX)
-		if msg.Y >= 2 && msg.Y < m.Height-1 && msg.X >= editorStartX {
+		// Click inside editor buffer area (Row 4 to Height-2, X >= editorStartX)
+		if msg.Y >= 4 && msg.Y < m.Height-1 && msg.X >= editorStartX {
 			m.Focus = FocusEditor
 			tab := m.TabManager.ActiveTab()
 			if tab != nil && tab.Type == editor.TabMarkdown && tab.MarkdownPreview && tab.MarkdownViewer != nil {
-				relRow := msg.Y - 2 + tab.MarkdownViewer.ScrollOffset
+				relRow := msg.Y - 4 + tab.MarkdownViewer.ScrollOffset
 				relCol := msg.X - editorStartX
 				if relCol < 0 {
 					relCol = 0
@@ -865,7 +865,7 @@ func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 				tab.MarkdownViewer.StartSelection(relRow, relCol)
 				return m, nil
 			} else if tab != nil && tab.Buffer != nil {
-				relY := msg.Y - 2
+				relY := msg.Y - 4
 				gutterW := tab.Buffer.GutterWidth()
 				relX := msg.X - editorStartX
 

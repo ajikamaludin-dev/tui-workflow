@@ -1,2 +1,3 @@
-- [x] tambahkan tab editor bisa di pindahkan dengan drag and drop dengan mouse 
-- [x] editoor tab dapat dilakukan pining
+- [ ] sebelum close terminal bisa pastikan cek tidak ada proses yang berjalan di terminal itu atau berikan warn baik close terminal ataupun juga close editor 
+- [ ] ubah menu keyboard shortcut dari setting ke about
+- [ ] search keyword dan juga git hunk selalu ditampilkan di bagian bawah untuk keyword yang di temukan dibawah saya ingin ini di tampilkan secara center vertical

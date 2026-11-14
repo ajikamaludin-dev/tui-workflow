@@ -11,6 +11,11 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+func TestBullet(t *testing.T) {
+	s := "(9router) ag/gemini-3.8-flash-medium • medium"
+	t.Logf("String len: %d, runewidth: %d, ansi width: %d", len(s), len([]rune(s)), ansi.StringWidth(s))
+}
+
 func TestKeyToBytes(t *testing.T) {
 	tests := []struct {
 		name     string

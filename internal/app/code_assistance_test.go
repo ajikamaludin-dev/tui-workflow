@@ -142,9 +142,9 @@ func TestCodeAssistanceIntegration(t *testing.T) {
 		t.Errorf("expected completion popup to close after Enter")
 	}
 
-	// Verify top import was prepended
+	// Verify top import was added/merged
 	firstLine := string(tab.Buffer.Lines[0])
-	if firstLine != "import { useEffect } from 'react';" {
+	if firstLine != "import React, { useEffect } from 'react';" && firstLine != "import { useEffect } from 'react';" {
 		t.Errorf("expected auto-import on line 0, got %q", firstLine)
 	}
 }

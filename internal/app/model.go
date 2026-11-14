@@ -389,6 +389,11 @@ func (m Model) handleTab() (tea.Model, tea.Cmd) {
 					startRow := buf.CursorRow
 					expanded := snippet.Expand(s, tab.Path)
 					buf.ReplaceWordBeforeCursor(startCol, expanded.Text)
+					if editor.ReactKnownExports[s.Prefix] {
+						if editor.EnsureReactImport(buf, s.Prefix) {
+							startRow++
+						}
+					}
 					m.SnippetSession = snippet.NewSession(startRow, startCol, expanded.TabStops)
 					if row, col, length, ok := m.SnippetSession.Current(); ok {
 						buf.CursorRow = row
@@ -415,10 +420,18 @@ func (m Model) handleTab() (tea.Model, tea.Cmd) {
 				insertText = selected.Label
 			}
 			buf.ReplaceWordBeforeCursor(startCol, insertText)
+
+			// Smart Auto-Import
 			if len(selected.AdditionalTextEdits) > 0 {
-				for _, edit := range selected.AdditionalTextEdits {
-					if edit.Range.Start.Line == 0 && edit.Range.Start.Character == 0 {
-						buf.InsertTopImport(edit.NewText)
+				if editor.ReactKnownExports[selected.Label] {
+					if editor.EnsureReactImport(buf, selected.Label) {
+						m.StatusBar.ShowToast("Auto-import '"+selected.Label+"' dari 'react' ditambahkan", false, 2*time.Second)
+					}
+				} else {
+					for _, edit := range selected.AdditionalTextEdits {
+						if editor.EnsureTextEditImport(buf, selected.Label, edit.NewText) {
+							m.StatusBar.ShowToast("Auto-import '"+selected.Label+"' ditambahkan", false, 2*time.Second)
+						}
 					}
 				}
 			}
@@ -462,6 +475,11 @@ func (m Model) handleTab() (tea.Model, tea.Cmd) {
 			startRow := buf.CursorRow
 			expanded := snippet.Expand(s, tab.Path)
 			buf.ReplaceWordBeforeCursor(startCol, expanded.Text)
+			if editor.ReactKnownExports[s.Prefix] {
+				if editor.EnsureReactImport(buf, s.Prefix) {
+					startRow++
+				}
+			}
 			m.SnippetSession = snippet.NewSession(startRow, startCol, expanded.TabStops)
 			if row, col, length, ok := m.SnippetSession.Current(); ok {
 				buf.CursorRow = row
@@ -1926,6 +1944,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 									startRow := buf.CursorRow
 									expanded := snippet.Expand(s, tab.Path)
 									buf.ReplaceWordBeforeCursor(startCol, expanded.Text)
+									if editor.ReactKnownExports[s.Prefix] {
+										if editor.EnsureReactImport(buf, s.Prefix) {
+											startRow++
+										}
+									}
 									m.SnippetSession = snippet.NewSession(startRow, startCol, expanded.TabStops)
 									if row, col, length, ok := m.SnippetSession.Current(); ok {
 										buf.CursorRow = row
@@ -1952,10 +1975,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							}
 							buf.ReplaceWordBeforeCursor(startCol, insertText)
 
+							// Smart Auto-Import
 							if len(selected.AdditionalTextEdits) > 0 {
-								for _, edit := range selected.AdditionalTextEdits {
-									if edit.Range.Start.Line == 0 && edit.Range.Start.Character == 0 {
-										buf.InsertTopImport(edit.NewText)
+								if editor.ReactKnownExports[selected.Label] {
+									if editor.EnsureReactImport(buf, selected.Label) {
+										m.StatusBar.ShowToast("Auto-import '"+selected.Label+"' dari 'react' ditambahkan", false, 2*time.Second)
+									}
+								} else {
+									for _, edit := range selected.AdditionalTextEdits {
+										if editor.EnsureTextEditImport(buf, selected.Label, edit.NewText) {
+											m.StatusBar.ShowToast("Auto-import '"+selected.Label+"' ditambahkan", false, 2*time.Second)
+										}
 									}
 								}
 							}
@@ -2170,6 +2200,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if len(msg.Runes) > 0 && !msg.Alt {
 						for _, r := range msg.Runes {
 							buf.InsertRune(r)
+							if r == '>' && editor.IsAutoCloseTagSupported(tab.Path) {
+								if buf.CursorRow >= 0 && buf.CursorRow < buf.LineCount() {
+									line := string(buf.Lines[buf.CursorRow])
+									if buf.CursorCol > 1 && buf.CursorCol <= len(line) {
+										lineBeforeGT := line[:buf.CursorCol-1]
+										closeTag := editor.DetectAutoCloseTag(lineBeforeGT)
+										if closeTag != "" {
+											buf.InsertString(closeTag)
+											buf.CursorCol -= len(closeTag)
+										}
+									}
+								}
+							}
 						}
 						m.syncStatusBarWithActiveTab()
 						return m, nil

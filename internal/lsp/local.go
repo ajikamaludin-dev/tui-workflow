@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -18,8 +19,7 @@ var jsKeywords = []string{
 	"continue", "try", "catch", "finally", "throw", "async", "await",
 	"class", "extends", "interface", "type", "typeof", "instanceof",
 	"new", "this", "super", "null", "undefined", "true", "false",
-	"useState", "useEffect", "useContext", "useReducer", "useCallback",
-	"useMemo", "useRef", "React",
+	"React",
 }
 
 var goKeywords = []string{
@@ -37,7 +37,7 @@ var pyKeywords = []string{
 }
 
 // BuildLocalCompletions creates a rich set of completion items from snippets,
-// symbol index, buffer words, and language keywords.
+// React hooks with auto-import, symbol index, buffer words, and language keywords.
 func BuildLocalCompletions(buf *editor.Buffer, filename string, symbolIndex *symbol.Index) []CompletionItem {
 	var items []CompletionItem
 	seen := make(map[string]bool)
@@ -67,7 +67,28 @@ func BuildLocalCompletions(buf *editor.Buffer, filename string, symbolIndex *sym
 		}
 	}
 
-	// 2. Project Symbols
+	// 2. React Hooks & APIs (with Auto-import from 'react')
+	if ext == ".jsx" || ext == ".tsx" || ext == ".js" || ext == ".ts" {
+		for hook := range editor.ReactKnownExports {
+			if !seen[hook] {
+				seen[hook] = true
+				items = append(items, CompletionItem{
+					Label:      hook,
+					Kind:       CompletionKindFunction,
+					Detail:     "Auto-import from 'react'",
+					InsertText: hook,
+					AdditionalTextEdits: []TextEdit{
+						{
+							Range:   Range{Start: Position{Line: 0, Character: 0}},
+							NewText: fmt.Sprintf("import { %s } from 'react';\n", hook),
+						},
+					},
+				})
+			}
+		}
+	}
+
+	// 3. Project Symbols (with Auto-import from source file)
 	if symbolIndex != nil {
 		for _, sym := range symbolIndex.AllSymbols() {
 			if !seen[sym.Name] && len(sym.Name) >= 2 {
@@ -81,17 +102,41 @@ func BuildLocalCompletions(buf *editor.Buffer, filename string, symbolIndex *sym
 				case symbol.KindConst:
 					kind = CompletionKindConstant
 				}
+
+				detail := string(sym.Kind) + " (" + filepath.Base(sym.FilePath) + ")"
+				var edits []TextEdit
+				if (ext == ".jsx" || ext == ".tsx" || ext == ".js" || ext == ".ts") &&
+					sym.FilePath != filename && sym.FilePath != "" {
+					rel, err := filepath.Rel(filepath.Dir(filename), sym.FilePath)
+					if err == nil {
+						rel = filepath.ToSlash(rel)
+						extSym := filepath.Ext(rel)
+						rel = strings.TrimSuffix(rel, extSym)
+						if !strings.HasPrefix(rel, "./") && !strings.HasPrefix(rel, "../") {
+							rel = "./" + rel
+						}
+						detail = "Auto-import from '" + rel + "'"
+						edits = []TextEdit{
+							{
+								Range:   Range{Start: Position{Line: 0, Character: 0}},
+								NewText: fmt.Sprintf("import { %s } from '%s';\n", sym.Name, rel),
+							},
+						}
+					}
+				}
+
 				items = append(items, CompletionItem{
-					Label:      sym.Name,
-					Kind:       kind,
-					Detail:     string(sym.Kind) + " (" + filepath.Base(sym.FilePath) + ")",
-					InsertText: sym.Name,
+					Label:               sym.Name,
+					Kind:                kind,
+					Detail:              detail,
+					InsertText:          sym.Name,
+					AdditionalTextEdits: edits,
 				})
 			}
 		}
 	}
 
-	// 3. Language Keywords
+	// 4. Language Keywords
 	var keywords []string
 	switch ext {
 	case ".js", ".jsx", ".ts", ".tsx":
@@ -113,7 +158,7 @@ func BuildLocalCompletions(buf *editor.Buffer, filename string, symbolIndex *sym
 		}
 	}
 
-	// 4. Current Buffer Words
+	// 5. Current Buffer Words
 	if buf != nil {
 		words := extractBufferWords(buf)
 		for _, w := range words {
@@ -145,7 +190,10 @@ func FilterCompletions(items []CompletionItem, prefix string) []CompletionItem {
 	for _, item := range items {
 		iLower := strings.ToLower(item.Label)
 		if iLower == pLower {
-			exact = append(exact, item)
+			// Do not suggest the exact incomplete buffer word that user just typed
+			if item.Kind != CompletionKindText {
+				exact = append(exact, item)
+			}
 		} else if strings.HasPrefix(iLower, pLower) {
 			prefixMatch = append(prefixMatch, item)
 		} else if strings.Contains(iLower, pLower) {
@@ -153,7 +201,7 @@ func FilterCompletions(items []CompletionItem, prefix string) []CompletionItem {
 		}
 	}
 
-	// Sort prefix matches: snippets first, then alphabetically
+	// Sort prefix matches: snippets first, then functions/hooks, then alphabetically
 	sort.SliceStable(prefixMatch, func(i, j int) bool {
 		if prefixMatch[i].Kind == CompletionKindSnippet && prefixMatch[j].Kind != CompletionKindSnippet {
 			return true

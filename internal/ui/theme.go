@@ -73,7 +73,8 @@ func NewDarkTheme() Theme {
 
 	t.TopMenuItemStyle = lipgloss.NewStyle().
 		Padding(0, 1).
-		Foreground(t.FgPrimary)
+		Foreground(t.FgHighlight).
+		Bold(true)
 
 	t.TopMenuActiveItem = lipgloss.NewStyle().
 		Padding(0, 1).
@@ -110,7 +111,8 @@ func NewDarkTheme() Theme {
 	t.SidebarTabInactive = lipgloss.NewStyle().
 		Padding(0, 1).
 		Background(t.BgTopMenu).
-		Foreground(t.FgSecondary)
+		Foreground(t.FgPrimary).
+		Bold(true)
 
 	t.EditorStyle = lipgloss.NewStyle().
 		Background(t.BgPrimary).
@@ -128,7 +130,8 @@ func NewDarkTheme() Theme {
 	t.TabInactiveStyle = lipgloss.NewStyle().
 		Padding(0, 1).
 		Background(t.BgInactiveTab).
-		Foreground(t.FgSecondary)
+		Foreground(t.FgPrimary).
+		Bold(true)
 
 	t.StatusBarStyle = lipgloss.NewStyle().
 		Background(t.BgStatusBar).

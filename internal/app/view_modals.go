@@ -124,6 +124,15 @@ Core Features & Technologies:
  • Git Integration     : In-Memory Pure-Go (go-git/v5)
  • PTY Terminal        : Embedded Pseudoterminal Subshell
 
+Author:
+ • Aji Kamaludin (github.com/ajikamaludin-dev)
+   Creator & Maintainer — aji19kamaludin@gmail.com
+
+Contributors:
+ • Help wanted! There are no contributors yet.
+   Pull requests & contributions are welcome.
+   github.com/ajikamaludin-dev/tui-workflow
+
 Engineered for 60 FPS, zero flickering, modeless text
 editing, and full mouse support in terminal environments.`
 

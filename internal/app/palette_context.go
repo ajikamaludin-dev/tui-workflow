@@ -17,7 +17,7 @@ func (m *Model) openExplorerContextMenu(absX, absY int) {
 		{ID: "explorer_new_folder", Label: "New Folder", Shortcut: "A"},
 		{ID: "explorer_rename", Label: "Rename", Shortcut: "F2"},
 		{ID: "explorer_delete", Label: "Delete", Shortcut: "d"},
-		{ID: "explorer_copy_path", Label: "Copy Relative Path"},
+		{ID: "explorer_copy_path", Label: "Copy Full Path"},
 	}
 	if node := m.Explorer.SelectedNode(); node == nil {
 		items[2].Disabled = true
@@ -209,9 +209,14 @@ func (m *Model) handleContextMenuAction(action string) tea.Cmd {
 
 	case "explorer_copy_path":
 		if node := m.Explorer.SelectedNode(); node != nil {
-			if rel, err := filepath.Rel(m.RootDir, node.Path); err == nil {
-				_ = clipboard.WriteAll(rel)
-				m.StatusBar.ShowToast("Path disalin: "+rel, false, 2*time.Second)
+			fullPath := node.Path
+			if abs, err := filepath.Abs(fullPath); err == nil {
+				fullPath = abs
+			}
+			if err := clipboard.WriteAll(fullPath); err != nil {
+				m.StatusBar.ShowToast("Gagal menyalin path: "+err.Error(), true, 3*time.Second)
+			} else {
+				m.StatusBar.ShowToast("Full path disalin: "+fullPath, false, 2*time.Second)
 			}
 		}
 		return nil

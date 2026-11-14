@@ -101,16 +101,16 @@ func NewModelWithPath(targetPath string, explicitArg bool) (Model, error) {
 
 	var rootDir string
 	var initialFile string
-	openPRDByDefault := false
+	openReadmeByDefault := false
 
 	if fi.IsDir() {
 		rootDir = cleanPath
-		prdPath := filepath.Join(rootDir, "PRD.md")
-		if _, err := os.Stat(prdPath); err == nil {
+		readmePath := filepath.Join(rootDir, "README.md")
+		if _, err := os.Stat(readmePath); err == nil {
 			if explicitArg {
-				initialFile = prdPath
+				initialFile = readmePath
 			} else {
-				openPRDByDefault = true
+				openReadmeByDefault = true
 			}
 		}
 	} else {
@@ -198,17 +198,17 @@ func NewModelWithPath(targetPath string, explicitArg bool) (Model, error) {
 				}
 				m.StatusBar.ShowToast(msg, false, 3*time.Second)
 				m.syncStatusBarWithActiveTab()
-			} else if openPRDByDefault {
-				prdPath := filepath.Join(rootDir, "PRD.md")
-				if _, err := os.Stat(prdPath); err == nil {
-					_, _ = tm.OpenFile(prdPath)
+			} else if openReadmeByDefault {
+				readmePath := filepath.Join(rootDir, "README.md")
+				if _, err := os.Stat(readmePath); err == nil {
+					_, _ = tm.OpenFile(readmePath)
 					m.syncStatusBarWithActiveTab()
 				}
 			}
-		} else if openPRDByDefault {
-			prdPath := filepath.Join(rootDir, "PRD.md")
-			if _, err := os.Stat(prdPath); err == nil {
-				_, _ = tm.OpenFile(prdPath)
+		} else if openReadmeByDefault {
+			readmePath := filepath.Join(rootDir, "README.md")
+			if _, err := os.Stat(readmePath); err == nil {
+				_, _ = tm.OpenFile(readmePath)
 				m.syncStatusBarWithActiveTab()
 			}
 		}

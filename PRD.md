@@ -113,7 +113,7 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
    - `F2` (atau `r` pada toolbar): Ubah nama (Rename) file/folder ➔ Membuka **Modal Dialog Input** berisi nama lama untuk diubah.
    - `d`: Hapus file/folder ➔ Membuka **Modal Konfirmasi Hapus** `[Delete] [Cancel]`.
    - `/`: Filter realtime pohon file (tekan Enter pada input kosong untuk membersihkan filter).
-   - Klik Kanan pada node file/folder: Membuka Context Menu Explorer (New File, New Folder, Rename, Delete, Copy Relative Path).
+   - Klik Kanan pada node file/folder: Membuka Context Menu Explorer (New File, New Folder, Rename, Delete, Copy Full Path).
 3. **Interaksi Mouse:**
    - Klik pada folder: Toggle expand / collapse.
    - Klik pada file: Buka file ke Editor Tab.
@@ -340,7 +340,7 @@ Menghadirkan ergonomi pengembangan modern setara VS Code ke dalam terminal melal
 ### 4.6. Workspace/Session Persistence (P0, Metadata-only)
 1. **Storage (D1):** `~/.config/tui-workflow/config.json` menyimpan preferensi user saja (AI, autosave, dsb.). Index session (mapping root kanonik workspace → entry) dipisahkan ke `~/.config/tui-workflow/session-index.json`; pada pemakaian pertama setelah perubahan ini, kunci `session_index` legacy di `config.json` dimigrasikan otomatis ke `session-index.json` sekali jalan. Setiap workspace memiliki file session terpisah `~/.config/tui-workflow/session-<id>.json` (versioned, atomic write, deterministic, backward-compatible).
 2. **Data (D2):** Hanya metadata UI/workspace: tab file/markdown path-backed valid, active tab, cursor/scroll, status preview markdown, visibilitas/lebar/view sidebar, dan focus. Tidak menyimpan isi buffer dirty, PTY terminal, atau diff transien.
-3. **Startup Priority (D3):** Jika argumen CLI path eksplisit diberikan → restore session diutamakan. Tanpa argumen → restore session workspace terakhir; fallback ke perilaku default sebelumnya (termasuk auto-open `PRD.md` bila relevan) secara deterministik dan tanpa regresi.
+3. **Startup Priority (D3):** Jika argumen CLI path eksplisit diberikan → restore session diutamakan. Tanpa argumen → restore session workspace terakhir; fallback ke perilaku default sebelumnya (termasuk auto-open `README.md` bila relevan) secara deterministik dan tanpa regresi.
 4. **Keamanan/Validasi:** File yang tidak ada, biner, atau >10MB dilewati saat restore dengan fallback non-blocking. Persist dilakukan saat event relevan (switch/close tab, resize/sidebar/focus, save, exit) dengan debounce.
 
 ### 4.7. Git Hunk-Level Diff Actions (P0)

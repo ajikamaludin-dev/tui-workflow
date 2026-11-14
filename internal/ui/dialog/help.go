@@ -80,7 +80,7 @@ func NewHelpDialog() *HelpDialog {
 		" • d : Delete Selected File or Folder",
 		" • / : Filter File Tree (Enter empty: clear)",
 		" • . : Toggle Hidden Files (Dotfiles)",
-		" • Right-Click Node : Open Explorer Context Menu (CRUD & Copy Path)",
+		" • Right-Click Node : Open Explorer Context Menu (CRUD & Copy Full Path)",
 		"",
 		"Git Source Control (Sidebar):",
 		" • Alt+B : Switch / Checkout Git Branch",

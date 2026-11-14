@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestQuickOpen(t *testing.T) {
@@ -38,7 +38,7 @@ func TestQuickOpen(t *testing.T) {
 	}
 
 	// Select and Enter
-	tabIdx, path, closed, _ := qo.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	tabIdx, path, closed, _ := qo.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if !closed {
 		t.Errorf("expected closed=true on enter")
 	}

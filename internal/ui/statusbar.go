@@ -5,23 +5,23 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
 type StatusBar struct {
-	AutoSave     bool
-	Branch       string
-	FilePath     string
-	Line         int
-	Col          int
-	FileSyntax   string
-	Encoding     string
-	ToastMsg     string
-	ToastIsErr   bool
-	ToastUntil   time.Time
-	Width        int
-	CursorCount  int
+	AutoSave    bool
+	Branch      string
+	FilePath    string
+	Line        int
+	Col         int
+	FileSyntax  string
+	Encoding    string
+	ToastMsg    string
+	ToastIsErr  bool
+	ToastUntil  time.Time
+	Width       int
+	CursorCount int
 }
 
 func NewStatusBar() *StatusBar {

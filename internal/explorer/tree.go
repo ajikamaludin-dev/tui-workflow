@@ -7,7 +7,7 @@ import (
 
 	"tui-workflow/internal/ignore"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"tui-workflow/internal/ui"
 )
@@ -282,7 +282,7 @@ func (t *Tree) SelectedNameExceeds(width int) bool {
 	if node == nil {
 		return false
 	}
-	prefixWidth := (node.Depth - 1) * 2 + 2
+	prefixWidth := (node.Depth-1)*2 + 2
 	availForName := width - prefixWidth
 	return ansi.StringWidth(node.Name) > availForName
 }

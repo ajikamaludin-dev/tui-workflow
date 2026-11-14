@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/creack/pty"
 	"github.com/hinshun/vt10x"
@@ -373,9 +373,12 @@ func (t *TerminalView) Render(width, height int, focused bool) string {
 	return strings.Join(lines, "\n")
 }
 
-// KeyToBytes converts a Bubble Tea KeyMsg to raw bytes expected by the PTY.
-func KeyToBytes(msg tea.KeyMsg) []byte {
-	switch msg.String() {
+// KeyToBytes converts a Bubble Tea KeyPressMsg to raw bytes expected by the PTY.
+func KeyToBytes(msg tea.KeyPressMsg) []byte {
+	isAlt := msg.Mod.Contains(tea.ModAlt)
+	isCtrl := msg.Mod.Contains(tea.ModCtrl)
+
+	switch msg.Keystroke() {
 	case "alt+left", "ctrl+left":
 		return []byte("\x1bb")
 	case "alt+right", "ctrl+right":
@@ -384,20 +387,23 @@ func KeyToBytes(msg tea.KeyMsg) []byte {
 		return []byte("\x1b\x7f")
 	case "ctrl+backspace":
 		return []byte{0x17}
+	case "shift+tab":
+		return []byte("\x1b[Z")
 	}
 
-	if msg.Type == tea.KeyRunes {
-		if msg.Alt {
-			return append([]byte{0x1b}, []byte(string(msg.Runes))...)
+	// Printable text (Alt prefixes an ESC byte, as in legacy terminals)
+	if msg.Text != "" {
+		if isAlt {
+			return append([]byte{0x1b}, msg.Text...)
 		}
-		return []byte(string(msg.Runes))
+		return []byte(msg.Text)
 	}
 
-	switch msg.Type {
+	switch msg.Code {
 	case tea.KeyEnter:
 		return []byte{'\r'}
 	case tea.KeyBackspace:
-		if msg.Alt {
+		if isAlt {
 			return []byte("\x1b\x7f")
 		}
 		return []byte{0x7f}
@@ -412,19 +418,15 @@ func KeyToBytes(msg tea.KeyMsg) []byte {
 	case tea.KeyDown:
 		return []byte("\x1b[B")
 	case tea.KeyRight:
-		if msg.Alt {
+		if isAlt {
 			return []byte("\x1bf")
 		}
 		return []byte("\x1b[C")
 	case tea.KeyLeft:
-		if msg.Alt {
+		if isAlt {
 			return []byte("\x1bb")
 		}
 		return []byte("\x1b[D")
-	case tea.KeyCtrlLeft:
-		return []byte("\x1bb")
-	case tea.KeyCtrlRight:
-		return []byte("\x1bf")
 	case tea.KeyHome:
 		return []byte("\x1b[H")
 	case tea.KeyEnd:
@@ -437,8 +439,6 @@ func KeyToBytes(msg tea.KeyMsg) []byte {
 		return []byte("\x1b[3~")
 	case tea.KeyInsert:
 		return []byte("\x1b[2~")
-	case tea.KeyShiftTab:
-		return []byte("\x1b[Z")
 	case tea.KeyF1:
 		return []byte("\x1bOP")
 	case tea.KeyF2:
@@ -465,9 +465,21 @@ func KeyToBytes(msg tea.KeyMsg) []byte {
 		return []byte("\x1b[24~")
 	}
 
-	// Control keys
-	if msg.Type >= tea.KeyCtrlAt && msg.Type <= tea.KeyCtrlUnderscore {
-		return []byte{byte(msg.Type - tea.KeyCtrlAt)}
+	// Ctrl combos: Ctrl+Space/@, Ctrl+A..Z, Ctrl+[\]^_ (and friends) → 0x00–0x1F
+	if isCtrl {
+		switch {
+		case msg.Code == tea.KeySpace:
+			return []byte{0x00}
+		case msg.Code >= 'a' && msg.Code <= 'z':
+			return []byte{byte(msg.Code - 'a' + 1)}
+		case msg.Code >= '@' && msg.Code <= '_':
+			return []byte{byte(msg.Code & 0x1f)}
+		}
+	}
+
+	// Alt+printable fallback for legacy terminals (ESC + char)
+	if isAlt && msg.Code >= 0x21 && msg.Code <= 0x7e {
+		return append([]byte{0x1b}, string(msg.Code)...)
 	}
 
 	return nil

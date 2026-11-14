@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestGlobalSearch(t *testing.T) {
@@ -28,7 +28,7 @@ func TestGlobalSearch(t *testing.T) {
 	}
 
 	// Navigate and Enter
-	path, line, col, closed, _ := gs.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	path, line, col, closed, _ := gs.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if !closed {
 		t.Errorf("expected closed=true")
 	}

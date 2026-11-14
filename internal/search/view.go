@@ -13,9 +13,9 @@ import (
 
 	"tui-workflow/internal/ignore"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"tui-workflow/internal/ui"
 )
@@ -58,17 +58,15 @@ func NewSearchView(rootDir string) *SearchView {
 	fi := textinput.New()
 	fi.Prompt = " Find: "
 	fi.CharLimit = 64
-	fi.Width = 20
-	fi.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
-	fi.PromptStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent)
+	fi.SetWidth(20)
+	applyTextInputStyles(&fi, lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary), lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent))
 	fi.Focus()
 
 	ri := textinput.New()
 	ri.Prompt = " Replace: "
 	ri.CharLimit = 64
-	ri.Width = 20
-	ri.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
-	ri.PromptStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent)
+	ri.SetWidth(20)
+	applyTextInputStyles(&ri, lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary), lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent))
 
 	return &SearchView{
 		RootDir:      rootDir,
@@ -215,8 +213,8 @@ func (sv *SearchView) DoReplaceAll() (count int, err error) {
 // Update handles keyboard navigation within SearchView.
 func (sv *SearchView) Update(msg tea.Msg) (filePath string, line, col int, cmd tea.Cmd) {
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
+	case tea.KeyPressMsg:
+		switch ui.KeyName(msg) {
 		case "tab":
 			sv.FocusField = (sv.FocusField + 1) % 3
 			sv.syncFocus()
@@ -333,13 +331,13 @@ func (sv *SearchView) Render(width, height int, focused bool) string {
 	sv.Width = width
 	sv.Height = height
 
-	sv.FindInput.Width = width - 10
-	if sv.FindInput.Width < 8 {
-		sv.FindInput.Width = 8
+	sv.FindInput.SetWidth(width - 10)
+	if sv.FindInput.Width() < 8 {
+		sv.FindInput.SetWidth(8)
 	}
-	sv.ReplaceInput.Width = width - 10
-	if sv.ReplaceInput.Width < 8 {
-		sv.ReplaceInput.Width = 8
+	sv.ReplaceInput.SetWidth(width - 10)
+	if sv.ReplaceInput.Width() < 8 {
+		sv.ReplaceInput.SetWidth(8)
 	}
 
 	inputRow1 := sv.FindInput.View()

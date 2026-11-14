@@ -3,7 +3,7 @@ package terminal
 import (
 	"fmt"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/hinshun/vt10x"
 )
 
@@ -25,19 +25,19 @@ const (
 
 func mouseButtonCb(b tea.MouseButton) (int, bool) {
 	switch b {
-	case tea.MouseButtonLeft:
+	case tea.MouseLeft:
 		return mouseBtnLeftCb, true
-	case tea.MouseButtonMiddle:
+	case tea.MouseMiddle:
 		return mouseBtnMiddleCb, true
-	case tea.MouseButtonRight:
+	case tea.MouseRight:
 		return mouseBtnRightCb, true
-	case tea.MouseButtonWheelUp:
+	case tea.MouseWheelUp:
 		return mouseWheelUpCb, true
-	case tea.MouseButtonWheelDown:
+	case tea.MouseWheelDown:
 		return mouseWheelDownCb, true
-	case tea.MouseButtonWheelLeft:
+	case tea.MouseWheelLeft:
 		return mouseWheelLeftCb, true
-	case tea.MouseButtonWheelRight:
+	case tea.MouseWheelRight:
 		return mouseWheelRightCb, true
 	default:
 		return 0, false
@@ -57,19 +57,20 @@ func MouseForward(mode vt10x.ModeFlag, msg tea.MouseMsg, relX, relY int) []byte 
 		return nil
 	}
 
-	base, ok := mouseButtonCb(msg.Button)
+	m := msg.Mouse()
+	base, ok := mouseButtonCb(m.Button)
 	if !ok {
 		return nil
 	}
 
 	isWheel := base >= mouseWheelUpCb
-	isMotion := msg.Action == tea.MouseActionMotion
-	isRelease := msg.Action == tea.MouseActionRelease
+	_, isMotion := msg.(tea.MouseMotionMsg)
+	_, isRelease := msg.(tea.MouseReleaseMsg)
 
 	if isMotion {
 		// 1000 (button press only) does not report motion; 1002 reports drag
-		// motion (bubbletea WithMouseCellMotion provides this); 1003 reports all
-		// motion (bubbletea cannot provide hover motion, see package notes).
+		// motion (MouseModeCellMotion provides this); 1003 reports all
+		// motion (MouseModeAllMotion provides hover motion).
 		if mode&(vt10x.ModeMouseMotion|vt10x.ModeMouseMany) == 0 {
 			return nil
 		}
@@ -77,13 +78,13 @@ func MouseForward(mode vt10x.ModeFlag, msg tea.MouseMsg, relX, relY int) []byte 
 	}
 
 	cb := base
-	if msg.Shift {
+	if m.Mod.Contains(tea.ModShift) {
 		cb += mouseShiftFlag
 	}
-	if msg.Alt {
+	if m.Mod.Contains(tea.ModAlt) {
 		cb += mouseAltFlag
 	}
-	if msg.Ctrl {
+	if m.Mod.Contains(tea.ModCtrl) {
 		cb += mouseCtrlFlag
 	}
 

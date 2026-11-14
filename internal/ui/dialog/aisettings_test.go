@@ -3,7 +3,7 @@ package dialog
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"tui-workflow/internal/config"
 )
 
@@ -31,13 +31,13 @@ func TestAISettingsDialog_Lifecycle(t *testing.T) {
 	}
 
 	// Test Tab focus cycle
-	d.Update(tea.KeyMsg{Type: tea.KeyTab})
+	d.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	if d.Focused != AIFieldAPIKey {
 		t.Errorf("expected focused to be AIFieldAPIKey, got %v", d.Focused)
 	}
 
 	// Test Ctrl+S save
-	saved, canceled, cfg, _ := d.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	saved, canceled, cfg, _ := d.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
 	if !saved || canceled {
 		t.Errorf("expected saved=true canceled=false, got saved=%v canceled=%v", saved, canceled)
 	}
@@ -50,7 +50,7 @@ func TestAISettingsDialog_Lifecycle(t *testing.T) {
 
 	// Test Esc cancel
 	d.Open(initCfg)
-	saved, canceled, _, _ = d.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	saved, canceled, _, _ = d.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	if saved || !canceled {
 		t.Errorf("expected saved=false canceled=true, got saved=%v canceled=%v", saved, canceled)
 	}
@@ -73,68 +73,38 @@ func TestAISettingsDialog_MouseInteraction(t *testing.T) {
 	// atX = (100 - 62)/2 = 19
 	// atY = (30 - 19)/2 = 5
 	// Click on Provider URL input (relY=5 -> msg.Y=10)
-	d.Update(tea.MouseMsg{
-		X:      25,
-		Y:      10,
-		Button: tea.MouseButtonLeft,
-		Action: tea.MouseActionPress,
-	})
+	d.Update(tea.MouseClickMsg{X: 25, Y: 10, Button: tea.MouseLeft})
 	if d.Focused != AIFieldProvider {
 		t.Errorf("expected focus AIFieldProvider, got %v", d.Focused)
 	}
 
 	// Click on API Key input (relY=8 -> msg.Y=13)
-	d.Update(tea.MouseMsg{
-		X:      25,
-		Y:      13,
-		Button: tea.MouseButtonLeft,
-		Action: tea.MouseActionPress,
-	})
+	d.Update(tea.MouseClickMsg{X: 25, Y: 13, Button: tea.MouseLeft})
 	if d.Focused != AIFieldAPIKey {
 		t.Errorf("expected focus AIFieldAPIKey, got %v", d.Focused)
 	}
 
 	// Click on Models input (relY=11 -> msg.Y=16)
-	d.Update(tea.MouseMsg{
-		X:      25,
-		Y:      16,
-		Button: tea.MouseButtonLeft,
-		Action: tea.MouseActionPress,
-	})
+	d.Update(tea.MouseClickMsg{X: 25, Y: 16, Button: tea.MouseLeft})
 	if d.Focused != AIFieldModels {
 		t.Errorf("expected focus AIFieldModels, got %v", d.Focused)
 	}
 
 	// Click on Default Model input (relY=14 -> msg.Y=19)
-	d.Update(tea.MouseMsg{
-		X:      25,
-		Y:      19,
-		Button: tea.MouseButtonLeft,
-		Action: tea.MouseActionPress,
-	})
+	d.Update(tea.MouseClickMsg{X: 25, Y: 19, Button: tea.MouseLeft})
 	if d.Focused != AIFieldDefaultModel {
 		t.Errorf("expected focus AIFieldDefaultModel, got %v", d.Focused)
 	}
 
 	// Click on Save button (relY=16 -> msg.Y=21, relX=10 -> msg.X=29)
-	saved, canceled, _, _ := d.Update(tea.MouseMsg{
-		X:      29,
-		Y:      21,
-		Button: tea.MouseButtonLeft,
-		Action: tea.MouseActionPress,
-	})
+	saved, canceled, _, _ := d.Update(tea.MouseClickMsg{X: 29, Y: 21, Button: tea.MouseLeft})
 	if !saved || canceled {
 		t.Errorf("expected saved=true on click Save button, got saved=%v canceled=%v", saved, canceled)
 	}
 
 	// Click outside dialog closes/cancels dialog
 	d.Open(initCfg)
-	saved, canceled, _, _ = d.Update(tea.MouseMsg{
-		X:      2,
-		Y:      2,
-		Button: tea.MouseButtonLeft,
-		Action: tea.MouseActionPress,
-	})
+	saved, canceled, _, _ = d.Update(tea.MouseClickMsg{X: 2, Y: 2, Button: tea.MouseLeft})
 	if saved || !canceled {
 		t.Errorf("expected canceled=true on click outside dialog, got saved=%v canceled=%v", saved, canceled)
 	}

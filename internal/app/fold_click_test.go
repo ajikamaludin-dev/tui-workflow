@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestFoldGutterClick(t *testing.T) {
@@ -46,12 +46,7 @@ func other() {
 	}
 
 	// Click on gutter at Y = 2 (first line of editor), X = 0 (marker column)
-	updated, _ := m.Update(tea.MouseMsg{
-		X:      0,
-		Y:      2,
-		Action: tea.MouseActionPress,
-		Button: tea.MouseButtonLeft,
-	})
+	updated, _ := m.Update(tea.MouseClickMsg{X: 0, Y: 2, Button: tea.MouseLeft})
 	m = updated.(Model)
 
 	tab = m.TabManager.ActiveTab()
@@ -60,12 +55,7 @@ func other() {
 	}
 
 	// Click again on gutter at Y = 2 to unfold, but this time at X = 2 (line number digit in gutter)
-	updated, _ = m.Update(tea.MouseMsg{
-		X:      2,
-		Y:      2,
-		Action: tea.MouseActionPress,
-		Button: tea.MouseButtonLeft,
-	})
+	updated, _ = m.Update(tea.MouseClickMsg{X: 2, Y: 2, Button: tea.MouseLeft})
 	m = updated.(Model)
 
 	if tab.Buffer.IsFoldedAt(0) {
@@ -77,12 +67,7 @@ func other() {
 	m.SidebarWidth = 28
 
 	// Click on gutter with sidebar offset: X = 28 (marker col)
-	updated, _ = m.Update(tea.MouseMsg{
-		X:      28,
-		Y:      2,
-		Action: tea.MouseActionPress,
-		Button: tea.MouseButtonLeft,
-	})
+	updated, _ = m.Update(tea.MouseClickMsg{X: 28, Y: 2, Button: tea.MouseLeft})
 	m = updated.(Model)
 
 	if !tab.Buffer.IsFoldedAt(0) {
@@ -91,12 +76,7 @@ func other() {
 
 	// Click on fold badge (past end of text in line 0): X = 28 + gutterW + 20
 	gutterW := tab.Buffer.GutterWidth()
-	updated, _ = m.Update(tea.MouseMsg{
-		X:      28 + gutterW + 20,
-		Y:      2,
-		Action: tea.MouseActionPress,
-		Button: tea.MouseButtonLeft,
-	})
+	updated, _ = m.Update(tea.MouseClickMsg{X: 28 + gutterW + 20, Y: 2, Button: tea.MouseLeft})
 	m = updated.(Model)
 
 	if tab.Buffer.IsFoldedAt(0) {

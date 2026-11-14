@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestNewModelWithPath(t *testing.T) {
@@ -48,7 +48,7 @@ func TestE2EStartupAndResize(t *testing.T) {
 	m := NewModel()
 
 	// Initial unready state
-	view := m.View()
+	view := m.View().Content
 	if !strings.Contains(view, "Memuat tui-workflow") && !strings.Contains(view, "Loading tui-workflow") {
 		t.Errorf("Expected loading message on unready model, got: %s", view)
 	}
@@ -61,7 +61,7 @@ func TestE2EStartupAndResize(t *testing.T) {
 		t.Fatalf("Model not ready after WindowSizeMsg")
 	}
 
-	view = m.View()
+	view = m.View().Content
 	if !strings.Contains(view, "File") || !strings.Contains(view, "Setting") {
 		t.Errorf("View missing menu bar: %s", view)
 	}
@@ -70,7 +70,7 @@ func TestE2EStartupAndResize(t *testing.T) {
 	newM, _ = m.Update(tea.WindowSizeMsg{Width: 70, Height: 20})
 	m = newM.(Model)
 
-	view = m.View()
+	view = m.View().Content
 	if !strings.Contains(view, "Ukuran Terminal Terlalu Kecil") && !strings.Contains(view, "Terminal Size Too Small") {
 		t.Errorf("Expected too small warning on 70x20 terminal")
 	}
@@ -82,13 +82,13 @@ func TestE2ENavigationAndShortcuts(t *testing.T) {
 	m = newM.(Model)
 
 	// Toggle Sidebar via Ctrl+B
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl})
 	m = newM.(Model)
 	if m.SidebarVisible {
 		t.Errorf("Sidebar should be hidden after Ctrl+B")
 	}
 
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl})
 	m = newM.(Model)
 	if !m.SidebarVisible {
 		t.Errorf("Sidebar should be visible after second Ctrl+B")
@@ -96,35 +96,35 @@ func TestE2ENavigationAndShortcuts(t *testing.T) {
 
 	// Toggle Focus via Ctrl+E
 	initFocus := m.Focus
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlE})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: 'e', Mod: tea.ModCtrl})
 	m = newM.(Model)
 	if m.Focus == initFocus {
 		t.Errorf("Focus should toggle after Ctrl+E")
 	}
 
 	// Switch Sidebar to Git via Alt+2
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}, Alt: true})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: '2', Text: "2", Mod: tea.ModAlt})
 	m = newM.(Model)
 	if m.SidebarView != SidebarGit {
 		t.Errorf("SidebarView should be SidebarGit after Alt+2")
 	}
 
 	// Switch Sidebar to Files via Alt+1
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}, Alt: true})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: '1', Text: "1", Mod: tea.ModAlt})
 	m = newM.(Model)
 	if m.SidebarView != SidebarFiles {
 		t.Errorf("SidebarView should be SidebarFiles after Alt+1")
 	}
 
 	// Help modal via '?'
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: '?', Text: "?"})
 	m = newM.(Model)
 	if !m.ShowHelp {
 		t.Errorf("Help modal should be active after '?'")
 	}
 
 	// Close help modal via Esc
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m = newM.(Model)
 	if m.ShowHelp {
 		t.Errorf("Help modal should close after Esc")
@@ -160,14 +160,14 @@ func TestE2EEditorWorkflow(t *testing.T) {
 	m.Focus = FocusEditor
 
 	// Toggle Markdown Preview via Alt+M / Ctrl+M
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}, Alt: true})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: 'm', Text: "m", Mod: tea.ModAlt})
 	m = newM.(Model)
 	if !m.TabManager.ActiveTab().MarkdownPreview {
 		t.Errorf("Markdown preview should be active after Alt+M")
 	}
 
 	// Toggle back to raw editor via Alt+M / Ctrl+M
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}, Alt: true})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: 'm', Text: "m", Mod: tea.ModAlt})
 	m = newM.(Model)
 	if m.TabManager.ActiveTab().MarkdownPreview {
 		t.Errorf("Markdown preview should be inactive after second Alt+M")
@@ -175,12 +175,12 @@ func TestE2EEditorWorkflow(t *testing.T) {
 
 	// Type text into buffer: " Extra"
 	for _, r := range " Extra" {
-		newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		newM, _ = m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 		m = newM.(Model)
 	}
 
 	// Save via Ctrl+S
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
 	m = newM.(Model)
 
 	// Verify file content on disk
@@ -214,7 +214,7 @@ func TestE2EModalConfirmations(t *testing.T) {
 	m.TabManager.ActiveTab().Buffer.InsertRune('X')
 
 	// Attempt close tab via Ctrl+W
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlW})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: 'w', Mod: tea.ModCtrl})
 	m = newM.(Model)
 
 	// Unsaved changes confirm dialog should be active!
@@ -223,7 +223,7 @@ func TestE2EModalConfirmations(t *testing.T) {
 	}
 
 	// Cancel dialog via Esc
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m = newM.(Model)
 
 	if m.ConfirmDialog.Active {

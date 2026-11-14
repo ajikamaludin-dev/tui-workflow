@@ -8,9 +8,9 @@ import (
 
 	"tui-workflow/internal/ignore"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"tui-workflow/internal/ui"
 )
@@ -49,9 +49,8 @@ func NewQuickOpen() *QuickOpen {
 	ti := textinput.New()
 	ti.Prompt = "❯ "
 	ti.CharLimit = 64
-	ti.Width = 48
-	ti.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
-	ti.PromptStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent)
+	ti.SetWidth(48)
+	applyTextInputStyles(&ti, lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary), lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent))
 
 	return &QuickOpen{
 		Active:       false,
@@ -172,8 +171,7 @@ func (q *QuickOpen) Open(openTabs []SwitcherItem, activeIdx int, rootDir string)
 	}
 
 	q.Filter.SetValue("")
-	q.Filter.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
-	q.Filter.PromptStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent)
+	applyTextInputStyles(&q.Filter, lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary), lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent))
 	q.Filter.Focus()
 	q.applyFilter()
 	q.Selected = 0
@@ -194,7 +192,7 @@ func (q *QuickOpen) SetWidth(w int) {
 		w = 40
 	}
 	q.Width = w
-	q.Filter.Width = w - 8
+	q.Filter.SetWidth(w - 8)
 }
 
 // Close closes the quick open dialog.
@@ -321,8 +319,8 @@ func (q *QuickOpen) Update(msg tea.Msg) (targetTabIdx int, targetPath string, cl
 	}
 
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
+	case tea.KeyPressMsg:
+		switch ui.KeyName(msg) {
 		case "esc":
 			q.Close()
 			return -1, "", true, nil

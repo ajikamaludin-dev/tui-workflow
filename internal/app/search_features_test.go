@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestSearchFeaturesIntegration(t *testing.T) {
@@ -34,7 +34,7 @@ func TestSearchFeaturesIntegration(t *testing.T) {
 	// Filter for beta
 	m.QuickOpen.Filter.SetValue("beta")
 	m.QuickOpen.ApplyFilter()
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newM, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = newM.(Model)
 
 	if m.QuickOpen.Active {
@@ -53,7 +53,7 @@ func TestSearchFeaturesIntegration(t *testing.T) {
 
 	// Simulate typing search query into FindBar
 	for _, r := range "find_me" {
-		newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		newM, _ = m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 		m = newM.(Model)
 	}
 
@@ -63,7 +63,7 @@ func TestSearchFeaturesIntegration(t *testing.T) {
 	}
 
 	// Close FindBar with Esc
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m = newM.(Model)
 	if m.FindBar.Active {
 		t.Errorf("expected FindBar to be closed on Esc")
@@ -85,7 +85,7 @@ func TestSearchFeaturesIntegration(t *testing.T) {
 	}
 
 	// Select first match and press Enter
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = newM.(Model)
 	if m.GlobalSearch.Active {
 		t.Errorf("expected GlobalSearch to be closed after enter")
@@ -107,7 +107,7 @@ func TestSearchFeaturesIntegration(t *testing.T) {
 	m.CommandPalette.Filter.SetValue("Toggle Sidebar")
 	m.CommandPalette.ApplyFilter()
 	wasSidebarVisible := m.SidebarVisible
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = newM.(Model)
 
 	if m.CommandPalette.Active {
@@ -126,7 +126,7 @@ func TestSearchFeaturesIntegration(t *testing.T) {
 		t.Errorf("expected QuickOpen width to be 80%% (%d), got %d", expectedWidth, m.QuickOpen.Width)
 	}
 
-	viewStr := m.View()
+	viewStr := m.View().Content
 	// Menu bar at top should still be preserved in the floating overlay
 	if !strings.Contains(viewStr, "File") {
 		t.Errorf("expected floating view to preserve top menu File in background")
@@ -136,15 +136,15 @@ func TestSearchFeaturesIntegration(t *testing.T) {
 	}
 
 	// Close QuickOpen
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m = newM.(Model)
 
 	// 6. Test F4 triggers Global Search
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f4")}) // or key type F4
+	newM, _ = m.Update(tea.KeyPressMsg{Code: []rune("f4")[len([]rune("f4"))-1], Text: "f4"}) // or key type F4
 	m = newM.(Model)
 	if m.GlobalSearch == nil || !m.GlobalSearch.Active {
 		// Try Special key type for F4
-		newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyF4})
+		newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyF4})
 		m = newM.(Model)
 	}
 	if m.GlobalSearch == nil || !m.GlobalSearch.Active {

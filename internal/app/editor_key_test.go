@@ -3,7 +3,7 @@ package app
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"tui-workflow/internal/editor"
 )
 
@@ -21,7 +21,7 @@ func TestEditorWordJumpSelectionAndWordBackspace(t *testing.T) {
 	tab.Buffer.ClearSelection()
 
 	// 1. Alt+Shift+Right (KeyShiftRight with Alt=true) selects "hello "
-	updM, _ := m.Update(tea.KeyMsg{Type: tea.KeyShiftRight, Alt: true})
+	updM, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModAlt | tea.ModShift})
 	m = updM.(Model)
 
 	if !tab.Buffer.HasSelection {
@@ -35,7 +35,7 @@ func TestEditorWordJumpSelectionAndWordBackspace(t *testing.T) {
 	}
 
 	// 2. Backspace deletes selection
-	updM, _ = m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+	updM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
 	m = updM.(Model)
 	if tab.Buffer.HasSelection {
 		t.Errorf("expected selection cleared after backspace")
@@ -46,7 +46,7 @@ func TestEditorWordJumpSelectionAndWordBackspace(t *testing.T) {
 
 	// 3. Alt+Backspace deletes word left
 	tab.Buffer.SetCursor(0, 5) // cursor after "world" in "world test"
-	updM, _ = m.Update(tea.KeyMsg{Type: tea.KeyBackspace, Alt: true})
+	updM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyBackspace, Mod: tea.ModAlt})
 	m = updM.(Model)
 	if string(tab.Buffer.Lines[0]) != " test" {
 		t.Errorf("expected ' test', got %q", string(tab.Buffer.Lines[0]))
@@ -58,7 +58,7 @@ func TestEditorWordJumpSelectionAndWordBackspace(t *testing.T) {
 	// 4. Shift+Right selects single character
 	tab.Buffer.SetCursor(0, 0)
 	tab.Buffer.ClearSelection()
-	updM, _ = m.Update(tea.KeyMsg{Type: tea.KeyShiftRight})
+	updM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModShift})
 	m = updM.(Model)
 	if !tab.Buffer.HasSelection {
 		t.Fatalf("expected HasSelection true after Shift+Right")
@@ -68,7 +68,7 @@ func TestEditorWordJumpSelectionAndWordBackspace(t *testing.T) {
 	}
 
 	// 5. Arrow without shift clears selection
-	updM, _ = m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	updM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
 	m = updM.(Model)
 	if tab.Buffer.HasSelection {
 		t.Errorf("expected selection cleared after Left arrow")

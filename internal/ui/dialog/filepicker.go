@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"tui-workflow/internal/ui"
 )
@@ -50,9 +50,8 @@ func NewFilePicker() *FilePicker {
 	ti := textinput.New()
 	ti.Prompt = "Search: "
 	ti.CharLimit = 64
-	ti.Width = 36
-	ti.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
-	ti.PromptStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent)
+	ti.SetWidth(36)
+	applyTextInputStyles(&ti, lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary), lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent))
 
 	return &FilePicker{
 		Active:      false,
@@ -196,8 +195,8 @@ func (p *FilePicker) Update(msg tea.Msg) (confirmed bool, canceled bool, selecte
 	}
 
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
+	case tea.KeyPressMsg:
+		switch ui.KeyName(msg) {
 		case "esc":
 			p.Close()
 			return false, true, "", nil

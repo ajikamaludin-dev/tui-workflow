@@ -1,22 +1,26 @@
 package ui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"image/color"
+
+	"charm.land/lipgloss/v2"
+)
 
 type Theme struct {
-	BgPrimary     lipgloss.Color
-	BgSidebar     lipgloss.Color
-	BgTopMenu     lipgloss.Color
-	BgStatusBar   lipgloss.Color
-	BgActiveTab   lipgloss.Color
-	BgInactiveTab lipgloss.Color
-	BorderColor   lipgloss.Color
-	FgPrimary     lipgloss.Color
-	FgSecondary   lipgloss.Color
-	FgHighlight   lipgloss.Color
-	Accent        lipgloss.Color
-	Red           lipgloss.Color
-	Green         lipgloss.Color
-	Yellow        lipgloss.Color
+	BgPrimary     color.Color
+	BgSidebar     color.Color
+	BgTopMenu     color.Color
+	BgStatusBar   color.Color
+	BgActiveTab   color.Color
+	BgInactiveTab color.Color
+	BorderColor   color.Color
+	FgPrimary     color.Color
+	FgSecondary   color.Color
+	FgHighlight   color.Color
+	Accent        color.Color
+	Red           color.Color
+	Green         color.Color
+	Yellow        color.Color
 
 	// Pre-built styles
 	TopMenuStyle      lipgloss.Style
@@ -25,25 +29,25 @@ type Theme struct {
 	DropdownStyle     lipgloss.Style
 	DropdownItemStyle lipgloss.Style
 
-	SidebarStyle        lipgloss.Style
-	SidebarHeaderStyle  lipgloss.Style
-	SidebarTabActive    lipgloss.Style
-	SidebarTabInactive  lipgloss.Style
+	SidebarStyle       lipgloss.Style
+	SidebarHeaderStyle lipgloss.Style
+	SidebarTabActive   lipgloss.Style
+	SidebarTabInactive lipgloss.Style
 
-	EditorStyle         lipgloss.Style
-	TabBarContainer     lipgloss.Style
-	TabActiveStyle      lipgloss.Style
-	TabInactiveStyle    lipgloss.Style
+	EditorStyle      lipgloss.Style
+	TabBarContainer  lipgloss.Style
+	TabActiveStyle   lipgloss.Style
+	TabInactiveStyle lipgloss.Style
 
 	StatusBarStyle      lipgloss.Style
 	StatusBarItemStyle  lipgloss.Style
 	StatusBarBadgeStyle lipgloss.Style
 
-	WarningBoxStyle     lipgloss.Style
-	LineNumberStyle     lipgloss.Style
+	WarningBoxStyle lipgloss.Style
+	LineNumberStyle lipgloss.Style
 
-	SearchMatchStyle    lipgloss.Style
-	SearchActiveMatch   lipgloss.Style
+	SearchMatchStyle  lipgloss.Style
+	SearchActiveMatch lipgloss.Style
 }
 
 var CurrentTheme = NewDarkTheme()

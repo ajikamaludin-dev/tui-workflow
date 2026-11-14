@@ -3,8 +3,8 @@ package ui
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -164,9 +164,9 @@ func (m *MenuBar) IsOpen() bool {
 	return m.ActiveMenu >= 0 && m.ActiveMenu < len(m.Categories)
 }
 
-func (m *MenuBar) HandleKey(msg tea.KeyMsg) (action string, handled bool) {
+func (m *MenuBar) HandleKey(msg tea.KeyPressMsg) (action string, handled bool) {
 	if !m.IsOpen() {
-		switch msg.String() {
+		switch KeyName(msg) {
 		case "alt+f", "alt+F":
 			m.Toggle(0)
 			return "", true
@@ -186,7 +186,7 @@ func (m *MenuBar) HandleKey(msg tea.KeyMsg) (action string, handled bool) {
 		return "", false
 	}
 
-	switch msg.String() {
+	switch KeyName(msg) {
 	case "esc":
 		m.Close()
 		return "", true
@@ -233,14 +233,15 @@ func (m *MenuBar) HandleKey(msg tea.KeyMsg) (action string, handled bool) {
 }
 
 func (m *MenuBar) HandleMouse(msg tea.MouseMsg) (action string, handled bool) {
-	if msg.Action != tea.MouseActionPress || msg.Button != tea.MouseButtonLeft {
+	click, isClick := msg.(tea.MouseClickMsg)
+	if !isClick || click.Button != tea.MouseLeft {
 		return "", false
 	}
 
 	// Click on Row 0 (Menu bar items)
-	if msg.Y == 0 {
+	if click.Y == 0 {
 		for i, cat := range m.Categories {
-			if msg.X >= cat.StartX && msg.X <= cat.EndX {
+			if click.X >= cat.StartX && click.X <= cat.EndX {
 				m.Toggle(i)
 				return "", true
 			}
@@ -260,10 +261,10 @@ func (m *MenuBar) HandleMouse(msg tea.MouseMsg) (action string, handled bool) {
 		boxHeight := lipgloss.Height(box)
 
 		// Check if click is within the dropdown box boundaries
-		if msg.X >= dropStartX && msg.X < dropStartX+boxWidth &&
-			msg.Y >= dropStartY && msg.Y < dropStartY+boxHeight {
+		if click.X >= dropStartX && click.X < dropStartX+boxWidth &&
+			click.Y >= dropStartY && click.Y < dropStartY+boxHeight {
 			// Item rows are inside the border (Y = dropStartY + 1 up to dropStartY + len(cat.Items))
-			itemY := msg.Y - (dropStartY + 1)
+			itemY := click.Y - (dropStartY + 1)
 			if itemY >= 0 && itemY < len(cat.Items) {
 				actionID := cat.Items[itemY].ActionID
 				m.Close()

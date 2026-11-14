@@ -31,7 +31,7 @@ Antarmuka `tui-workflow` dibagi secara deterministik menjadi 4 zona layout yang 
 
 ## 2. Siklus Event & The Elm Architecture (Bubble Tea)
 
-`tui-workflow` mengadopsi pola The Elm Architecture (`Model`, `Init`, `Update`, `View`) yang diorkestrasi oleh Bubble Tea v1.3+:
+`tui-workflow` mengadopsi pola The Elm Architecture (`Model`, `Init`, `Update`, `View`) yang diorkestrasi oleh Bubble Tea v2 (`charm.land/bubbletea/v2`):
 
 ```text
                ┌───────────────────────┐
@@ -76,8 +76,46 @@ Antarmuka `tui-workflow` dibagi secara deterministik menjadi 4 zona layout yang 
 ## 3. Paket & Modul Inti
 
 ### `internal/app` (Orchestrator)
-- `model.go`: Mendefinisikan root `Model`, inisialisasi state, event dispatcher global, dan interceptor mouse/keyboard modal.
-- `view.go`: Menggabungkan 4 zona layout dan merender overlay modal dengan helper `overlayCenter` dan `overlayTopCenter` berbasis ANSI trimming.
+Root package berisi Elm Model, event dispatcher, dan render root. **Batas keras: setiap file maksimal 500 baris.** Pemecahan per-domain dilakukan agar AI agent berikutnya tidak menumbuhkan God Object (lihat AGENTS.md Rule 12).
+
+**Model & Update**
+- `model.go`: Definisi root `Model` + inisialisasi (`NewModelWithPath`, `NewModel`, `Init`).
+- `update.go`: Entry point `Update(msg)` — routing pesan ke handler fokus.
+- `model_actions.go`: Aksi sidebar/tab (resize sidebar, soft-wrap, watcher, close tab, binary guard).
+- `model_modals.go`: Pembukaan modal (GoToSymbol, QuickOpen, Command Palette, GlobalSearch, Find/Replace Bar, Go-to-Line, Buffer Switcher, Branch Switcher, AI Settings).
+- `model_diff.go`: Aksi hunk (stage/unstage/discard & refresh diff tab).
+- `session.go`: Workspace session persistence (90–165).
+- `commands.go`: `tea.Cmd` constructors (git refresh/commit/push, formatter, LSP completion, AI commit, terminal output watcher).
+- `navigation.go`, `resize.go`, `keymap.go`: Navigasi viewport, helper resize, definisi konstanta key.
+
+**Keyboard handlers (`keys_*.go`)**
+- `keys_global.go`: Dispatcher `handleKeyMsg` (urutan tetap: ctrl+K → GoToSymbol → context menu → search modals → modals → terminal → sidebar/git → editor).
+- `keys_editor.go`: Helper editing (`handleCtrlSpace`, `handleTab`, `handleShiftTab`, `handleCtrlKPending`, dispatcher `handleEditorKeys`).
+- `keys_buffer.go`: Handler buffer modeless plain (autocomplete/snippet/fold/undo/dll).
+- `keys_preview.go`: Handler Diff View & Markdown Preview.
+- `keys_search.go`: GoToSymbol + Find Bar/Replace + QuickOpen + Command Palette + GlobalSearch.
+- `keys_modal.go`: Modal non-search (BranchSwitcher, AI Settings, Switcher, FilePicker, Input/Confirm Dialog, MenuBar, Help/About).
+- `keys_terminal.go`: Tab terminal PTY (raw keystroke forward + toggle fokus `Ctrl+\`).
+- `keys_git.go`: Sidebar Git/Files (`d`/`x` buang hunk, discard, branch switcher `Alt+B`).
+
+**Mouse handlers (`mouse_*.go`)**
+- `update_mouse.go`: Dispatcher `handleMouseMsg` (urutan: modals → resize/drag → right-click → drag-select → release → menu bar → tab bar → sidebar wheel → editor wheel → help/about → click fallback).
+- `mouse_modal.go`: Hit-testing modal & context menu + help/about.
+- `mouse_sidebar.go`: Resize sidebar (`col-resize` pointer), right-click explorer, scroll sidebar, klik baris refresh/bottom tabs/body.
+- `mouse_tabbar.go`: Drag tab, scroll horizontal, right-click tab bar, klik tab (Row 1).
+- `mouse_editor.go`: Drag-select (buffer/terminal/markdown preview), klik editor (gutter/fold/selection), klik tab terminal.
+- `mouse_terminal.go`: Right-click terminal (forward PTY mouse reporting).
+- `mouse_menu.go`, `mouse_statusbar.go`: Klik Top Menu Bar & Status Bar.
+- `mouse_click.go`, `mouse_release.go`: Dispatcher fallback klik kiri & release + right-click.
+
+**Rendering**
+- `view.go`: `View()` (tea.View), `renderSidebar`, `renderEditor` (4 zona layout).
+- `view_overlay.go`: `overlayAt/Center/TopCenter`, `placeCenter` (overlay modal ANSI-aware).
+- `view_modals.go`: `renderHelpModal`, `renderAboutModal`, `renderGoToSymbol`.
+- `palette_actions.go`: `handleMenuAction` (semua aksi dari Menu Bar & Command Palette).
+- `palette_context.go`: `handleContextMenuAction` + `openExplorerContextMenu`.
+
+**Peta Budget (`wc -l internal/app/*.go` target ≤ 500)** — lihat AGENTS.md Rule 12.
 
 ### `internal/editor` (Text Buffer & Tab Engine)
 - `buffer.go`: Modeless line-based buffer (`[][]rune`) dengan cursor clamping, soft-wrap virtual line mapping, gutter width adaptif, word jump, selection range, caching teks (`cachedText`), dan undo/redo snapshots.

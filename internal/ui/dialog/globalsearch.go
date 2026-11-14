@@ -12,9 +12,9 @@ import (
 
 	"tui-workflow/internal/ignore"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"tui-workflow/internal/ui"
 )
@@ -47,9 +47,8 @@ func NewGlobalSearch() *GlobalSearch {
 	ti := textinput.New()
 	ti.Prompt = "❯ "
 	ti.CharLimit = 64
-	ti.Width = 52
-	ti.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
-	ti.PromptStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent)
+	ti.SetWidth(52)
+	applyTextInputStyles(&ti, lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary), lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent))
 
 	return &GlobalSearch{
 		Active:    false,
@@ -72,8 +71,7 @@ func (gs *GlobalSearch) Open(rootDir string) {
 	gs.ScrollTop = 0
 	gs.TotalFound = 0
 	gs.Filter.SetValue("")
-	gs.Filter.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
-	gs.Filter.PromptStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent)
+	applyTextInputStyles(&gs.Filter, lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary), lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent))
 	gs.Filter.Focus()
 }
 
@@ -83,7 +81,7 @@ func (gs *GlobalSearch) SetWidth(w int) {
 		w = 40
 	}
 	gs.Width = w
-	gs.Filter.Width = w - 8
+	gs.Filter.SetWidth(w - 8)
 }
 
 // Close closes the global search dialog.
@@ -213,8 +211,8 @@ func (gs *GlobalSearch) Update(msg tea.Msg) (filePath string, line int, col int,
 	}
 
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
+	case tea.KeyPressMsg:
+		switch ui.KeyName(msg) {
 		case "esc":
 			gs.Close()
 			return "", 0, 0, true, nil

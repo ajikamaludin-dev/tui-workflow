@@ -3,9 +3,9 @@ package dialog
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"tui-workflow/internal/config"
 	"tui-workflow/internal/ui"
 )
@@ -39,14 +39,13 @@ func NewAISettingsDialog() *AISettingsDialog {
 		ti := textinput.New()
 		ti.Prompt = "❯ "
 		ti.CharLimit = 256
-		ti.Width = 50
+		ti.SetWidth(50)
 		ti.Placeholder = placeholder
 		if isPassword {
 			ti.EchoMode = textinput.EchoPassword
 			ti.EchoCharacter = '•'
 		}
-		ti.TextStyle = lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgPrimary)
-		ti.PromptStyle = lipgloss.NewStyle().Foreground(ui.CurrentTheme.Accent)
+		applyTextInputStyles(&ti, lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgPrimary), lipgloss.NewStyle().Foreground(ui.CurrentTheme.Accent))
 		return ti
 	}
 
@@ -217,13 +216,14 @@ func (d *AISettingsDialog) Update(msg tea.Msg) (saved bool, canceled bool, newCf
 	}
 
 	switch msg := msg.(type) {
-	case tea.MouseMsg:
-		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-			return d.handleMouseClick(msg.X, msg.Y)
+	case tea.MouseClickMsg:
+		if msg.Button == tea.MouseLeft {
+			m := msg.Mouse()
+			return d.handleMouseClick(m.X, m.Y)
 		}
 
-	case tea.KeyMsg:
-		switch msg.String() {
+	case tea.KeyPressMsg:
+		switch ui.KeyName(msg) {
 		case "esc":
 			d.Close()
 			return false, true, config.AIConfig{}, nil
@@ -346,10 +346,10 @@ func (d *AISettingsDialog) Render() string {
 	if fieldWidth < 20 {
 		fieldWidth = 20
 	}
-	d.ProviderInput.Width = fieldWidth - 4
-	d.APIKeyInput.Width = fieldWidth - 4
-	d.ModelsInput.Width = fieldWidth - 4
-	d.DefaultModelInput.Width = fieldWidth - 4
+	d.ProviderInput.SetWidth(fieldWidth - 4)
+	d.APIKeyInput.SetWidth(fieldWidth - 4)
+	d.ModelsInput.SetWidth(fieldWidth - 4)
+	d.DefaultModelInput.SetWidth(fieldWidth - 4)
 
 	inputBoxStyle := lipgloss.NewStyle().
 		Width(fieldWidth).

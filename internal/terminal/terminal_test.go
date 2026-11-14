@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -19,77 +19,77 @@ func TestBullet(t *testing.T) {
 func TestKeyToBytes(t *testing.T) {
 	tests := []struct {
 		name     string
-		msg      tea.KeyMsg
+		msg      tea.KeyPressMsg
 		expected []byte
 	}{
 		{
 			name:     "Runes 'a'",
-			msg:      tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}},
+			msg:      tea.KeyPressMsg{Code: 'a', Text: "a"},
 			expected: []byte("a"),
 		},
 		{
 			name:     "Alt+a",
-			msg:      tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}, Alt: true},
+			msg:      tea.KeyPressMsg{Code: 'a', Text: "a", Mod: tea.ModAlt},
 			expected: []byte("\x1ba"),
 		},
 		{
 			name:     "Enter",
-			msg:      tea.KeyMsg{Type: tea.KeyEnter},
+			msg:      tea.KeyPressMsg{Code: tea.KeyEnter},
 			expected: []byte{'\r'},
 		},
 		{
 			name:     "Backspace",
-			msg:      tea.KeyMsg{Type: tea.KeyBackspace},
+			msg:      tea.KeyPressMsg{Code: tea.KeyBackspace},
 			expected: []byte{0x7f},
 		},
 		{
 			name:     "Tab",
-			msg:      tea.KeyMsg{Type: tea.KeyTab},
+			msg:      tea.KeyPressMsg{Code: tea.KeyTab},
 			expected: []byte{'\t'},
 		},
 		{
 			name:     "Ctrl+C",
-			msg:      tea.KeyMsg{Type: tea.KeyCtrlC},
+			msg:      tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl},
 			expected: []byte{0x03},
 		},
 		{
 			name:     "Ctrl+D",
-			msg:      tea.KeyMsg{Type: tea.KeyCtrlD},
+			msg:      tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl},
 			expected: []byte{0x04},
 		},
 		{
 			name:     "Arrow Up",
-			msg:      tea.KeyMsg{Type: tea.KeyUp},
+			msg:      tea.KeyPressMsg{Code: tea.KeyUp},
 			expected: []byte("\x1b[A"),
 		},
 		{
 			name:     "Arrow Down",
-			msg:      tea.KeyMsg{Type: tea.KeyDown},
+			msg:      tea.KeyPressMsg{Code: tea.KeyDown},
 			expected: []byte("\x1b[B"),
 		},
 		{
 			name:     "Alt+Left (word back)",
-			msg:      tea.KeyMsg{Type: tea.KeyLeft, Alt: true},
+			msg:      tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModAlt},
 			expected: []byte("\x1bb"),
 		},
 		{
 			name:     "Alt+Right (word forward)",
-			msg:      tea.KeyMsg{Type: tea.KeyRight, Alt: true},
+			msg:      tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModAlt},
 			expected: []byte("\x1bf"),
 		},
 		{
 			name:     "Ctrl+Left (word back)",
-			msg:      tea.KeyMsg{Type: tea.KeyCtrlLeft},
+			msg:      tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModCtrl},
 			expected: []byte("\x1bb"),
 		},
 		{
 			name:     "Ctrl+Right (word forward)",
-			msg:      tea.KeyMsg{Type: tea.KeyCtrlRight},
+			msg:      tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModCtrl},
 			expected: []byte("\x1bf"),
 		},
 		{
 			name:     "Alt+Backspace (word delete)",
-			msg:      tea.KeyMsg{Type: tea.KeyBackspace, Alt: true},
+			msg:      tea.KeyPressMsg{Code: tea.KeyBackspace, Mod: tea.ModAlt},
 			expected: []byte("\x1b\x7f"),
 		},
 	}
@@ -283,5 +283,3 @@ func TestTerminalHasRunningProcess(t *testing.T) {
 		t.Errorf("expected HasRunningProcess() to be false after Close()")
 	}
 }
-
-

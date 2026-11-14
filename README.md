@@ -4,7 +4,7 @@
 > Dibangun dengan **Go 1.24+** dan ekosistem **Charmbracelet (Bubble Tea, Lipgloss, Bubbles, Glamour, Chroma, go-git/v5)**.
 
 [![Go Version](https://img.shields.io/badge/Go-1.24%2B-00ADD8?style=flat&logo=go)](https://golang.org)
-[![PRD Version](https://img.shields.io/badge/PRD-v0.1.1-blueviolet)](PRD.md)
+[![PRD Version](https://img.shields.io/badge/PRD-v0.2.0-blueviolet)](PRD.md)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen)](https://github.com)
 
@@ -97,7 +97,7 @@
 |---|---|
 | `Ctrl + Q` | Keluar dari aplikasi (dengan konfirmasi jika ada buffer kotor) |
 | `Ctrl + Shift + \` / `Ctrl + T` | Buka tab terminal terintegrasi baru |
-| `Ctrl + \` | Pindah fokus antara Terminal dan Sidebar |
+| `Ctrl + Backtick / F6` | Pindah fokus antara Terminal dan Sidebar |
 | `Ctrl + B` | Sembunyikan / Tampilkan Sidebar (Toggle Sidebar) |
 | `Ctrl + E` / `F6` | Pindah fokus antara Sidebar dan Editor |
 | `Alt + 1` | Beralih Sidebar ke Tampilan File Explorer |

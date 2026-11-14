@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestSidebarMouseWheelScroll(t *testing.T) {
@@ -33,12 +33,7 @@ func TestSidebarMouseWheelScroll(t *testing.T) {
 
 	// 1. Test Wheel Down on Files view
 	for i := 0; i < 15; i++ {
-		m.Update(tea.MouseMsg{
-			X:      10,
-			Y:      5,
-			Button: tea.MouseButtonWheelDown,
-			Action: tea.MouseActionPress,
-		})
+		m.Update(tea.MouseWheelMsg{X: 10, Y: 5, Button: tea.MouseWheelDown})
 	}
 	_ = m.View()
 
@@ -48,12 +43,7 @@ func TestSidebarMouseWheelScroll(t *testing.T) {
 
 	// Test Wheel Up on Files view all the way back to top
 	for i := 0; i < 20; i++ {
-		m.Update(tea.MouseMsg{
-			X:      10,
-			Y:      5,
-			Button: tea.MouseButtonWheelUp,
-			Action: tea.MouseActionPress,
-		})
+		m.Update(tea.MouseWheelMsg{X: 10, Y: 5, Button: tea.MouseWheelUp})
 	}
 	_ = m.View()
 
@@ -65,22 +55,12 @@ func TestSidebarMouseWheelScroll(t *testing.T) {
 	m.SidebarView = SidebarGit
 	if m.GitView != nil {
 		m.GitView.TotalLines = 50
-		m.Update(tea.MouseMsg{
-			X:      10,
-			Y:      5,
-			Button: tea.MouseButtonWheelDown,
-			Action: tea.MouseActionPress,
-		})
+		m.Update(tea.MouseWheelMsg{X: 10, Y: 5, Button: tea.MouseWheelDown})
 
 		if m.GitView.ScrollOffset <= 0 {
 			t.Errorf("Expected GitView.ScrollOffset > 0 after WheelDown, got %d", m.GitView.ScrollOffset)
 		}
 
-		m.Update(tea.MouseMsg{
-			X:      10,
-			Y:      5,
-			Button: tea.MouseButtonWheelUp,
-			Action: tea.MouseActionPress,
-		})
+		m.Update(tea.MouseWheelMsg{X: 10, Y: 5, Button: tea.MouseWheelUp})
 	}
 }

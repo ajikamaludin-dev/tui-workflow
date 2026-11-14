@@ -1,13 +1,12 @@
 package app
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"context"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
-
-	tea "github.com/charmbracelet/bubbletea"
 	"tui-workflow/internal/ai"
 	"tui-workflow/internal/config"
 	"tui-workflow/internal/formatter"

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestFilePickerOperations(t *testing.T) {
@@ -61,11 +61,11 @@ func TestFilePickerOperations(t *testing.T) {
 	picker.FilterInput.SetValue("")
 	picker.applyFilter()
 	picker.FocusArea = 1 // List focus
-	_, _, _, _ = picker.Update(tea.KeyMsg{Type: tea.KeyDown})
+	_, _, _, _ = picker.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	if picker.SelectedIdx != 1 {
 		t.Errorf("Expected SelectedIdx 1, got %d", picker.SelectedIdx)
 	}
-	_, _, _, _ = picker.Update(tea.KeyMsg{Type: tea.KeyUp})
+	_, _, _, _ = picker.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	if picker.SelectedIdx != 0 {
 		t.Errorf("Expected SelectedIdx 0, got %d", picker.SelectedIdx)
 	}

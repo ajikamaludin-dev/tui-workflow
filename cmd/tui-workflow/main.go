@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"tui-workflow/internal/app"
 	"tui-workflow/internal/logger"
 )
@@ -42,11 +42,9 @@ func main() {
 	fmt.Print("\x1b[6 q")
 	fmt.Print("\x1b[0 q\x1b]22;default\x1b\\")
 
-	p := tea.NewProgram(
-		model,
-		tea.WithAltScreen(),
-		tea.WithMouseCellMotion(),
-	)
+	// Program options moved to declarative tea.View fields in Bubble Tea v2
+	// (see Model.View: AltScreen + MouseModeCellMotion).
+	p := tea.NewProgram(model)
 
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error tui-workflow: %v\n", err)

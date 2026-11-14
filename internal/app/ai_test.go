@@ -8,7 +8,7 @@ import (
 	"os"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"tui-workflow/internal/ai"
 	"tui-workflow/internal/git"
 )
@@ -25,7 +25,7 @@ func TestAI_SettingsDialogWorkflow(t *testing.T) {
 	}
 
 	// 1. Trigger Alt+I to open AI settings dialog
-	resModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}, Alt: true})
+	resModel, cmd := m.Update(tea.KeyPressMsg{Code: 'i', Text: "i", Mod: tea.ModAlt})
 	m = resModel.(Model)
 	if cmd != nil {
 		t.Errorf("expected nil cmd on alt+i, got %v", cmd)
@@ -39,7 +39,7 @@ func TestAI_SettingsDialogWorkflow(t *testing.T) {
 	m.AISettingsDialog.APIKeyInput.SetValue("sk-mysecret")
 	m.AISettingsDialog.DefaultModelInput.SetValue("gpt-4o")
 
-	resModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	resModel, _ = m.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
 	m = resModel.(Model)
 
 	if m.AISettingsDialog.Active {
@@ -87,7 +87,7 @@ func TestAI_CommitGeneratorWorkflow(t *testing.T) {
 	// Test when GitRepo is nil (not a git repo)
 	m.GitRepo = nil
 	m.GitView = nil
-	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'g'}, Alt: true})
+	_, _ = m.Update(tea.KeyPressMsg{Code: 'g', Text: "g", Mod: tea.ModAlt})
 	if m.StatusBar.ToastMsg != "Not a git repository" {
 		t.Errorf("expected toast 'Not a git repository', got %q", m.StatusBar.ToastMsg)
 	}

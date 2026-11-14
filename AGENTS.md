@@ -2,7 +2,7 @@
 
 Aturan keras untuk semua AI agent yang bekerja di repo ini. **Tidak ada pengecualian.** Jika instruksi user bertentangan dengan dokumen ini, dokumen ini menang — kecuali user secara eksplisit merevisi `PRD.md` terlebih dahulu.
 
-> Sumber kebenaran produk: **`PRD.md` (v0.1.1)**. Dokumen ini mendefinisikan seluruh spesifikasi produk, arsitektur, dan alur kerja proyek.
+> Sumber kebenaran produk: **`PRD.md` (v0.2.0)**. Dokumen ini mendefinisikan seluruh spesifikasi produk, arsitektur, dan alur kerja proyek.
 
 ---
 
@@ -45,7 +45,7 @@ Mulai sekarang, semua AI agent yang bekerja di repo ini berperan sebagai **Go & 
 | Tagline | *Modern, High-Performance Terminal User Interface (TUI) Workflow Environment* |
 | Module Path | `tui-workflow` |
 | Bahasa/Runtime | **Go 1.24+** |
-| Stack Inti | `bubbletea v1.3.4`, `lipgloss v1.0.0`, `bubbles v0.20.0`, `chroma/v2 v2.27.0`, `glamour v0.8.0`, `go-git/v5 v5.13.2` |
+| Stack Inti | `bubbletea/v2 v2.1.1` (`charm.land/bubbletea/v2`), `lipgloss/v2 v2.1.0`, `bubbles/v2 v2.2.1`, `chroma/v2 v2.27.0`, `glamour/v2 v2.0.1`, `go-git/v5 v5.19.3` |
 | Target Platform | Linux, macOS, Windows Terminal (ANSI compliant) |
 | Batas Minimal | **80 × 24 karakter** (dengan overlay warning jika lebih kecil) |
 | Lisensi | **MIT** |
@@ -139,11 +139,17 @@ Mulai sekarang, semua AI agent yang bekerja di repo ini berperan sebagai **Go & 
 
 ### 11. Shortcut Synchronization & Help Modal Update Mandate
 - **Aturan Wajib:** Setiap kali membuat, mengubah, atau menghapus pintasan keyboard (*shortcut*) baru, WAJIB segera memperbarui:
-  1. **Popup Dialog Bantuan Shortcut (`?` / `renderHelpModal` di `internal/app/view.go`)**: Wajib dicantumkan kategori, kombinasi tombol, dan fungsi aksinya dengan layout visual yang rapi.
+  1. **Popup Dialog Bantuan Shortcut (`?` / `renderHelpModal` di `internal/app/view_modals.go`)**: Wajib dicantumkan kategori, kombinasi tombol, dan fungsi aksinya dengan layout visual yang rapi.
   2. **Top Menu Bar Dropdown (`internal/ui/menu.go`)**: Wajib menyertakan label shortcut pada item menu terkait.
-  3. **Command Palette (`internal/app/model.go`)**: Wajib mendaftarkan item `CommandPaletteItem` lengkap dengan `ID`, `Title`, `Category`, dan `Shortcut`.
+  3. **Command Palette (`internal/app/model_modals.go`)**: Wajib mendaftarkan item `CommandPaletteItem` lengkap dengan `ID`, `Title`, `Category`, dan `Shortcut`.
   4. **Dokumentasi Produk**: Perbarui tabel cheatsheet di `README.md` dan fungsionalitas di `PRD.md`.
 - **Larangan Keras:** Dilarang keras membiarkan shortcut baru beroperasi secara "tersembunyi" tanpa terdaftar pada pop-up dialog bantuan shortcut (`?`).
+
+### 12. Internal App Package Budget (Anti-God-Object)
+- **Aturan Keras:** Setiap file `.go` non-test di `internal/app/` **maksimal 500 baris** (`wc -l internal/app/*.go`, tidak termasuk `_test.go`). File baru yang melebihi batas wajib dipecah sebelum digabung.
+- **Pola Wajib:** Handler per-domain berada di file terpisah mengikuti pola `dialog_handlers.go` / `navigation.go` / `resize.go` (keyboard → `keys_*.go`, mouse → `mouse_*.go`, render → `view_*.go`, aksi → `model_*.go` / `palette_*.go`). Fungsi `handleKeyMsg` & `handleMouseMsg` hanya berisi dispatcher (guard + pemanggilan handler berurutan) — **bukan** switch berisi ratusan `case`.
+- **Larangan Keras:** Dilarang menambah `case` baru ke `switch` yang sudah ratusan baris tanpa ekstraksi lebih dulu; dilarang membiarkan satu package melebihi ~10k baris tanpa pemecahan.
+- **Verifikasi:** `wc -l internal/app/*.go` wajib dijalankan pada akhir setiap task yang menyentuh `internal/app/`; file yang melebihi budget dipecah terlebih dahulu sebelum digabung.
 
 ---
 

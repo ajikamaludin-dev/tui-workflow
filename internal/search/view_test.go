@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestSearchViewSearchAndReplace(t *testing.T) {
@@ -71,17 +71,17 @@ func TestSearchViewNavigation(t *testing.T) {
 		t.Fatalf("Expected initial focus FocusFindInput")
 	}
 
-	sv.Update(tea.KeyMsg{Type: tea.KeyTab})
+	sv.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	if sv.FocusField != FocusReplaceInput {
 		t.Errorf("Expected FocusReplaceInput after Tab, got %v", sv.FocusField)
 	}
 
-	sv.Update(tea.KeyMsg{Type: tea.KeyTab})
+	sv.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	if sv.FocusField != FocusMatchList {
 		t.Errorf("Expected FocusMatchList after Tab, got %v", sv.FocusField)
 	}
 
-	sv.Update(tea.KeyMsg{Type: tea.KeyTab})
+	sv.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	if sv.FocusField != FocusFindInput {
 		t.Errorf("Expected wrap to FocusFindInput after Tab, got %v", sv.FocusField)
 	}

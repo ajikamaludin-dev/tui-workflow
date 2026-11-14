@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	gogit "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
@@ -274,8 +274,8 @@ func TestGitView_MultilineCommitInputAndTextWrap(t *testing.T) {
 	}
 
 	// Test keyboard navigation: Up stays at top row when row=0
-	gv.CommitInput.SetCursor(0)
-	gv.Update(tea.KeyMsg{Type: tea.KeyUp})
+	gv.CommitInput.MoveToBegin()
+	gv.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	if gv.FocusArea != GitFocusCommitInput {
 		t.Errorf("Expected focus to remain GitFocusCommitInput on KeyUp, got %v", gv.FocusArea)
 	}
@@ -287,12 +287,12 @@ func TestGitView_MultilineCommitInputAndTextWrap(t *testing.T) {
 		t.Fatalf("Expected cursor on line 0, got %d", gv.CommitInput.Line())
 	}
 	// Line 1 -> KeyDown moves to Line 2
-	gv.Update(tea.KeyMsg{Type: tea.KeyDown})
+	gv.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	if gv.FocusArea != GitFocusCommitInput {
 		t.Errorf("Expected focus to remain GitFocusCommitInput while navigating lines, got %v", gv.FocusArea)
 	}
 	// On line 2 (last line) -> KeyDown exits to GitFocusStaged
-	gv.Update(tea.KeyMsg{Type: tea.KeyDown})
+	gv.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	if gv.FocusArea != GitFocusStaged {
 		t.Errorf("Expected focus to transition to GitFocusStaged at bottom line, got %v", gv.FocusArea)
 	}

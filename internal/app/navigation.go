@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"time"
-
 	"tui-workflow/internal/lsp"
 )
 
@@ -142,4 +141,3 @@ func (m *Model) addNextOccurrence() {
 	}
 	m.StatusBar.ShowToast("No other occurrences found", true, 2*time.Second)
 }
-

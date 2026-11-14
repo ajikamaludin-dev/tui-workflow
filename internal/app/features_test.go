@@ -1,14 +1,14 @@
 package app
 
 import (
+	"charm.land/lipgloss/v2"
 	"os"
 	"path/filepath"
 	"strings"
-	"github.com/charmbracelet/lipgloss"
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	gogit "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 	"tui-workflow/internal/git"
@@ -92,7 +92,7 @@ func TestBranchInStatusBarAndUntrackedOpen(t *testing.T) {
 	m.GitView.FocusArea = git.GitFocusChanges
 	m.GitView.ChangesIdx = 0
 
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newM, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = newM.(Model)
 
 	// Untracked file should be opened DIRECTLY as editor tab, NOT diff tab
@@ -129,7 +129,7 @@ func TestOpenFileAndFolderDialogs(t *testing.T) {
 	m.Height = 30
 
 	// 1. Test Open File via shortcut Ctrl+O -> Opens FilePicker in PickerModeFile
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlO})
+	newM, _ := m.Update(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})
 	m = newM.(Model)
 
 	if !m.FilePicker.Active || m.FilePicker.Mode != dialog.PickerModeFile {
@@ -151,7 +151,7 @@ func TestOpenFileAndFolderDialogs(t *testing.T) {
 	m.FilePicker.FocusArea = 1
 
 	// Simulate Enter on selected file item
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = newM.(Model)
 
 	if m.FilePicker.Active {
@@ -178,12 +178,7 @@ func TestOpenFileAndFolderDialogs(t *testing.T) {
 	btnY := startY + modalH - 3
 	btnX := startX + 6
 
-	newM, _ = m.Update(tea.MouseMsg{
-		X:      btnX,
-		Y:      btnY,
-		Button: tea.MouseButtonLeft,
-		Action: tea.MouseActionPress,
-	})
+	newM, _ = m.Update(tea.MouseClickMsg{X: btnX, Y: btnY, Button: tea.MouseLeft})
 	m = newM.(Model)
 
 	if m.FilePicker.Active {
@@ -223,12 +218,7 @@ func TestModalMouseClicks(t *testing.T) {
 	startY := (m.Height - modalH) / 2
 	clickX := startX + 25
 	clickY := startY + modalH - 3
-	newM, _ := m.Update(tea.MouseMsg{
-		X:      clickX,
-		Y:      clickY,
-		Button: tea.MouseButtonLeft,
-		Action: tea.MouseActionPress,
-	})
+	newM, _ := m.Update(tea.MouseClickMsg{X: clickX, Y: clickY, Button: tea.MouseLeft})
 	m = newM.(Model)
 	if m.InputDialog.Active {
 		t.Errorf("InputDialog should be closed after clicking Cancel")
@@ -244,12 +234,7 @@ func TestModalMouseClicks(t *testing.T) {
 	startX = (m.Width - modalW) / 2
 	startY = (m.Height - modalH) / 2
 	// Click Cancel button (buttonY = boxH - 3, relX ~ 20)
-	newM, _ = m.Update(tea.MouseMsg{
-		X:      startX + 20,
-		Y:      startY + modalH - 3,
-		Button: tea.MouseButtonLeft,
-		Action: tea.MouseActionPress,
-	})
+	newM, _ = m.Update(tea.MouseClickMsg{X: startX + 20, Y: startY + modalH - 3, Button: tea.MouseLeft})
 	m = newM.(Model)
 	if m.ConfirmDialog.Active {
 		t.Errorf("ConfirmDialog should be closed after clicking Cancel")
@@ -331,12 +316,7 @@ func TestGitCommitAndPushButtonInteraction(t *testing.T) {
 	// Click [Commit] (X = 4)
 	// Click Y is relative to sidebar content row (relLine = msg.Y - 3)
 	screenY := buttonY + 3
-	newM, cmd := m.Update(tea.MouseMsg{
-		X:      4,
-		Y:      screenY,
-		Button: tea.MouseButtonLeft,
-		Action: tea.MouseActionPress,
-	})
+	newM, cmd := m.Update(tea.MouseClickMsg{X: 4, Y: screenY, Button: tea.MouseLeft})
 	m = newM.(Model)
 
 	if !m.GitView.IsLoading || m.GitView.LoadingMsg != "Committing..." {
@@ -381,12 +361,7 @@ func TestGitCommitAndPushButtonInteraction(t *testing.T) {
 	screenY = buttonY + 3
 
 	// Click [Push]
-	newM, cmd = m.Update(tea.MouseMsg{
-		X:      4,
-		Y:      screenY,
-		Button: tea.MouseButtonLeft,
-		Action: tea.MouseActionPress,
-	})
+	newM, cmd = m.Update(tea.MouseClickMsg{X: 4, Y: screenY, Button: tea.MouseLeft})
 	m = newM.(Model)
 
 	if !m.GitView.IsLoading || m.GitView.LoadingMsg != "Pushing..." {
@@ -443,27 +418,13 @@ func TestContextMenuAndSelection(t *testing.T) {
 	// Gutter is ~6 columns, so editor text starts around X = m.SidebarWidth + 6
 	// Y = 2 is line 0 of buffer
 	textStartX := m.SidebarWidth + 6
-	newM, _ = m.Update(tea.MouseMsg{
-		X:      textStartX,
-		Y:      2,
-		Button: tea.MouseButtonLeft,
-		Action: tea.MouseActionPress,
-	})
+	newM, _ = m.Update(tea.MouseClickMsg{X: textStartX, Y: 2, Button: tea.MouseLeft})
 	m = newM.(Model)
 
-	newM, _ = m.Update(tea.MouseMsg{
-		X:      textStartX + 5,
-		Y:      2,
-		Action: tea.MouseActionMotion,
-	})
+	newM, _ = m.Update(tea.MouseMotionMsg{X: textStartX + 5, Y: 2})
 	m = newM.(Model)
 
-	newM, _ = m.Update(tea.MouseMsg{
-		X:      textStartX + 5,
-		Y:      2,
-		Button: tea.MouseButtonLeft,
-		Action: tea.MouseActionRelease,
-	})
+	newM, _ = m.Update(tea.MouseReleaseMsg{X: textStartX + 5, Y: 2, Button: tea.MouseLeft})
 	m = newM.(Model)
 
 	tab = m.TabManager.ActiveTab()
@@ -472,12 +433,7 @@ func TestContextMenuAndSelection(t *testing.T) {
 	}
 
 	// 2. Right click to open ContextMenu
-	newM, _ = m.Update(tea.MouseMsg{
-		X:      textStartX + 6,
-		Y:      5,
-		Button: tea.MouseButtonRight,
-		Action: tea.MouseActionPress,
-	})
+	newM, _ = m.Update(tea.MouseClickMsg{X: textStartX + 6, Y: 5, Button: tea.MouseRight})
 	m = newM.(Model)
 
 	if m.ContextMenu == nil || !m.ContextMenu.Active {
@@ -485,19 +441,14 @@ func TestContextMenuAndSelection(t *testing.T) {
 	}
 
 	// Right-click release at same position must NOT close menu
-	newM, _ = m.Update(tea.MouseMsg{
-		X:      40,
-		Y:      5,
-		Button: tea.MouseButtonRight,
-		Action: tea.MouseActionRelease,
-	})
+	newM, _ = m.Update(tea.MouseReleaseMsg{X: 40, Y: 5, Button: tea.MouseRight})
 	m = newM.(Model)
 	if !m.ContextMenu.Active {
 		t.Fatalf("expected ContextMenu to stay active after right-click release")
 	}
 
 	// 3. Esc closes ContextMenu
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m = newM.(Model)
 
 	if m.ContextMenu.Active {
@@ -505,7 +456,7 @@ func TestContextMenuAndSelection(t *testing.T) {
 	}
 
 	// 4. Ctrl+A selects all
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 	m = newM.(Model)
 
 	tab = m.TabManager.ActiveTab()
@@ -548,7 +499,7 @@ func TestSoftWrapToggleAndWordJump(t *testing.T) {
 	}
 
 	// 2. Press Alt+Z -> Toggle to false
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'z'}, Alt: true})
+	newM, _ := m.Update(tea.KeyPressMsg{Code: 'z', Text: "z", Mod: tea.ModAlt})
 	m = newM.(Model)
 	if m.SoftWrap || tab.Buffer.SoftWrap {
 		t.Errorf("Expected SoftWrap to be false after Alt+Z")
@@ -563,14 +514,14 @@ func TestSoftWrapToggleAndWordJump(t *testing.T) {
 	// 4. Test Word Jump via key messages
 	tab.Buffer.SetCursor(0, 0)
 	// Press ctrl+right
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlRight})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyRight, Mod: tea.ModCtrl})
 	m = newM.(Model)
 	if tab.Buffer.CursorCol != 8 { // after "package " -> lands at "main" (col 8)
 		t.Errorf("Expected cursor at col 8 after Ctrl+Right, got %d", tab.Buffer.CursorCol)
 	}
 
 	// Press ctrl+left
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlLeft})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModCtrl})
 	m = newM.(Model)
 	if tab.Buffer.CursorCol != 0 {
 		t.Errorf("Expected cursor at col 0 after Ctrl+Left, got %d", tab.Buffer.CursorCol)
@@ -584,12 +535,7 @@ func TestSoftWrapToggleAndWordJump(t *testing.T) {
 	// Click on Row 2 (first editor text row), X = sidebarWidth + gutterWidth + 3
 	editorStartX := 30
 	clickX := editorStartX + tab.Buffer.GutterWidth() + 3
-	newM, _ = m.Update(tea.MouseMsg{
-		X:      clickX,
-		Y:      2,
-		Button: tea.MouseButtonLeft,
-		Action: tea.MouseActionPress,
-	})
+	newM, _ = m.Update(tea.MouseClickMsg{X: clickX, Y: 2, Button: tea.MouseLeft})
 	m = newM.(Model)
 	if tab.Buffer.CursorRow != 0 || tab.Buffer.CursorCol != 3 {
 		t.Errorf("Expected cursor at (0, 3) after precise click, got (%d, %d)", tab.Buffer.CursorRow, tab.Buffer.CursorCol)
@@ -644,7 +590,7 @@ func TestGitCommit_UserNotConfiguredAlert(t *testing.T) {
 	}
 
 	// Pressing Enter dismisses the alert dialog
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	newM, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = newM.(Model)
 	if m.ConfirmDialog.Active {
 		t.Errorf("Expected ConfirmDialog inactive after Enter")
@@ -662,5 +608,3 @@ func TestGitCommit_UserNotConfiguredAlert(t *testing.T) {
 		t.Errorf("Expected toast notification, got %q", m.StatusBar.ToastMsg)
 	}
 }
-
-

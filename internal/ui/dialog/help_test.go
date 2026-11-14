@@ -3,7 +3,7 @@ package dialog
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestHelpDialogNavigationAndMouse(t *testing.T) {
@@ -24,13 +24,13 @@ func TestHelpDialogNavigationAndMouse(t *testing.T) {
 	}
 
 	// Down arrow scrolls down
-	hd.Update(tea.KeyMsg{Type: tea.KeyDown})
+	hd.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	if hd.ScrollTop != 1 {
 		t.Fatalf("expected ScrollTop 1 after KeyDown, got %d", hd.ScrollTop)
 	}
 
 	// Up arrow scrolls up
-	hd.Update(tea.KeyMsg{Type: tea.KeyUp})
+	hd.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	if hd.ScrollTop != 0 {
 		t.Fatalf("expected ScrollTop 0 after KeyUp, got %d", hd.ScrollTop)
 	}
@@ -54,7 +54,7 @@ func TestHelpDialogNavigationAndMouse(t *testing.T) {
 	}
 
 	// Esc key closes modal
-	closed = hd.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	closed = hd.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	if !closed || hd.Active {
 		t.Fatalf("expected Esc to close modal, got closed=%v active=%v", closed, hd.Active)
 	}

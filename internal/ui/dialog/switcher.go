@@ -3,9 +3,9 @@ package dialog
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"tui-workflow/internal/ui"
 )
 
@@ -17,21 +17,20 @@ type SwitcherItem struct {
 }
 
 type BufferSwitcher struct {
-	Active     bool
-	Items      []SwitcherItem
-	Filtered   []SwitcherItem
-	Selected   int
-	Filter     textinput.Model
-	Width      int
+	Active   bool
+	Items    []SwitcherItem
+	Filtered []SwitcherItem
+	Selected int
+	Filter   textinput.Model
+	Width    int
 }
 
 func NewBufferSwitcher() *BufferSwitcher {
 	ti := textinput.New()
 	ti.Prompt = "Search Tab: "
 	ti.CharLimit = 64
-	ti.Width = 38
-	ti.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
-	ti.PromptStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent)
+	ti.SetWidth(38)
+	applyTextInputStyles(&ti, lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary), lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent))
 
 	return &BufferSwitcher{
 		Active:   false,
@@ -92,8 +91,8 @@ func (s *BufferSwitcher) Update(msg tea.Msg) (targetIdx int, closed bool, cmd te
 	}
 
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
+	case tea.KeyPressMsg:
+		switch ui.KeyName(msg) {
 		case "esc":
 			s.Close()
 			return -1, true, nil

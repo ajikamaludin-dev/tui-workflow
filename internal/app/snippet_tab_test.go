@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestSnippetTabAndShiftTabNavigation(t *testing.T) {
@@ -26,12 +26,12 @@ func TestSnippetTabAndShiftTabNavigation(t *testing.T) {
 
 	// 1. User types 'rafce'
 	for _, r := range "rafce" {
-		res, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		res, _ := m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 		m = res.(Model)
 	}
 
 	// 2. User presses Tab -> expands snippet (Tab-stop 1: ComponentName)
-	res, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	res, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	m = res.(Model)
 
 	tab = m.TabManager.ActiveTab()
@@ -43,7 +43,7 @@ func TestSnippetTabAndShiftTabNavigation(t *testing.T) {
 	}
 
 	// 3. User presses Tab -> advances to Tab-stop 2: content
-	res, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	res, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	m = res.(Model)
 
 	tab = m.TabManager.ActiveTab()
@@ -52,7 +52,7 @@ func TestSnippetTabAndShiftTabNavigation(t *testing.T) {
 	}
 
 	// 4. User presses Shift+Tab -> goes back to Tab-stop 1: ComponentName
-	res, _ = m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	res, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
 	m = res.(Model)
 
 	tab = m.TabManager.ActiveTab()
@@ -61,7 +61,7 @@ func TestSnippetTabAndShiftTabNavigation(t *testing.T) {
 	}
 
 	// 5. User presses Esc -> exits snippet session cleanly
-	res, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	res, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m = res.(Model)
 
 	if m.SnippetSession != nil && m.SnippetSession.Active {
@@ -81,11 +81,11 @@ func TestCtrlSpaceLocalAutocomplete(t *testing.T) {
 	m.openFile(testFile)
 
 	// Move cursor to bottom
-	res, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	res, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = res.(Model)
 
 	// Trigger Ctrl+Space (both tea.KeyCtrlAt and "ctrl+space")
-	res, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlAt})
+	res, _ = m.Update(tea.KeyPressMsg{Code: tea.KeySpace, Mod: tea.ModCtrl})
 	m = res.(Model)
 
 	if m.CompletionPopup == nil || !m.CompletionPopup.Active {
@@ -116,7 +116,7 @@ func TestCtrlSpaceLocalAutocomplete(t *testing.T) {
 	}
 
 	// Close popup with Esc
-	res, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	res, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m = res.(Model)
 	if m.CompletionPopup.Active {
 		t.Errorf("CompletionPopup should close on Esc")

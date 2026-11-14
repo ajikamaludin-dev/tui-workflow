@@ -3,9 +3,9 @@ package dialog
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"tui-workflow/internal/ui"
 )
 
@@ -35,9 +35,8 @@ func NewInputDialog() *InputDialog {
 	ti := textinput.New()
 	ti.Prompt = "❯ "
 	ti.CharLimit = 128
-	ti.Width = 36
-	ti.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
-	ti.PromptStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent)
+	ti.SetWidth(36)
+	applyTextInputStyles(&ti, lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary), lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent))
 
 	return &InputDialog{
 		Active:    false,
@@ -52,8 +51,7 @@ func (d *InputDialog) Open(t InputDialogType, title, targetPath, initialVal stri
 	d.Title = title
 	d.TargetPath = targetPath
 	d.TextInput.SetValue(initialVal)
-	d.TextInput.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
-	d.TextInput.PromptStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent)
+	applyTextInputStyles(&d.TextInput, lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary), lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent))
 	d.TextInput.CursorEnd()
 	d.TextInput.Focus()
 	d.FocusedBtn = 0
@@ -74,8 +72,8 @@ func (d *InputDialog) Update(msg tea.Msg) (confirmed bool, canceled bool, cmd te
 	}
 
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
+	case tea.KeyPressMsg:
+		switch ui.KeyName(msg) {
 		case "esc":
 			d.Close()
 			return false, true, nil

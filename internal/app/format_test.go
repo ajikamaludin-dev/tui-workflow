@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"tui-workflow/internal/config"
 	"tui-workflow/internal/editor"
 	"tui-workflow/internal/ui"
@@ -120,16 +119,6 @@ func TestFormatKeypressShortcuts(t *testing.T) {
 		Focus:      FocusEditor,
 	}
 
-	// Press ctrl+shift+i
-	keyMsg := tea.KeyMsg{
-		Type:  tea.KeyRunes,
-		Runes: []rune("ctrl+shift+i"),
-		Alt:   false,
-	}
-	// Bubble tea string representation of key
-	// In our switch statement we check msg.String() == "ctrl+shift+i"
-	// Let's create KeyMsg with type or use mock
 	_ = m
 	_ = time.Second
-	_ = keyMsg
 }

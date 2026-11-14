@@ -2,13 +2,12 @@ package app
 
 import (
 	"bytes"
+	tea "charm.land/bubbletea/v2"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-
-	tea "github.com/charmbracelet/bubbletea"
 	"tui-workflow/internal/config"
 	"tui-workflow/internal/editor"
 )
@@ -113,8 +112,6 @@ func (m *Model) captureWorkspaceSession() *config.WorkspaceSession {
 	config.NormalizeWorkspaceSession(sess)
 	return sess
 }
-
-
 
 func (m *Model) scheduleSessionPersist() tea.Cmd {
 	if m == nil {

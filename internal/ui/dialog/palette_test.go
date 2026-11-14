@@ -3,7 +3,7 @@ package dialog
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestCommandPalette(t *testing.T) {
@@ -31,7 +31,7 @@ func TestCommandPalette(t *testing.T) {
 	}
 
 	// Enter
-	action, closed, _ := cp.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	action, closed, _ := cp.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if !closed || action != "setting.sidebar" {
 		t.Errorf("expected closed=true and action=setting.sidebar, got closed=%v, action=%s", closed, action)
 	}

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"tui-workflow/internal/linter"
 	"tui-workflow/internal/lsp"
 	"tui-workflow/internal/snippet"
@@ -53,7 +53,7 @@ func TestCodeAssistanceIntegration(t *testing.T) {
 	}
 
 	// Simulate pressing Tab
-	resModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	resModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	m = resModel.(Model)
 
 	tab = m.TabManager.ActiveTab()
@@ -66,7 +66,7 @@ func TestCodeAssistanceIntegration(t *testing.T) {
 	}
 
 	// Cancel snippet session with Esc
-	resModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	resModel, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	m = resModel.(Model)
 	if m.SnippetSession != nil && m.SnippetSession.Active {
 		t.Errorf("expected SnippetSession to be inactive after Esc")
@@ -134,7 +134,7 @@ func TestCodeAssistanceIntegration(t *testing.T) {
 	}
 
 	// Press Enter to confirm completion
-	resModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	resModel, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = resModel.(Model)
 	tab = m.TabManager.ActiveTab()
 

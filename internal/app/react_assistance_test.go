@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"tui-workflow/internal/lsp"
 )
 
@@ -28,7 +28,7 @@ func TestReactAutoCloseTag(t *testing.T) {
 
 	// 1. User types "<div>"
 	for _, r := range "<div>" {
-		res, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		res, _ := m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 		m = res.(Model)
 	}
 
@@ -44,11 +44,11 @@ func TestReactAutoCloseTag(t *testing.T) {
 	}
 
 	// 2. User types "<Button className=\"btn\">"
-	res, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	res, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = res.(Model)
 
 	for _, r := range "<Button className=\"btn\">" {
-		res, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		res, _ = m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 		m = res.(Model)
 	}
 
@@ -81,12 +81,12 @@ func TestReactAutoImportOnCompletion(t *testing.T) {
 
 	// Type "useSt"
 	for _, r := range "useSt" {
-		res, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		res, _ := m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 		m = res.(Model)
 	}
 
 	// Trigger Ctrl+Space autocomplete
-	res, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlAt})
+	res, _ := m.Update(tea.KeyPressMsg{Code: tea.KeySpace, Mod: tea.ModCtrl})
 	m = res.(Model)
 
 	if m.CompletionPopup == nil || !m.CompletionPopup.Active {
@@ -100,7 +100,7 @@ func TestReactAutoImportOnCompletion(t *testing.T) {
 	}
 
 	// Press Enter to accept completion
-	res, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	res, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = res.(Model)
 
 	tab = m.TabManager.ActiveTab()
@@ -159,7 +159,7 @@ export const MyPage = () => {
 	}, 10, 10, "Btn")
 
 	// Press Enter to accept completion
-	res, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	res, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = res.(Model)
 
 	tab = m.TabManager.ActiveTab()

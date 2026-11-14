@@ -1,15 +1,16 @@
 package dialog
 
 import (
+	"image/color"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // NormalizeDialogBackground ensures that all padding spaces and inner elements
 // inside a dialog box have the specified background color, preventing visual "holes"
 // caused by child ANSI resets (\x1b[0m).
-func NormalizeDialogBackground(rendered string, bg lipgloss.Color) string {
+func NormalizeDialogBackground(rendered string, bg color.Color) string {
 	if rendered == "" {
 		return ""
 	}

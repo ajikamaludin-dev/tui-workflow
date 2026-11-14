@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestTabContextMenu(t *testing.T) {
@@ -50,12 +50,7 @@ func TestTabContextMenu(t *testing.T) {
 	// 1. Right-click on Tab 1
 	tab1Region := m.TabManager.ClickRegions[1]
 	clickX := editorStartX + tab1Region.StartX + 1
-	newM, _ := m.Update(tea.MouseMsg{
-		X:      clickX,
-		Y:      1,
-		Button: tea.MouseButtonRight,
-		Action: tea.MouseActionPress,
-	})
+	newM, _ := m.Update(tea.MouseClickMsg{X: clickX, Y: 1, Button: tea.MouseRight})
 	m = newM.(Model)
 
 	if m.ContextMenu == nil || !m.ContextMenu.Active {
@@ -110,12 +105,7 @@ func TestSidebarRefreshButton(t *testing.T) {
 	// 1. Click refresh button in Row 2 when Files tab is active
 	// Refresh button is located on Row 2 at the top inside the active tab
 	refreshClickX := 5
-	newM, _ := m.Update(tea.MouseMsg{
-		X:      refreshClickX,
-		Y:      2,
-		Button: tea.MouseButtonLeft,
-		Action: tea.MouseActionPress,
-	})
+	newM, _ := m.Update(tea.MouseClickMsg{X: refreshClickX, Y: 2, Button: tea.MouseLeft})
 	m = newM.(Model)
 
 	if !strings.Contains(m.StatusBar.ToastMsg, "File explorer reloaded") {
@@ -124,12 +114,7 @@ func TestSidebarRefreshButton(t *testing.T) {
 
 	// 2. Click refresh button when Git tab is active
 	m.SidebarView = SidebarGit
-	newM, _ = m.Update(tea.MouseMsg{
-		X:      refreshClickX,
-		Y:      2,
-		Button: tea.MouseButtonLeft,
-		Action: tea.MouseActionPress,
-	})
+	newM, _ = m.Update(tea.MouseClickMsg{X: refreshClickX, Y: 2, Button: tea.MouseLeft})
 	m = newM.(Model)
 
 	// Since tempDir is not a git repo, gitView is nil or it doesn't crash
@@ -160,10 +145,7 @@ func TestEditorQuestionMarkTyping(t *testing.T) {
 	m.ShowHelp = false
 
 	// Type '?' in active editor buffer
-	newM, _ := m.Update(tea.KeyMsg{
-		Type:  tea.KeyRunes,
-		Runes: []rune{'?'},
-	})
+	newM, _ := m.Update(tea.KeyPressMsg{Code: '?', Text: "?"})
 	m = newM.(Model)
 
 	// Help modal should NOT be shown
@@ -183,10 +165,7 @@ func TestEditorQuestionMarkTyping(t *testing.T) {
 
 	// When focus is on Sidebar, '?' SHOULD toggle Help
 	m.Focus = FocusSidebar
-	newM, _ = m.Update(tea.KeyMsg{
-		Type:  tea.KeyRunes,
-		Runes: []rune{'?'},
-	})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: '?', Text: "?"})
 	m = newM.(Model)
 	if !m.ShowHelp {
 		t.Errorf("Expected ShowHelp=true when pressing '?' outside editor")
@@ -221,7 +200,6 @@ func TestSidebarFooterTabsPinnedToBottom(t *testing.T) {
 	}
 }
 
-
 func TestTabDragAndPin(t *testing.T) {
 	tempDir, err := os.MkdirTemp("", "tui-drag-pin-test-*")
 	if err != nil {
@@ -250,7 +228,7 @@ func TestTabDragAndPin(t *testing.T) {
 
 	// 1. Test Alt+P shortcut on active tab (c.txt, index 2)
 	m.TabManager.ActiveIndex = 2
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}, Alt: true})
+	newM, _ := m.Update(tea.KeyPressMsg{Code: 'p', Text: "p", Mod: tea.ModAlt})
 	m = newM.(Model)
 
 	if !m.TabManager.Tabs[0].IsPinned || m.TabManager.Tabs[0].Name != "c.txt" {
@@ -282,24 +260,14 @@ func TestTabDragAndPin(t *testing.T) {
 	reg2 := m.TabManager.ClickRegions[2] // b.txt
 
 	// Mouse Press on tab 2
-	newM, _ = m.Update(tea.MouseMsg{
-		X:      editorStartX + reg2.StartX + 1,
-		Y:      1,
-		Button: tea.MouseButtonLeft,
-		Action: tea.MouseActionPress,
-	})
+	newM, _ = m.Update(tea.MouseClickMsg{X: editorStartX + reg2.StartX + 1, Y: 1, Button: tea.MouseLeft})
 	m = newM.(Model)
 	if m.DraggingTabIdx != 2 {
 		t.Errorf("Expected DraggingTabIdx=2, got %d", m.DraggingTabIdx)
 	}
 
 	// Mouse Motion to tab 1
-	newM, _ = m.Update(tea.MouseMsg{
-		X:      editorStartX + reg1.StartX + 1,
-		Y:      1,
-		Button: tea.MouseButtonLeft,
-		Action: tea.MouseActionMotion,
-	})
+	newM, _ = m.Update(tea.MouseMotionMsg{X: editorStartX + reg1.StartX + 1, Y: 1, Button: tea.MouseLeft})
 	m = newM.(Model)
 	if m.DraggingTabIdx != 1 {
 		t.Errorf("Expected DraggingTabIdx to become 1 after drag, got %d", m.DraggingTabIdx)
@@ -309,12 +277,7 @@ func TestTabDragAndPin(t *testing.T) {
 	}
 
 	// Mouse Release ends drag
-	newM, _ = m.Update(tea.MouseMsg{
-		X:      editorStartX + reg1.StartX + 1,
-		Y:      1,
-		Button: tea.MouseButtonLeft,
-		Action: tea.MouseActionRelease,
-	})
+	newM, _ = m.Update(tea.MouseReleaseMsg{X: editorStartX + reg1.StartX + 1, Y: 1, Button: tea.MouseLeft})
 	m = newM.(Model)
 	if m.DraggingTabIdx != -1 || m.IsDraggingTab {
 		t.Errorf("Expected drag state reset after release, DraggingTabIdx=%d, IsDraggingTab=%v", m.DraggingTabIdx, m.IsDraggingTab)

@@ -3,16 +3,28 @@ package terminal
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/hinshun/vt10x"
 )
 
-func mouseMsg(btn tea.MouseButton, action tea.MouseAction, x, y int) tea.MouseMsg {
-	return tea.MouseMsg{Button: btn, Action: action, X: x, Y: y}
+func clickMsg(btn tea.MouseButton, x, y int) tea.MouseMsg {
+	return tea.MouseClickMsg{X: x, Y: y, Button: btn}
+}
+
+func releaseMsg(btn tea.MouseButton, x, y int) tea.MouseMsg {
+	return tea.MouseReleaseMsg{X: x, Y: y, Button: btn}
+}
+
+func motionMsg(btn tea.MouseButton, x, y int) tea.MouseMsg {
+	return tea.MouseMotionMsg{X: x, Y: y, Button: btn}
+}
+
+func wheelMsg(btn tea.MouseButton, x, y int) tea.MouseMsg {
+	return tea.MouseWheelMsg{X: x, Y: y, Button: btn}
 }
 
 func TestMouseForward_NoModeRequested(t *testing.T) {
-	msg := mouseMsg(tea.MouseButtonLeft, tea.MouseActionPress, 3, 2)
+	msg := clickMsg(tea.MouseLeft, 3, 2)
 	if got := MouseForward(0, msg, 3, 2); got != nil {
 		t.Fatalf("expected nil when inner app requested no mouse mode, got %q", got)
 	}
@@ -52,13 +64,13 @@ func TestMouseForward_SGR(t *testing.T) {
 		msg      tea.MouseMsg
 		expected string
 	}{
-		{"left press", mouseMsg(tea.MouseButtonLeft, tea.MouseActionPress, 3, 2), "\x1b[<0;3;2M"},
-		{"right press", mouseMsg(tea.MouseButtonRight, tea.MouseActionPress, 3, 2), "\x1b[<2;3;2M"},
-		{"middle press", mouseMsg(tea.MouseButtonMiddle, tea.MouseActionPress, 3, 2), "\x1b[<1;3;2M"},
-		{"release", mouseMsg(tea.MouseButtonLeft, tea.MouseActionRelease, 3, 2), "\x1b[<0;3;2m"},
-		{"drag motion", mouseMsg(tea.MouseButtonLeft, tea.MouseActionMotion, 3, 2), "\x1b[<32;3;2M"},
-		{"wheel up", mouseMsg(tea.MouseButtonWheelUp, tea.MouseActionPress, 3, 2), "\x1b[<64;3;2M"},
-		{"wheel down", mouseMsg(tea.MouseButtonWheelDown, tea.MouseActionPress, 3, 2), "\x1b[<65;3;2M"},
+		{"left press", clickMsg(tea.MouseLeft, 3, 2), "\x1b[<0;3;2M"},
+		{"right press", clickMsg(tea.MouseRight, 3, 2), "\x1b[<2;3;2M"},
+		{"middle press", clickMsg(tea.MouseMiddle, 3, 2), "\x1b[<1;3;2M"},
+		{"release", releaseMsg(tea.MouseLeft, 3, 2), "\x1b[<0;3;2m"},
+		{"drag motion", motionMsg(tea.MouseLeft, 3, 2), "\x1b[<32;3;2M"},
+		{"wheel up", wheelMsg(tea.MouseWheelUp, 3, 2), "\x1b[<64;3;2M"},
+		{"wheel down", wheelMsg(tea.MouseWheelDown, 3, 2), "\x1b[<65;3;2M"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -72,9 +84,7 @@ func TestMouseForward_SGR(t *testing.T) {
 
 func TestMouseForward_SGRWithModifiers(t *testing.T) {
 	mode := vt10x.ModeMouseButton | vt10x.ModeMouseSgr
-	msg := mouseMsg(tea.MouseButtonLeft, tea.MouseActionPress, 0, 0)
-	msg.Ctrl = true
-	msg.Shift = true
+	msg := tea.MouseClickMsg{X: 0, Y: 0, Button: tea.MouseLeft, Mod: tea.ModCtrl | tea.ModShift}
 	got := MouseForward(mode, msg, 0, 0)
 	// ctrl (16) + shift (4) + left (0) = 20
 	if string(got) != "\x1b[<20;1;1M" {
@@ -84,7 +94,7 @@ func TestMouseForward_SGRWithModifiers(t *testing.T) {
 
 func TestMouseForward_MotionDroppedWithoutMotionMode(t *testing.T) {
 	mode := vt10x.ModeMouseButton | vt10x.ModeMouseSgr // 1000 only
-	msg := mouseMsg(tea.MouseButtonLeft, tea.MouseActionMotion, 1, 1)
+	msg := motionMsg(tea.MouseLeft, 1, 1)
 	if got := MouseForward(mode, msg, 1, 1); got != nil {
 		t.Fatalf("motion must be dropped in 1000 mode, got %q", got)
 	}
@@ -94,13 +104,13 @@ func TestMouseForward_LegacyX10(t *testing.T) {
 	// 1000 without 1006 → legacy encoding
 	mode := vt10x.ModeMouseButton
 
-	got := MouseForward(mode, mouseMsg(tea.MouseButtonLeft, tea.MouseActionPress, 3, 2), 2, 1)
+	got := MouseForward(mode, clickMsg(tea.MouseLeft, 3, 2), 2, 1)
 	want := []byte{0x1b, '[', 'M', byte(0 + 32), byte(3 + 32), byte(2 + 32)}
 	if string(got) != string(want) {
 		t.Fatalf("press got %v, want %v", got, want)
 	}
 
-	got = MouseForward(mode, mouseMsg(tea.MouseButtonLeft, tea.MouseActionRelease, 3, 2), 2, 1)
+	got = MouseForward(mode, releaseMsg(tea.MouseLeft, 3, 2), 2, 1)
 	want = []byte{0x1b, '[', 'M', byte(3 + 32), byte(3 + 32), byte(2 + 32)}
 	if string(got) != string(want) {
 		t.Fatalf("release got %v, want %v", got, want)
@@ -109,21 +119,21 @@ func TestMouseForward_LegacyX10(t *testing.T) {
 
 func TestMouseForward_Mode9PressOnly(t *testing.T) {
 	mode := vt10x.ModeMouseX10
-	press := MouseForward(mode, mouseMsg(tea.MouseButtonLeft, tea.MouseActionPress, 1, 1), 1, 1)
+	press := MouseForward(mode, clickMsg(tea.MouseLeft, 1, 1), 1, 1)
 	if len(press) != 6 {
 		t.Fatalf("expected X10 press encoding, got %v", press)
 	}
-	if got := MouseForward(mode, mouseMsg(tea.MouseButtonLeft, tea.MouseActionRelease, 1, 1), 1, 1); got != nil {
+	if got := MouseForward(mode, releaseMsg(tea.MouseLeft, 1, 1), 1, 1); got != nil {
 		t.Fatalf("mode 9 must drop release, got %v", got)
 	}
-	if got := MouseForward(mode, mouseMsg(tea.MouseButtonLeft, tea.MouseActionMotion, 1, 1), 1, 1); got != nil {
+	if got := MouseForward(mode, motionMsg(tea.MouseLeft, 1, 1), 1, 1); got != nil {
 		t.Fatalf("mode 9 must drop motion, got %v", got)
 	}
 }
 
 func TestMouseForward_WheelInMode1000(t *testing.T) {
 	mode := vt10x.ModeMouseButton | vt10x.ModeMouseSgr
-	got := MouseForward(mode, mouseMsg(tea.MouseButtonWheelUp, tea.MouseActionPress, 5, 5), 5, 5)
+	got := MouseForward(mode, wheelMsg(tea.MouseWheelUp, 5, 5), 5, 5)
 	if string(got) != "\x1b[<64;6;6M" {
 		t.Fatalf("wheel up got %q", got)
 	}
@@ -131,7 +141,7 @@ func TestMouseForward_WheelInMode1000(t *testing.T) {
 
 func TestMouseForward_SGRWithoutReportingMode(t *testing.T) {
 	// SGR bit alone (no 9/1000/1002/1003) must not enable reporting
-	got := MouseForward(vt10x.ModeMouseSgr, mouseMsg(tea.MouseButtonLeft, tea.MouseActionPress, 1, 1), 1, 1)
+	got := MouseForward(vt10x.ModeMouseSgr, clickMsg(tea.MouseLeft, 1, 1), 1, 1)
 	if got != nil {
 		t.Fatalf("expected nil for SGR-only mode, got %q", got)
 	}

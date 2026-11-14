@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestModalMouseInteractivity(t *testing.T) {
@@ -25,19 +25,14 @@ func TestModalMouseInteractivity(t *testing.T) {
 	m.Ready = true
 
 	// 1. Test Command Palette Mouse Click and Outside Click
-	m2, _ := m.Update(tea.KeyMsg{Type: tea.KeyF1})
+	m2, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyF1})
 	m = m2.(Model)
 	if m.CommandPalette == nil || !m.CommandPalette.Active {
 		t.Fatal("expected Command Palette to be active")
 	}
 
 	// Click outside Command Palette -> should dismiss
-	dismissMsg := tea.MouseMsg{
-		X:      2,
-		Y:      1,
-		Action: tea.MouseActionPress,
-		Button: tea.MouseButtonLeft,
-	}
+	dismissMsg := tea.MouseClickMsg{X: 2, Y: 1, Button: tea.MouseLeft}
 	m3, _ := m.Update(dismissMsg)
 	m = m3.(Model)
 	if m.CommandPalette.Active {
@@ -45,19 +40,14 @@ func TestModalMouseInteractivity(t *testing.T) {
 	}
 
 	// Re-open and click item
-	m4, _ := m.Update(tea.KeyMsg{Type: tea.KeyF1})
+	m4, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyF1})
 	m = m4.(Model)
 	modalW := m.CommandPalette.Width
 	modalH := strings.Count(m.CommandPalette.Render(), "\n") + 1
 	startX := (m.Width - modalW) / 2
 	startY := (m.Height - modalH) / 3
 	// Click on list item row (list starts at relY 6)
-	clickItemMsg := tea.MouseMsg{
-		X:      startX + 10,
-		Y:      startY + 6,
-		Action: tea.MouseActionPress,
-		Button: tea.MouseButtonLeft,
-	}
+	clickItemMsg := tea.MouseClickMsg{X: startX + 10, Y: startY + 6, Button: tea.MouseLeft}
 	m5, _ := m.Update(clickItemMsg)
 	m = m5.(Model)
 	if m.CommandPalette.Active {
@@ -89,12 +79,7 @@ func TestModalMouseInteractivity(t *testing.T) {
 	}
 
 	// Click outside find bar -> dismisses
-	outsideFindMsg := tea.MouseMsg{
-		X:      10,
-		Y:      10,
-		Action: tea.MouseActionPress,
-		Button: tea.MouseButtonLeft,
-	}
+	outsideFindMsg := tea.MouseClickMsg{X: 10, Y: 10, Button: tea.MouseLeft}
 	m8, _ := m.Update(outsideFindMsg)
 	m = m8.(Model)
 	if m.FindBar.Active {
@@ -103,12 +88,7 @@ func TestModalMouseInteractivity(t *testing.T) {
 
 	// 4. Test Help Modal Mouse Dismissal
 	m.ShowHelp = true
-	helpClickMsg := tea.MouseMsg{
-		X:      50,
-		Y:      15,
-		Action: tea.MouseActionPress,
-		Button: tea.MouseButtonLeft,
-	}
+	helpClickMsg := tea.MouseClickMsg{X: 50, Y: 15, Button: tea.MouseLeft}
 	m9, _ := m.Update(helpClickMsg)
 	m = m9.(Model)
 	if m.ShowHelp {
@@ -131,12 +111,7 @@ func TestStatusBarMouseInteraction(t *testing.T) {
 	m.StatusBar.AutoSave = true
 
 	// 1. Click on [AutoSave] badge (col 2, bottom row)
-	clickAutoSaveMsg := tea.MouseMsg{
-		X:      2,
-		Y:      m.Height - 1,
-		Action: tea.MouseActionPress,
-		Button: tea.MouseButtonLeft,
-	}
+	clickAutoSaveMsg := tea.MouseClickMsg{X: 2, Y: m.Height - 1, Button: tea.MouseLeft}
 	newModel, _ := m.Update(clickAutoSaveMsg)
 	m = newModel.(Model)
 	if m.AutoSave {
@@ -151,12 +126,7 @@ func TestStatusBarMouseInteraction(t *testing.T) {
 	}
 
 	// 2. Click on ?: Help (right side of status bar)
-	clickHelpMsg := tea.MouseMsg{
-		X:      m.Width - 3,
-		Y:      m.Height - 1,
-		Action: tea.MouseActionPress,
-		Button: tea.MouseButtonLeft,
-	}
+	clickHelpMsg := tea.MouseClickMsg{X: m.Width - 3, Y: m.Height - 1, Button: tea.MouseLeft}
 	newModel, _ = m.Update(clickHelpMsg)
 	m = newModel.(Model)
 	if !m.ShowHelp {

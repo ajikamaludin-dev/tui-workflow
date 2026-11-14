@@ -3,7 +3,7 @@ package dialog
 import (
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestBranchSwitcherOpenAndFilter(t *testing.T) {
@@ -33,13 +33,13 @@ func TestBranchSwitcherOpenAndFilter(t *testing.T) {
 	}
 
 	// Navigate down
-	bs.Update(tea.KeyMsg{Type: tea.KeyDown})
+	bs.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	if bs.Selected != 1 {
 		t.Errorf("Expected Selected 1 after KeyDown, got %d", bs.Selected)
 	}
 
 	// Select branch via Enter
-	chosen, closed, _ := bs.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	chosen, closed, _ := bs.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if !closed || chosen != "feature/dashboard" {
 		t.Errorf("Expected chosen 'feature/dashboard', got %q (closed=%v)", chosen, closed)
 	}
@@ -52,7 +52,7 @@ func TestBranchSwitcherCancel(t *testing.T) {
 	bs := NewBranchSwitcher()
 	bs.Open([]string{"main", "dev"}, "main")
 
-	chosen, closed, _ := bs.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	chosen, closed, _ := bs.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	if !closed || chosen != "" {
 		t.Errorf("Expected empty chosen branch on Esc, got %q", chosen)
 	}

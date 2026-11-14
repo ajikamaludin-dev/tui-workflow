@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"tui-workflow/internal/editor"
 	"tui-workflow/internal/ui/dialog"
 )
@@ -50,38 +50,45 @@ func TestTerminalTabIntegration(t *testing.T) {
 
 	// 3. Test typing into terminal via Update
 	for _, r := range "echo TEST_OK" {
-		updM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		updM, _ := m.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
 		m = updM.(Model)
 	}
-	updM, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updM, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = updM.(Model)
 
 	// Wait for terminal output
 	time.Sleep(150 * time.Millisecond)
 
+	// Ensure the echo child process has fully exited (PTY children can lag
+	// behind in busy environments); Alt+W intentionally prompts when a child
+	// is still running.
+	for i := 0; i < 40 && tab.TerminalView.HasRunningProcess(); i++ {
+		time.Sleep(25 * time.Millisecond)
+	}
+
 	// Render view and check zero overflow
-	view := m.View()
+	view := m.View().Content
 	lines := strings.Split(view, "\n")
 	if len(lines) > m.Height {
 		t.Fatalf("rendered view height %d exceeds terminal height %d", len(lines), m.Height)
 	}
 
 	// 4. Test Toggle Focus (F6)
-	updM, _ = m.Update(tea.KeyMsg{Type: tea.KeyF6})
+	updM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyF6})
 	m = updM.(Model)
 	if m.Focus != FocusSidebar {
 		t.Errorf("expected FocusSidebar after F6, got %v", m.Focus)
 	}
 
 	// Toggle back
-	updM, _ = m.Update(tea.KeyMsg{Type: tea.KeyF6})
+	updM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyF6})
 	m = updM.(Model)
 	if m.Focus != FocusEditor {
 		t.Errorf("expected FocusEditor after second F6, got %v", m.Focus)
 	}
 
 	// 5. Test Close Terminal Tab (Alt+W)
-	updM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'w'}, Alt: true})
+	updM, _ = m.Update(tea.KeyPressMsg{Code: 'w', Text: "w", Mod: tea.ModAlt})
 	m = updM.(Model)
 	if m.TabManager.Count() != 0 {
 		t.Errorf("expected 0 tabs after Alt+W, got %d", m.TabManager.Count())
@@ -186,7 +193,7 @@ func TestOpenTerminalKeybinding(t *testing.T) {
 	m.Ready = true
 
 	// Send ctrl+\ key msg
-	resM, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlBackslash})
+	resM, cmd := m.Update(tea.KeyPressMsg{Code: '\\', Mod: tea.ModCtrl})
 	m = resM.(Model)
 	if cmd == nil {
 		t.Fatal("expected non-nil cmd from ctrl+\\")
@@ -214,7 +221,7 @@ func TestQuickOpenSwitchToCommandPalette(t *testing.T) {
 	}
 
 	// Press '>'
-	resM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'>'}})
+	resM, _ := m.Update(tea.KeyPressMsg{Code: '>', Text: ">"})
 	m = resM.(Model)
 
 	if m.QuickOpen.Active {
@@ -278,9 +285,9 @@ func TestTerminalMouseDoesNotHijackTabBarAndMenu(t *testing.T) {
 	clickX := tab0Region.StartX + 1 + m.SidebarWidth
 	clickY := 1
 
-	resM, _ := m.Update(tea.MouseMsg{X: clickX, Y: clickY, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	resM, _ := m.Update(tea.MouseClickMsg{X: clickX, Y: clickY, Button: tea.MouseLeft})
 	m = resM.(Model)
-	resM, _ = m.Update(tea.MouseMsg{X: clickX, Y: clickY, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease})
+	resM, _ = m.Update(tea.MouseReleaseMsg{X: clickX, Y: clickY, Button: tea.MouseLeft})
 	m = resM.(Model)
 
 	if m.TabManager.ActiveIndex != 0 {
@@ -294,7 +301,7 @@ func TestTerminalMouseDoesNotHijackTabBarAndMenu(t *testing.T) {
 	// 2. Click on Menu Bar (Row 0)
 	cat0 := m.MenuBar.Categories[0]
 	menuClickX := cat0.StartX + 1
-	resM, _ = m.Update(tea.MouseMsg{X: menuClickX, Y: 0, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	resM, _ = m.Update(tea.MouseClickMsg{X: menuClickX, Y: 0, Button: tea.MouseLeft})
 	m = resM.(Model)
 
 	if !m.MenuBar.IsOpen() {
@@ -304,7 +311,7 @@ func TestTerminalMouseDoesNotHijackTabBarAndMenu(t *testing.T) {
 	// 3. Click on another Menu Bar category (Row 0, e.g. Category 1)
 	cat1 := m.MenuBar.Categories[1]
 	menuClickX1 := cat1.StartX + 1
-	resM, _ = m.Update(tea.MouseMsg{X: menuClickX1, Y: 0, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	resM, _ = m.Update(tea.MouseClickMsg{X: menuClickX1, Y: 0, Button: tea.MouseLeft})
 	m = resM.(Model)
 
 	if !m.MenuBar.IsOpen() || m.MenuBar.ActiveMenu != 1 {
@@ -316,18 +323,17 @@ func TestTerminalMouseDoesNotHijackTabBarAndMenu(t *testing.T) {
 
 	// 4. Test Scroll Wheel on Tab Bar (Row 1) does not get swallowed by Terminal
 	m.TabManager.ActiveIndex = 1
-	resM, _ = m.Update(tea.MouseMsg{X: clickX, Y: 1, Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress})
+	resM, _ = m.Update(tea.MouseWheelMsg{X: clickX, Y: 1, Button: tea.MouseWheelDown})
 	m = resM.(Model)
 	// Still valid state, no panics or corruptions
 
 	// 5. Test Click inside Terminal Area (Row 5, Col 30) IS forwarded to PTY/Terminal
-	resM, _ = m.Update(tea.MouseMsg{X: 30, Y: 5, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	resM, _ = m.Update(tea.MouseClickMsg{X: 30, Y: 5, Button: tea.MouseLeft})
 	m = resM.(Model)
-	resM, _ = m.Update(tea.MouseMsg{X: 30, Y: 5, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease})
+	resM, _ = m.Update(tea.MouseReleaseMsg{X: 30, Y: 5, Button: tea.MouseLeft})
 	m = resM.(Model)
 	// Active tab remains terminal
 	if m.TabManager.ActiveIndex != 1 {
 		t.Errorf("expected ActiveIndex to remain 1 after clicking inside terminal area, got %d", m.TabManager.ActiveIndex)
 	}
 }
-

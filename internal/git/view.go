@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textarea"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textarea"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"tui-workflow/internal/ui"
 )
@@ -25,11 +25,11 @@ type GitView struct {
 	Repo        *Repo
 	CommitInput textarea.Model
 
-	Staged   []GitFileStatus
-	Changes  []GitFileStatus
-	History  []CommitInfo
+	Staged  []GitFileStatus
+	Changes []GitFileStatus
+	History []CommitInfo
 
-	FocusArea    GitFocusArea
+	FocusArea      GitFocusArea
 	StagedIdx      int
 	ChangesIdx     int
 	HistoryIdx     int
@@ -100,12 +100,14 @@ func NewGitViewWithOpts(repo *Repo, lazy bool) *GitView {
 	ta.Placeholder = "Message (Ctrl+Enter to commit)"
 	ta.CharLimit = 500
 	ta.SetHeight(3)
-	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
-	ta.BlurredStyle.CursorLine = lipgloss.NewStyle()
-	ta.FocusedStyle.Placeholder = lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgSecondary)
-	ta.BlurredStyle.Placeholder = lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgSecondary)
-	ta.FocusedStyle.Text = lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgPrimary)
-	ta.BlurredStyle.Text = lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgPrimary)
+	taStyles := ta.Styles()
+	taStyles.Focused.CursorLine = lipgloss.NewStyle()
+	taStyles.Blurred.CursorLine = lipgloss.NewStyle()
+	taStyles.Focused.Placeholder = lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgSecondary)
+	taStyles.Blurred.Placeholder = lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgSecondary)
+	taStyles.Focused.Text = lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgPrimary)
+	taStyles.Blurred.Text = lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgPrimary)
+	ta.SetStyles(taStyles)
 
 	gv := &GitView{
 		Repo:         repo,
@@ -469,8 +471,8 @@ func (gv *GitView) Update(msg tea.Msg) (tea.Cmd, *GitFileStatus) {
 	var fileToOpen *GitFileStatus
 
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.Type {
+	case tea.KeyPressMsg:
+		switch msg.Code {
 		case tea.KeyTab:
 			// Cycle focus
 			switch gv.FocusArea {
@@ -562,14 +564,13 @@ func (gv *GitView) Update(msg tea.Msg) (tea.Cmd, *GitFileStatus) {
 				fileToOpen = gv.SelectedChangesFile()
 			}
 
-		case tea.KeyRunes:
-			str := string(msg.Runes)
+		default:
+			str := msg.Text
 			if gv.FocusArea == GitFocusCommitInput {
 				var cmd tea.Cmd
 				gv.CommitInput, cmd = gv.CommitInput.Update(msg)
 				return cmd, nil
 			}
-
 			if str == "+" {
 				_ = gv.StageSelected()
 			} else if str == "-" {

@@ -4,9 +4,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"tui-workflow/internal/ui"
 )
@@ -37,9 +37,8 @@ func NewCommandPalette() *CommandPalette {
 	ti := textinput.New()
 	ti.Prompt = "❯ "
 	ti.CharLimit = 64
-	ti.Width = 48
-	ti.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
-	ti.PromptStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent)
+	ti.SetWidth(48)
+	applyTextInputStyles(&ti, lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary), lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent))
 
 	return &CommandPalette{
 		Active:    false,
@@ -58,8 +57,7 @@ func (cp *CommandPalette) Open(items []CommandPaletteItem) {
 	cp.Active = true
 	cp.Items = items
 	cp.Filter.SetValue("")
-	cp.Filter.TextStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary)
-	cp.Filter.PromptStyle = lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent)
+	applyTextInputStyles(&cp.Filter, lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.FgPrimary), lipgloss.NewStyle().Background(ui.CurrentTheme.BgTopMenu).Foreground(ui.CurrentTheme.Accent))
 	cp.Filter.Focus()
 	cp.applyFilter()
 	cp.Selected = 0
@@ -78,7 +76,7 @@ func (cp *CommandPalette) SetWidth(w int) {
 		w = 40
 	}
 	cp.Width = w
-	cp.Filter.Width = w - 8
+	cp.Filter.SetWidth(w - 8)
 }
 
 // ApplyFilter updates filtered commands based on current input.
@@ -142,8 +140,8 @@ func (cp *CommandPalette) Update(msg tea.Msg) (actionID string, closed bool, cmd
 	}
 
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
+	case tea.KeyPressMsg:
+		switch ui.KeyName(msg) {
 		case "esc":
 			cp.Close()
 			return "", true, nil

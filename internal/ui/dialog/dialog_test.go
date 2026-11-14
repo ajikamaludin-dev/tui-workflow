@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestInputDialog(t *testing.T) {
@@ -24,13 +24,13 @@ func TestInputDialog(t *testing.T) {
 	}
 
 	// Tab navigates buttons
-	d.Update(tea.KeyMsg{Type: tea.KeyTab})
+	d.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	if d.FocusedBtn != 1 {
 		t.Errorf("Expected FocusedBtn=1 after Tab, got %d", d.FocusedBtn)
 	}
 
 	// Esc cancels
-	confirmed, canceled, _ := d.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	confirmed, canceled, _ := d.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	if confirmed || !canceled || d.Active {
 		t.Errorf("Expected dialog canceled and inactive after Esc")
 	}
@@ -72,7 +72,7 @@ func TestConfirmDialog(t *testing.T) {
 	}
 
 	// Enter on default selected Cancel (1)
-	confirmed, canceled, _ := d.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	confirmed, canceled, _ := d.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if confirmed || !canceled || d.Active {
 		t.Errorf("Expected canceled after pressing Enter on Cancel button")
 	}
@@ -82,7 +82,7 @@ func TestConfirmDialog(t *testing.T) {
 	// Navigate right to Discard (1)
 	d.Selected = 1
 	var discard bool
-	confirmed, canceled, discard = d.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	confirmed, canceled, discard = d.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if confirmed || canceled || !discard {
 		t.Errorf("Expected discard=true, got confirmed=%v, canceled=%v, discard=%v", confirmed, canceled, discard)
 	}
@@ -96,7 +96,7 @@ func TestConfirmDialog(t *testing.T) {
 
 	// Select 0: Reload
 	d.Selected = 0
-	confirmed, canceled, discard = d.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	confirmed, canceled, discard = d.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if !confirmed || canceled || discard {
 		t.Errorf("Expected confirmed=true for Reload, got confirmed=%v, canceled=%v, discard=%v", confirmed, canceled, discard)
 	}
@@ -104,7 +104,7 @@ func TestConfirmDialog(t *testing.T) {
 	// Select 1: Merge
 	d.Open(ConfirmExternalChange, "File Conflict", "File modified externally", "/tmp/conflict.txt")
 	d.Selected = 1
-	confirmed, canceled, discard = d.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	confirmed, canceled, discard = d.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if confirmed || canceled || !discard {
 		t.Errorf("Expected discard=true for Merge, got confirmed=%v, canceled=%v, discard=%v", confirmed, canceled, discard)
 	}
@@ -123,23 +123,22 @@ func TestConfirmDialog_Alert(t *testing.T) {
 	}
 
 	// Pressing Enter confirms and closes
-	confirmed, canceled, discard := d.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	confirmed, canceled, discard := d.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if !confirmed || canceled || discard || d.Active {
 		t.Errorf("Expected confirmed=true on Enter for alert, got confirmed=%v canceled=%v discard=%v active=%v", confirmed, canceled, discard, d.Active)
 	}
 
 	// Reopen and test space
 	d.Open(ConfirmAlert, "Notice", "Space to close", "")
-	confirmed, canceled, discard = d.Update(tea.KeyMsg{Type: tea.KeySpace})
+	confirmed, canceled, discard = d.Update(tea.KeyPressMsg{Code: tea.KeySpace})
 	if !confirmed || canceled || discard || d.Active {
 		t.Errorf("Expected confirmed=true on Space for alert")
 	}
 
 	// Reopen and test Esc
 	d.Open(ConfirmAlert, "Notice", "Esc to close", "")
-	confirmed, canceled, discard = d.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	confirmed, canceled, discard = d.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	if confirmed || !canceled || discard || d.Active {
 		t.Errorf("Expected canceled=true on Esc for alert")
 	}
 }
-

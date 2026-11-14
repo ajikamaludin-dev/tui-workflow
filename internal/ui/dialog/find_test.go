@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestFindBarOpenModesAndMatches(t *testing.T) {
@@ -55,19 +55,19 @@ func TestFindBarKeyNavigation(t *testing.T) {
 	fb.Open("test")
 
 	// Enter triggers next
-	action, closed, _ := fb.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	action, closed, _ := fb.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	if closed || action != "next" {
 		t.Errorf("Expected action 'next', got %q (closed=%v)", action, closed)
 	}
 
 	// Shift+Enter / up triggers prev
-	action, closed, _ = fb.Update(tea.KeyMsg{Type: tea.KeyUp})
+	action, closed, _ = fb.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	if closed || action != "prev" {
 		t.Errorf("Expected action 'prev', got %q", action)
 	}
 
 	// Esc triggers close
-	action, closed, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	action, closed, _ = fb.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	if !closed || action != "close" || fb.Active {
 		t.Errorf("Expected close on Esc, got action=%q closed=%v", action, closed)
 	}
@@ -78,13 +78,13 @@ func TestFindBarReplaceKeyNavigation(t *testing.T) {
 	fb.OpenReplace("query")
 
 	// Switch focus to replace input via Tab
-	action, closed, _ := fb.Update(tea.KeyMsg{Type: tea.KeyTab})
+	action, closed, _ := fb.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	if closed || action != "" || fb.FocusField != FindFocusReplace {
 		t.Errorf("Expected focus switched to FindFocusReplace on Tab")
 	}
 
 	// Switch focus back via Tab
-	fb.Update(tea.KeyMsg{Type: tea.KeyTab})
+	fb.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	if fb.FocusField != FindFocusInput {
 		t.Errorf("Expected focus switched back to FindFocusInput on Tab")
 	}
@@ -93,16 +93,16 @@ func TestFindBarReplaceKeyNavigation(t *testing.T) {
 	fb.FocusField = FindFocusReplace
 
 	// Alt+R / Ctrl+R triggers replace_one
-	action, _, _ = fb.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}, Alt: true})
+	action, _, _ = fb.Update(tea.KeyPressMsg{Code: 'r', Text: "r", Mod: tea.ModAlt})
 	if action != "replace_one" {
-		action, _, _ = fb.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
+		action, _, _ = fb.Update(tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl})
 	}
 	if action != "replace_one" {
 		t.Errorf("Expected action 'replace_one', got %q", action)
 	}
 
 	// Alt+Enter triggers replace_all
-	action, _, _ = fb.Update(tea.KeyMsg{Type: tea.KeyEnter, Alt: true})
+	action, _, _ = fb.Update(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModAlt})
 	if action != "replace_all" {
 		t.Errorf("Expected action 'replace_all' on Alt+Enter, got %q", action)
 	}

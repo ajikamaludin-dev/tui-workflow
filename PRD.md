@@ -1,6 +1,6 @@
 # Product Requirement Document (PRD)
 ## Project: `tui-workflow`
-**Version:** v0.1.1  
+**Version:** v0.2.0  
 **Status:** Approved  
 **Language/Framework:** Go (1.24+), Bubble Tea Ecosystem 
 ## 1. Executive Summary
@@ -13,12 +13,12 @@
 | Layer | Technology | Version | Purpose |
 |---|---|---|---|
 | **Runtime** | Go | 1.24+ | Core execution runtime & concurrency |
-| **TUI Core Engine** | `github.com/charmbracelet/bubbletea` | v1.3+ | Elm-based Model-Update-View architecture, event loop, mouse tracking (`tea.WithMouseCellMotion()`) |
-| **Styling & Layout** | `github.com/charmbracelet/lipgloss` | v1.1+ | Flexible box model, borders, colors, horizontal/vertical join |
-| **UI Components** | `github.com/charmbracelet/bubbles` | v1.0+ | Textinput, viewport, keymaps, help system |
+| **TUI Core Engine** | `charm.land/bubbletea/v2` | v2.1+ | Elm-based Model-Update-View architecture, event loop, mouse tracking (declarative `tea.View` fields: `AltScreen`, `MouseModeCellMotion`) |
+| **Styling & Layout** | `charm.land/lipgloss/v2` | v2.1+ | Flexible box model, borders, colors, horizontal/vertical join |
+| **UI Components** | `charm.land/bubbles/v2` | v2.2+ | Textinput, viewport, keymaps, help system |
 | **Syntax Highlighting** | `github.com/alecthomas/chroma/v2` | v2.27+ | Terminal truecolor/256-color code syntax tokenizer & styler (integrated with custom line buffer) |
-| **Markdown Renderer** | `github.com/charmbracelet/glamour` | v0.8+ | In-terminal rendered Markdown styling & preview engine |
-| **Git Engine** | `github.com/go-git/go-git/v5` | v5.13+ | Pure Go Git implementation for status, diff, staging, commit, and log history |
+| **Markdown Renderer** | `charm.land/glamour/v2` | v2.0+ | In-terminal rendered Markdown styling & preview engine |
+| **Git Engine** | `github.com/go-git/go-git/v5` | v5.19+ | Pure Go Git implementation for status, diff, staging, commit, and log history |
 | **File System I/O** | Standard Library (`os`, `path/filepath`, `io`) | Go 1.24 | Safe cross-platform directory traversal and file I/O |
 | **PTY & Terminal Emulation** | `github.com/creack/pty`, `github.com/hinshun/vt10x` | v1.1+, v0.0+ | Pseudo-terminal allocation, shell process spawning, ANSI/VT100 screen emulation |
 | **Language Intelligence & LSP** | JSON-RPC 2.0 Client (`os/exec`, `bufio`, `encoding/json`) | Go 1.24 | Generic LSP client over stdio, diagnostics parser, auto-import, completion |
@@ -89,7 +89,7 @@ Layout terminal dibagi menjadi 4 zona: Baris 0 (Top Menu), Kolom 1 (Sidebar: Fil
      - `Switch Git Branch...` (`Alt+b`) ➔ Membuka modal dialog pilih branch Git.
      - `Keyboard Shortcuts` (`?`) ➔ Membuka modal cheatsheet shortcut.
    - `[ About ]` (`Alt+a`):
-     - Membuka modal dialog info aplikasi (Nama, Versi v0.1.1, Tech Stack Go + Bubble Tea + Lipgloss, Lisensi).
+     - Membuka modal dialog info aplikasi (Nama, Versi v0.2.0, Tech Stack Go + Bubble Tea + Lipgloss, Lisensi).
 2. **Interaksi Dropdown:**
    - Klik mouse pada judul menu untuk membuka dropdown.
    - Navigasi keyboard `Up` / `Down` dan `Enter` untuk memilih item.
@@ -497,3 +497,20 @@ tui-workflow/
 > 2. **Wajib Memanggil `ask_user`:** Setiap ada pilihan arsitektural, percabangan logika, atau keputusan penting saat koding, Orchestrator **WAJIB** memanggil tool `ask_user` untuk mempresentasikan konteks, opsi, dan meminta keputusan langsung dari user sebelum menulis kode implementasi terkait.
 > 3. **Konfirmasi Eksekusi:** Setiap transisi fase atau pendelegasian tugas ke sub-agent wajib dikonfirmasi terlebih dahulu kepada user.
 
+---
+
+## 9. Known Risks & Technical Debt
+
+1. **LSP client hand-rolled** (`internal/lsp/`): JSON-RPC 2.0 stdio tanpa framework. Area bug paling halus: position encoding (UTF-16 vs byte), incremental document sync (`TextDocumentSyncKind`), capability negotiation defensive-parsing, crash recovery. Untuk v1 cukup; **jangan di-rewrite** — gunakan `docs/lsp-audit-checklist.md` setiap kali klien diubah. Status: _v1-acceptable, known debt_.
+2. **`internal/app` package budget**: root package pernah mencapai ~6.3k baris (God Object). Sekarang dipecah menjadi handler per-domain (`keys_*.go`, `mouse_*.go`, `view_*.go`, `model_*.go`, `palette_*.go`) dengan batas keras **≤500 baris per file** — diatur di `AGENTS.md` Rule 12 ("Internal App Package Budget").
+3. **Ekosistem Charm v2 bergerak cepat**: modul pinned ke `charm.land/bubbletea/v2` v2.1.x, `lipgloss/v2` v2.1.0, `bubbles/v2` v2.2.x, `glamour/v2` v2.0.x. **Jangan** `go get -u` tanpa menjalankan `go vet ./... && go test -race ./...` penuh. Bump minor hanya dengan approval user.
+4. **Lip Gloss v2 API change**: `lipgloss.Color(s string)` adalah **function** (bukan type) — warna sekarang `color.Color` stdlib. Kode yang menyalin contoh v1 dengan `var c lipgloss.Color` akan gagal kompilasi.
+5. **vt10x / creack/pty** tidak terpengaruh migrasi v2 (independen dari Charm) — tidak perlu di-upgrade.
+6. **`github.com/charmbracelet/x/ansi`** tetap di path lama (bukan `charm.land/x/ansi`); versi disinkronkan ke rilis terbaru yang kompatibel.
+
+## Revision History
+
+| Versi | Tanggal | Perubahan |
+|---|---|---|
+| v0.2.0 | 2026-11-14 | **Migrasi penuh Charm v2**: `bubbletea`/`lipgloss`/`bubbles`/`glamour` → `charm.land/*/v2` (+`x/ansi` latest). `View()` deklaratif (`tea.View` dengan `AltScreen`/`MouseMode`), `KeyPressMsg`, mouse interface (`MouseClickMsg`/`MouseWheelMsg`/`MouseMotionMsg`/`MouseReleaseMsg` + `msg.Mouse()`), program options dihapus dari `main.go`. `internal/app` dipecah (≤500 baris/file, Rule 12). TODO.md dikosongkan. `architecture.md` & `AGENTS.md` disinkronkan. LSP audit checklist ditambahkan. **Revision history ditambahkan.** |
+| v0.1.1 | 2026-11-12 | Doc baseline (workspace persistence P0, symbol navigation Path B, interactive terminal safety, keymap ergonomics). |

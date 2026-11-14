@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/atotto/clipboard"
-	tea "github.com/charmbracelet/bubbletea"
 	"tui-workflow/internal/editor"
 )
 
@@ -110,14 +110,14 @@ func TestAdjustableSidebarWidth(t *testing.T) {
 	}
 
 	// 1. Keyboard Alt+] to widen
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{']'}, Alt: true})
+	newM, _ := m.Update(tea.KeyPressMsg{Code: ']', Text: "]", Mod: tea.ModAlt})
 	m = newM.(Model)
 	if m.SidebarWidth != initialWidth+2 {
 		t.Errorf("Expected sidebar width to increase to %d, got %d", initialWidth+2, m.SidebarWidth)
 	}
 
 	// 2. Keyboard Alt+[ to narrow
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'['}, Alt: true})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: '[', Text: "[", Mod: tea.ModAlt})
 	m = newM.(Model)
 	if m.SidebarWidth != initialWidth {
 		t.Errorf("Expected sidebar width to return to %d, got %d", initialWidth, m.SidebarWidth)
@@ -125,7 +125,7 @@ func TestAdjustableSidebarWidth(t *testing.T) {
 
 	// 3. Minimum width clamping (min 15)
 	for i := 0; i < 30; i++ {
-		newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'['}, Alt: true})
+		newM, _ = m.Update(tea.KeyPressMsg{Code: '[', Text: "[", Mod: tea.ModAlt})
 		m = newM.(Model)
 	}
 	if m.SidebarWidth != 15 {
@@ -134,7 +134,7 @@ func TestAdjustableSidebarWidth(t *testing.T) {
 
 	// 4. Maximum width clamping (max Width - 20 = 80)
 	for i := 0; i < 50; i++ {
-		newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{']'}, Alt: true})
+		newM, _ = m.Update(tea.KeyPressMsg{Code: ']', Text: "]", Mod: tea.ModAlt})
 		m = newM.(Model)
 	}
 	if m.SidebarWidth != 80 {
@@ -146,36 +146,21 @@ func TestAdjustableSidebarWidth(t *testing.T) {
 	borderX := m.SidebarWidth - 1 // 29
 
 	// Click on border to start resizing
-	newM, _ = m.Update(tea.MouseMsg{
-		X:      borderX,
-		Y:      5,
-		Action: tea.MouseActionPress,
-		Button: tea.MouseButtonLeft,
-	})
+	newM, _ = m.Update(tea.MouseClickMsg{X: borderX, Y: 5, Button: tea.MouseLeft})
 	m = newM.(Model)
 	if !m.ResizingSidebar {
 		t.Errorf("Expected ResizingSidebar to be true on border press")
 	}
 
 	// Drag mouse to column 42
-	newM, _ = m.Update(tea.MouseMsg{
-		X:      42,
-		Y:      5,
-		Action: tea.MouseActionMotion,
-		Button: tea.MouseButtonLeft,
-	})
+	newM, _ = m.Update(tea.MouseMotionMsg{X: 42, Y: 5, Button: tea.MouseLeft})
 	m = newM.(Model)
 	if m.SidebarWidth != 42 {
 		t.Errorf("Expected sidebar width to be 42 after drag, got %d", m.SidebarWidth)
 	}
 
 	// Release mouse
-	newM, _ = m.Update(tea.MouseMsg{
-		X:      42,
-		Y:      5,
-		Action: tea.MouseActionRelease,
-		Button: tea.MouseButtonLeft,
-	})
+	newM, _ = m.Update(tea.MouseReleaseMsg{X: 42, Y: 5, Button: tea.MouseLeft})
 	m = newM.(Model)
 	if m.ResizingSidebar {
 		t.Errorf("Expected ResizingSidebar to be false after release")
@@ -225,14 +210,14 @@ func TestMarkdownPreviewCopyAndPaste(t *testing.T) {
 	}
 
 	// 1. Test Select All via Ctrl+A in Preview
-	newM, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlA})
+	newM, _ := m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModCtrl})
 	m = newM.(Model)
 	if !tab.MarkdownViewer.HasSelection {
 		t.Errorf("Expected HasSelection to be true after Ctrl+A")
 	}
 
 	// 2. Test Copy via Ctrl+C in Preview
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	m = newM.(Model)
 
 	clipText, err := clipboard.ReadAll()
@@ -243,7 +228,7 @@ func TestMarkdownPreviewCopyAndPaste(t *testing.T) {
 	}
 
 	// 3. Test Escape clears selection
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	m = newM.(Model)
 	if tab.MarkdownViewer.HasSelection {
 		t.Errorf("Expected HasSelection to be false after Escape")
@@ -252,24 +237,14 @@ func TestMarkdownPreviewCopyAndPaste(t *testing.T) {
 	// 4. Test Mouse Drag selection in Preview
 	editorStartX := m.SidebarWidth
 	// Click inside preview area
-	newM, _ = m.Update(tea.MouseMsg{
-		X:      editorStartX + 5,
-		Y:      2,
-		Action: tea.MouseActionPress,
-		Button: tea.MouseButtonLeft,
-	})
+	newM, _ = m.Update(tea.MouseClickMsg{X: editorStartX + 5, Y: 2, Button: tea.MouseLeft})
 	m = newM.(Model)
 	if !tab.MarkdownViewer.HasSelection {
 		t.Errorf("Expected HasSelection to be true after mouse press in preview")
 	}
 
 	// Drag inside preview area
-	newM, _ = m.Update(tea.MouseMsg{
-		X:      editorStartX + 20,
-		Y:      4,
-		Action: tea.MouseActionMotion,
-		Button: tea.MouseButtonLeft,
-	})
+	newM, _ = m.Update(tea.MouseMotionMsg{X: editorStartX + 20, Y: 4, Button: tea.MouseLeft})
 	m = newM.(Model)
 	selText := tab.MarkdownViewer.GetSelectedText()
 	if len(selText) == 0 {
@@ -278,7 +253,7 @@ func TestMarkdownPreviewCopyAndPaste(t *testing.T) {
 
 	// 5. Test Paste action (Ctrl+V) in Preview
 	_ = clipboard.WriteAll("\n\n## Tambahan dari Paste")
-	newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlV})
+	newM, _ = m.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
 	m = newM.(Model)
 
 	if !strings.Contains(tab.Buffer.Text(), "Tambahan dari Paste") {
@@ -335,7 +310,7 @@ func TestExternalChangeConflictDialogOptions(t *testing.T) {
 
 		// Navigate to button 1: Merge (Diff)
 		m.ConfirmDialog.Selected = 1
-		newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 		m = newM.(Model)
 
 		activeTab := m.TabManager.ActiveTab()
@@ -370,7 +345,7 @@ func TestExternalChangeConflictDialogOptions(t *testing.T) {
 
 		// Select button 0: Reload
 		m.ConfirmDialog.Selected = 0
-		newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 		m = newM.(Model)
 
 		tab = m.TabManager.ActiveTab()
@@ -408,7 +383,7 @@ func TestExternalChangeConflictDialogOptions(t *testing.T) {
 
 		// Select button 2: Cancel / Keep Local
 		m.ConfirmDialog.Selected = 2
-		newM, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		newM, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 		m = newM.(Model)
 
 		tab = m.TabManager.ActiveTab()

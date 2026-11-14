@@ -1,14 +1,13 @@
 package app
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
-
-	tea "github.com/charmbracelet/bubbletea"
 	"tui-workflow/internal/config"
 	"tui-workflow/internal/editor"
 	"tui-workflow/internal/explorer"

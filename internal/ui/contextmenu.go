@@ -3,8 +3,8 @@ package ui
 import (
 	"strings"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -119,14 +119,16 @@ func (m *ContextMenu) HandleMouse(msg tea.MouseMsg) (action string, handled bool
 		return "", false
 	}
 
-	relX := msg.X - m.X
-	relY := msg.Y - m.Y
+	mouse := msg.Mouse()
+
+	relX := mouse.X - m.X
+	relY := mouse.Y - m.Y
 	totalH := len(m.Items) + 2
 	isInside := relX >= 0 && relX < m.Width && relY >= 0 && relY < totalH
 	isOnItem := relX >= 1 && relX < m.Width-1 && relY >= 1 && relY <= len(m.Items)
 
-	switch msg.Action {
-	case tea.MouseActionMotion:
+	switch msg := msg.(type) {
+	case tea.MouseMotionMsg:
 		if isOnItem {
 			idx := relY - 1
 			if idx >= 0 && idx < len(m.Items) && !m.Items[idx].Disabled {
@@ -140,8 +142,8 @@ func (m *ContextMenu) HandleMouse(msg tea.MouseMsg) (action string, handled bool
 		// Mouse motion outside does NOT close menu
 		return "", false
 
-	case tea.MouseActionPress:
-		if msg.Button == tea.MouseButtonLeft {
+	case tea.MouseClickMsg:
+		if msg.Button == tea.MouseLeft {
 			if isOnItem {
 				idx := relY - 1
 				item := m.Items[idx]
@@ -155,19 +157,20 @@ func (m *ContextMenu) HandleMouse(msg tea.MouseMsg) (action string, handled bool
 			m.Close()
 			return "", true
 		}
-		if msg.Button == tea.MouseButtonRight {
+		if msg.Button == tea.MouseRight {
 			// Right click re-handled by caller to open at new position
 			m.Close()
 			return "", false
 		}
 		return "", true
 
-	case tea.MouseActionRelease:
+	case tea.MouseReleaseMsg:
 		// Consume release event if inside to prevent underlying controls from receiving it
 		if isInside {
 			return "", true
 		}
 		return "", false
+
 	}
 
 	return "", false

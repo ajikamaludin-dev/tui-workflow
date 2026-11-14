@@ -28,4 +28,4 @@
 | 2026-11-14 | [2026-11-14 - Perbaikan Temuan Audit Kode (Rule Compliance, Layout Safety, Linter & Git Hunk)](done/2026-11-14%20-%20Perbaikan%20Temuan%20Audit%20Kode%20%28Rule%20Compliance%2C%20Layout%20Safety%2C%20Linter%20%26%20Git%20Hunk%29.md) | done |
 | 2026-11-14 | [2026-11-14 - Tab Drag-and-Drop Reordering & Tab Pinning](done/2026-11-14%20-%20Tab%20Drag-and-Drop%20Reordering%20%26%20Tab%20Pinning.md) | done |
 | 2026-11-14 | [2026-11-14 - Peningkatan Terminal Safety, Menu Shortcut, Viewport Centering, dan Ergonomi Keymap](done/2026-11-14%20-%20Peningkatan%20Terminal%20Safety%2C%20Menu%20Shortcut%2C%20Viewport%20Centering%2C%20dan%20Ergonomi%20Keymap.md) | done |
-
+| 2026-11-15 | [2026-11-15 - Bubble Tea v2 Migration, PRD v0.2.0 & Refactor internal app](done/2026-11-15%20-%20Bubble%20Tea%20v2%20Migration%2C%20PRD%20v0.2.0%20%26%20Refactor%20internal%20app.md) | done |

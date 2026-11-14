@@ -108,33 +108,26 @@ Git Source Control:
 func renderAboutModal() string {
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(ui.CurrentTheme.FgHighlight).
-		MarginBottom(1)
+		Foreground(ui.CurrentTheme.FgHighlight)
 
 	renderedTitle := titleStyle.Render("ℹ ABOUT tui-workflow")
 
 	content := `tui-workflow v0.2.0
-Modern, High-Performance Terminal User Interface Workflow Environment.
+Modern, High-Performance Terminal Workflow Environment.
 
 Core Features & Technologies:
- • Programming Language: Go 1.24+ (Goroutines, Channels)
- • Terminal Engine     : Charmbracelet Bubble Tea & Lipgloss
- • Syntax Tokenizer    : Chroma v2 Highlighting Cache
- • Markdown Renderer   : Glamour ANSI Stylesheet
- • Git Integration     : In-Memory Pure-Go (go-git/v5)
- • PTY Terminal        : Embedded Pseudoterminal Subshell
+ • Language: Go 1.24+ (Goroutines, Channels)
+ • Terminal: Bubble Tea & Lipgloss
+ • Tokenizer: Chroma v2 Highlighting Cache
+ • Markdown: Glamour ANSI Stylesheet
+ • Git     : In-Memory Pure-Go (go-git/v5)
+ • PTY     : Embedded Pseudoterminal Subshell
 
-Author:
- • Aji Kamaludin (github.com/ajikamaludin-dev)
-   Creator & Maintainer — aji19kamaludin@gmail.com
+Author: Aji Kamaludin — Creator & Maintainer
+    aji19kamaludin@gmail.com · github.com/ajikamaludin-dev
+Contributors: contributions are welcome.
 
-Contributors:
- • Help wanted! There are no contributors yet.
-   Pull requests & contributions are welcome.
-   github.com/ajikamaludin-dev/tui-workflow
-
-Engineered for 60 FPS, zero flickering, modeless text
-editing, and full mouse support in terminal environments.`
+Engineered for 60 FPS, modeless, zero flicker.`
 
 	closeBtn := lipgloss.NewStyle().
 		Bold(true).

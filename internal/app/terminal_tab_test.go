@@ -1,12 +1,14 @@
 package app
 
 import (
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"tui-workflow/internal/editor"
+	"tui-workflow/internal/ui/dialog"
 )
 
 func TestTerminalTabIntegration(t *testing.T) {
@@ -62,18 +64,18 @@ func TestTerminalTabIntegration(t *testing.T) {
 		t.Fatalf("rendered view height %d exceeds terminal height %d", len(lines), m.Height)
 	}
 
-	// 4. Test Toggle Focus (Ctrl+\)
-	updM, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlBackslash})
+	// 4. Test Toggle Focus (F6)
+	updM, _ = m.Update(tea.KeyMsg{Type: tea.KeyF6})
 	m = updM.(Model)
 	if m.Focus != FocusSidebar {
-		t.Errorf("expected FocusSidebar after Ctrl+\\, got %v", m.Focus)
+		t.Errorf("expected FocusSidebar after F6, got %v", m.Focus)
 	}
 
 	// Toggle back
-	updM, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlBackslash})
+	updM, _ = m.Update(tea.KeyMsg{Type: tea.KeyF6})
 	m = updM.(Model)
 	if m.Focus != FocusEditor {
-		t.Errorf("expected FocusEditor after second Ctrl+\\, got %v", m.Focus)
+		t.Errorf("expected FocusEditor after second F6, got %v", m.Focus)
 	}
 
 	// 5. Test Close Terminal Tab (Alt+W)
@@ -124,5 +126,99 @@ func TestTerminalMenuAndCommandPalette(t *testing.T) {
 	help := renderHelpModal()
 	if !strings.Contains(help, "Terminal & Shell (PTY)") {
 		t.Error("expected Help Modal to contain 'Terminal & Shell (PTY)'")
+	}
+}
+
+func TestTerminalCloseConfirmationWithRunningProcess(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows")
+	}
+
+	m, _ := NewModelWithPath(t.TempDir(), false)
+	m.Width = 100
+	m.Height = 30
+	m.Ready = true
+
+	newM, cmd := m.openNewTerminalTab()
+	if cmd == nil {
+		t.Fatal("expected non-nil tea.Cmd from openNewTerminalTab")
+	}
+	m = newM
+	activeTab := m.TabManager.ActiveTab()
+	if activeTab == nil || activeTab.TerminalView == nil {
+		t.Fatal("expected active terminal tab")
+	}
+	defer activeTab.TerminalView.Close()
+
+	// Write command with child process
+	_, err := activeTab.TerminalView.Write([]byte("sleep 2\n"))
+	if err != nil {
+		t.Fatalf("failed to write sleep command: %v", err)
+	}
+
+	// Wait up to 500ms for child process
+	for i := 0; i < 20; i++ {
+		time.Sleep(25 * time.Millisecond)
+		if activeTab.TerminalView.HasRunningProcess() {
+			break
+		}
+	}
+
+	if activeTab.TerminalView.HasRunningProcess() {
+		// Attempt close tab
+		m.attemptCloseTab(0)
+		if !m.ConfirmDialog.Active || m.ConfirmDialog.Type != dialog.ConfirmCloseTerminal {
+			t.Errorf("expected ConfirmCloseTerminal dialog active, got active=%v, type=%v", m.ConfirmDialog.Active, m.ConfirmDialog.Type)
+		}
+	}
+}
+
+func TestOpenTerminalKeybinding(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping pty test on windows")
+	}
+
+	m, _ := NewModelWithPath(t.TempDir(), false)
+	m.Width = 100
+	m.Height = 30
+	m.Ready = true
+
+	// Send ctrl+\ key msg
+	resM, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlBackslash})
+	m = resM.(Model)
+	if cmd == nil {
+		t.Fatal("expected non-nil cmd from ctrl+\\")
+	}
+
+	tab := m.TabManager.ActiveTab()
+	if tab == nil || tab.Type != editor.TabTerminal {
+		t.Fatalf("expected TabTerminal active after ctrl+\\, got %v", tab)
+	}
+	if tab.TerminalView != nil {
+		defer tab.TerminalView.Close()
+	}
+}
+
+func TestQuickOpenSwitchToCommandPalette(t *testing.T) {
+	m, _ := NewModelWithPath(t.TempDir(), false)
+	m.Width = 100
+	m.Height = 30
+	m.Ready = true
+
+	// Open Quick Open
+	m.openQuickOpen()
+	if m.QuickOpen == nil || !m.QuickOpen.Active {
+		t.Fatal("expected QuickOpen to be active")
+	}
+
+	// Press '>'
+	resM, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'>'}})
+	m = resM.(Model)
+
+	if m.QuickOpen.Active {
+		t.Errorf("expected QuickOpen to be closed after typing '>'")
+	}
+	if m.CommandPalette == nil || !m.CommandPalette.Active {
+		t.Errorf("expected CommandPalette to be active after typing '>'")
 	}
 }

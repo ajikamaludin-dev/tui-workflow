@@ -152,3 +152,28 @@ func TestMenuBarMouseClick(t *testing.T) {
 		t.Errorf("Expected menu to close when clicking outside, open=%v", mb.IsOpen())
 	}
 }
+
+func TestMenuBarAboutCategoryHasShortcuts(t *testing.T) {
+	mb := NewMenuBar()
+	var aboutCat *MenuCategory
+	for i := range mb.Categories {
+		if mb.Categories[i].Title == "About" {
+			aboutCat = &mb.Categories[i]
+			break
+		}
+	}
+	if aboutCat == nil {
+		t.Fatal("expected About menu category")
+	}
+
+	foundShortcuts := false
+	for _, item := range aboutCat.Items {
+		if item.Label == "Keyboard Shortcuts" {
+			foundShortcuts = true
+			break
+		}
+	}
+	if !foundShortcuts {
+		t.Error("expected 'Keyboard Shortcuts' to be in About menu category")
+	}
+}

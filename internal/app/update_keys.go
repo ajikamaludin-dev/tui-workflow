@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/atotto/clipboard"
@@ -427,6 +428,17 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// 0.5. Quick Open Handling if active
 	if m.QuickOpen != nil && m.QuickOpen.Active {
 		targetTabIdx, targetPath, closed, cmd := m.QuickOpen.Update(msg)
+		if m.QuickOpen.Active && strings.HasPrefix(m.QuickOpen.Filter.Value(), ">") {
+			initialQuery := strings.TrimPrefix(m.QuickOpen.Filter.Value(), ">")
+			initialQuery = strings.TrimLeft(initialQuery, " ")
+			m.QuickOpen.Close()
+			m.openCommandPalette()
+			if initialQuery != "" && m.CommandPalette != nil {
+				m.CommandPalette.Filter.SetValue(initialQuery)
+				m.CommandPalette.ApplyFilter()
+			}
+			return m, nil
+		}
 		if closed {
 			if targetTabIdx >= 0 && targetTabIdx < m.TabManager.Count() {
 				if m.AutoSave {
@@ -595,11 +607,11 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		tab := m.TabManager.ActiveTab()
 		if tab != nil && tab.Type == editor.TabTerminal && tab.TerminalView != nil {
 			switch msg.String() {
-			case "ctrl+\\", "ctrl+`", "f6":
+			case "ctrl+`", "f6":
 				m.Focus = FocusSidebar
-				m.StatusBar.ShowToast("Focus: Sidebar (press Ctrl+\\ to return to Terminal)", false, 2*time.Second)
+				m.StatusBar.ShowToast("Focus: Sidebar (press Ctrl+` to return to Terminal)", false, 2*time.Second)
 				return m, nil
-			case "ctrl+shift+\\", "ctrl+t":
+			case "ctrl+shift+\\", "ctrl+\\", "ctrl+|", "ctrl+t":
 				var cmd tea.Cmd
 				m, cmd = m.openNewTerminalTab()
 				return m, cmd
@@ -627,11 +639,11 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// 6. Global Shortcuts
 	switch msg.String() {
-	case "ctrl+shift+\\", "ctrl+t":
+	case "ctrl+shift+\\", "ctrl+\\", "ctrl+|", "ctrl+t":
 		var cmd tea.Cmd
 		m, cmd = m.openNewTerminalTab()
 		return m, cmd
-	case "ctrl+\\", "ctrl+`":
+	case "ctrl+`":
 		m.toggleFocus()
 		return m, nil
 	case "ctrl+q":
@@ -640,6 +652,15 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				dialog.ConfirmUnsavedChanges,
 				"Unsaved Changes",
 				"There are unsaved buffers.\nSave before exiting?",
+				"app.exit",
+			)
+			return m, nil
+		}
+		if runningTerm := m.hasRunningTerminalProcesses(); runningTerm != nil {
+			m.ConfirmDialog.Open(
+				dialog.ConfirmCloseTerminal,
+				"Active Terminal Process",
+				fmt.Sprintf("Terminal '%s' still has active processes running.\nTerminate process and exit?", runningTerm.Name),
 				"app.exit",
 			)
 			return m, nil

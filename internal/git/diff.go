@@ -451,14 +451,14 @@ func (dv *DiffView) ensureActiveHunkVisible(viewHeight int) {
 		contentHeight = 1
 	}
 	target := h.StartRow
-	if target < dv.ScrollOffset {
-		dv.ScrollOffset = target
+	// Position target at vertical center of viewport
+	dv.ScrollOffset = target - (contentHeight / 2)
+	if dv.ScrollOffset < 0 {
+		dv.ScrollOffset = 0
 	}
-	if target >= dv.ScrollOffset+contentHeight {
-		dv.ScrollOffset = target - contentHeight + 1
-		if dv.ScrollOffset < 0 {
-			dv.ScrollOffset = 0
-		}
+	maxOffset := len(dv.Result.Rows) - contentHeight
+	if maxOffset > 0 && dv.ScrollOffset > maxOffset {
+		dv.ScrollOffset = maxOffset
 	}
 }
 

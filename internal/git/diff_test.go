@@ -50,3 +50,43 @@ func TestComputeSplitDiff(t *testing.T) {
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || (len(s) > 0 && len(substr) > 0 && (s[:len(substr)] == substr || (len(s) > len(substr) && (contains(s[1:], substr))))))
 }
+
+func TestDiffHunkVerticalCentering(t *testing.T) {
+	origLines := make([]string, 50)
+	modLines := make([]string, 50)
+	for i := range origLines {
+		origLines[i] = "common line"
+		modLines[i] = "common line"
+	}
+	modLines[30] = "modified line 30"
+
+	orig := ""
+	mod := ""
+	for i := range origLines {
+		orig += origLines[i] + "\n"
+		mod += modLines[i] + "\n"
+	}
+
+	dv := NewDiffView("test.txt", orig, mod)
+	if len(dv.Hunks) == 0 {
+		t.Fatalf("expected at least 1 hunk")
+	}
+
+	// Navigate to next hunk with viewHeight 20
+	dv.NextHunk(20)
+
+	h, ok := dv.ActiveHunkData()
+	if !ok {
+		t.Fatalf("expected active hunk data")
+	}
+
+	// Check that ScrollOffset is centered around target (target - contentHeight/2)
+	contentHeight := 20 - 1
+	expectedOffset := h.StartRow - (contentHeight / 2)
+	if expectedOffset < 0 {
+		expectedOffset = 0
+	}
+	if dv.ScrollOffset != expectedOffset {
+		t.Errorf("expected ScrollOffset to be %d, got %d (hunk StartRow=%d)", expectedOffset, dv.ScrollOffset, h.StartRow)
+	}
+}

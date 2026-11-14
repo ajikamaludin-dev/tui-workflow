@@ -53,9 +53,10 @@ type Buffer struct {
 	SelectAnchorCol int
 
 	// Search state
-	SearchQuery    string
-	SearchMatches  []MatchPos
-	ActiveMatchIdx int
+	SearchQuery           string
+	SearchMatches         []MatchPos
+	ActiveMatchIdx        int
+	CenterCursorRequested bool
 
 	// Undo / Redo state
 	undoStack    []BufferSnapshot

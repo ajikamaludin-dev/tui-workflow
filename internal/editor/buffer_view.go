@@ -235,7 +235,10 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 	}
 
 	// 4. Adjust viewport scrolling
-	if visualCursorRow < b.ScrollRow {
+	if b.CenterCursorRequested {
+		b.CenterCursorRequested = false
+		b.ScrollRow = visualCursorRow - (height / 2)
+	} else if visualCursorRow < b.ScrollRow {
 		b.ScrollRow = visualCursorRow
 	} else if visualCursorRow >= b.ScrollRow+height {
 		b.ScrollRow = visualCursorRow - height + 1
@@ -243,6 +246,9 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 
 	if b.ScrollRow < 0 {
 		b.ScrollRow = 0
+	}
+	if b.ScrollRow >= len(vLines) && len(vLines) > 0 {
+		b.ScrollRow = len(vLines) - 1
 	}
 
 	// 5. Highlighting (Lazy Viewport-Bounded Line Parsing)

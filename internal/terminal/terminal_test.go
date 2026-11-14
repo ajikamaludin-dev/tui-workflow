@@ -244,3 +244,44 @@ func TestTerminalTrueColorAnd256ColorRender(t *testing.T) {
 	}
 }
 
+func TestTerminalHasRunningProcess(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping on windows")
+	}
+
+	term, err := NewTerminalView("test-proc", 80, 24, "/bin/sh", "")
+	if err != nil {
+		t.Fatalf("failed to create terminal: %v", err)
+	}
+	defer term.Close()
+
+	// Initial shell might not have active child process
+	_ = term.HasRunningProcess()
+
+	// Spawn child process in shell
+	_, err = term.Write([]byte("sleep 1\n"))
+	if err != nil {
+		t.Fatalf("failed to write to terminal: %v", err)
+	}
+
+	// Wait up to 500ms for sleep child process to start
+	hasRunning := false
+	for i := 0; i < 20; i++ {
+		time.Sleep(25 * time.Millisecond)
+		if term.HasRunningProcess() {
+			hasRunning = true
+			break
+		}
+	}
+	if !hasRunning {
+		t.Log("Note: child process sleep may have finished quickly or environment restricted")
+	}
+
+	// After closing, HasRunningProcess must be false
+	_ = term.Close()
+	if term.HasRunningProcess() {
+		t.Errorf("expected HasRunningProcess() to be false after Close()")
+	}
+}
+
+

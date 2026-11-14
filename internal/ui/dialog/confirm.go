@@ -17,6 +17,7 @@ const (
 	ConfirmDiscardGit
 	ConfirmDiscardGitHunk
 	ConfirmAlert
+	ConfirmCloseTerminal
 )
 
 type ConfirmDialog struct {
@@ -49,6 +50,9 @@ func (d *ConfirmDialog) Open(t ConfirmDialogType, title, message, targetPath str
 	} else if t == ConfirmExternalChange {
 		d.Selected = 1
 		d.Width = 54
+	} else if t == ConfirmCloseTerminal {
+		d.Selected = 1
+		d.Width = 52
 	} else {
 		d.Selected = 1
 		d.Width = 48
@@ -121,6 +125,11 @@ func (d *ConfirmDialog) Update(msg tea.Msg) (confirmed bool, canceled bool, disc
 					return true, false, false // Discard hunk
 				}
 				return false, true, false
+			} else if d.Type == ConfirmCloseTerminal {
+				if d.Selected == 0 {
+					return true, false, false // Terminate & close
+				}
+				return false, true, false
 			} else {
 				if d.Selected == 0 {
 					return true, false, false // Confirm delete
@@ -173,6 +182,12 @@ func (d *ConfirmDialog) HandleMouse(relX, relY int) (confirmed bool, canceled bo
 		} else if d.Type == ConfirmDiscardGitHunk {
 			if relX >= 2 && relX <= 20 {
 				return true, false, false, true // Discard hunk
+			} else {
+				return false, true, false, true // Cancel
+			}
+		} else if d.Type == ConfirmCloseTerminal {
+			if relX >= 2 && relX <= 18 {
+				return true, false, false, true // Terminate
 			} else {
 				return false, true, false, true // Cancel
 			}
@@ -272,6 +287,21 @@ func (d *ConfirmDialog) Render() string {
 			btnReload.Render("Reload"),
 			btnSep,
 			btnMerge.Render("Merge (Diff)"),
+			btnSep,
+			btnCancel.Render("Cancel"),
+		)
+	} else if d.Type == ConfirmCloseTerminal {
+		btnTerminate := btnStyle
+		btnCancel := btnStyle
+		if d.Selected == 0 {
+			btnTerminate = btnTerminate.Background(ui.CurrentTheme.Red).Foreground(ui.CurrentTheme.FgHighlight).Bold(true)
+		} else if d.Selected == 1 {
+			btnCancel = btnCancel.Background(ui.CurrentTheme.BorderColor).Foreground(ui.CurrentTheme.FgHighlight).Bold(true)
+		}
+
+		buttons = lipgloss.JoinHorizontal(
+			lipgloss.Center,
+			btnTerminate.Render("Terminate"),
 			btnSep,
 			btnCancel.Render("Cancel"),
 		)

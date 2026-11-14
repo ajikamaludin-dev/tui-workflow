@@ -333,7 +333,7 @@ func renderHelpModal() string {
  • ? / Esc : Open Help / Close Pop-up Dialog
 
 Search & Code Navigation:
- • F1 / Ctrl+Shift+P : Open Command Palette
+ • F1 / Ctrl+Shift+P : Open Command Palette (or type '>' in Ctrl+P)
  • Ctrl+P : Quick Open File (Workspace)
  • Ctrl+Shift+O : Go to Symbol (workspace)
  • F12 / Shift+F12 : Go to Definition / Find References
@@ -365,8 +365,8 @@ Editor & Buffer:
  • Ctrl+A / C / V : Select All / Copy / Paste Text
 
 Terminal & Shell (PTY):
- • Ctrl+Shift+\ : Open New Terminal Shell Tab
- • Ctrl+\ : Switch Focus Terminal / TUI Editor
+ • Ctrl+\ / Ctrl+T : Open New Terminal Shell Tab
+ • Ctrl+Backtick / F6 : Switch Focus Terminal / TUI Editor
  • Ctrl+Shift+W : Close Active Terminal Shell Tab
  • Alt/Ctrl+Arrow : Jump Word in Shell CLI (Readline)
  • Alt/Ctrl+Bcksp : Delete Word Left in Shell CLI

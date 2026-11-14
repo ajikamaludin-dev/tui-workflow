@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -58,5 +59,25 @@ func TestBufferSearch(t *testing.T) {
 	b.ClearSearch()
 	if len(b.SearchMatches) != 0 || b.SearchQuery != "" {
 		t.Errorf("expected search cleared")
+	}
+}
+
+func TestBufferSearchVerticalCentering(t *testing.T) {
+	lines := make([]string, 50)
+	for i := range lines {
+		lines[i] = "line content"
+	}
+	lines[30] = "special keyword here"
+
+	b := NewBuffer(strings.Join(lines, "\n"))
+	b.SetSearchQuery("keyword")
+
+	// Render with height 20
+	_ = b.Render(80, 20, "test.txt", false)
+
+	// Since match is on line 30, with height 20, ScrollRow should be centered around 30 - (20/2) = 20
+	expectedScroll := 30 - (20 / 2)
+	if b.ScrollRow != expectedScroll {
+		t.Errorf("expected ScrollRow to be centered around %d, got %d", expectedScroll, b.ScrollRow)
 	}
 }

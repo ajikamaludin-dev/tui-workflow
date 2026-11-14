@@ -410,6 +410,23 @@ func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 
 	// Right-click handling
 	if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonRight {
+		// Terminal tab with inner mouse reporting active → forward right press to PTY
+		if msg.Y >= 2 && msg.Y < m.Height-1 && msg.X >= editorStartX {
+			if tab := m.TabManager.ActiveTab(); tab != nil && tab.Type == editor.TabTerminal && tab.TerminalView != nil {
+				if tab.TerminalView.WantsMouse() {
+					relX := msg.X - editorStartX
+					relY := msg.Y - 2
+					if relX < 0 {
+						relX = 0
+					}
+					if relY < 0 {
+						relY = 0
+					}
+					_ = tab.TerminalView.ForwardMouse(msg, relX, relY)
+					return m, nil
+				}
+			}
+		}
 		// Tab Bar right-click (Row 1, X >= editorStartX)
 		if msg.Y == 1 && msg.X >= editorStartX {
 			relX := msg.X - editorStartX
@@ -483,6 +500,8 @@ func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			if tab := m.TabManager.ActiveTab(); tab != nil {
 				if tab.Type == editor.TabMarkdown && tab.MarkdownPreview && tab.MarkdownViewer != nil {
 					hasSelection = tab.MarkdownViewer.HasSelection
+				} else if tab.Type == editor.TabTerminal && tab.TerminalView != nil {
+					hasSelection = tab.TerminalView.HasSelection()
 				} else if tab.Buffer != nil {
 					hasSelection = tab.Buffer.HasSelection
 				}
@@ -505,6 +524,21 @@ func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			}
 			tab.MarkdownViewer.UpdateSelection(relRow, relCol)
 			return m, nil
+		} else if tab != nil && tab.Type == editor.TabTerminal && tab.TerminalView != nil {
+			relX := msg.X - editorStartX
+			if relX < 0 {
+				relX = 0
+			}
+			relY := msg.Y - 2
+			if relY < 0 {
+				relY = 0
+			}
+			if tab.TerminalView.WantsMouse() {
+				_ = tab.TerminalView.ForwardMouse(msg, relX, relY)
+			} else {
+				tab.TerminalView.UpdateSelection(relX, relY)
+			}
+			return m, nil
 		} else if tab != nil && tab.Buffer != nil {
 			relY := msg.Y - 2
 			gutterW := tab.Buffer.GutterWidth()
@@ -524,19 +558,42 @@ func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Release mouse inside editor area
-	if msg.Action == tea.MouseActionRelease && msg.Button == tea.MouseButtonLeft {
-		if m.ResizingSidebar {
-			m.ResizingSidebar = false
-			return m, nil
-		}
-		if m.DraggingTabIdx >= 0 {
-			m.DraggingTabIdx = -1
-			m.IsDraggingTab = false
-			m.TabManager.DraggingIndex = -1
-			m.setMousePointer("default")
-			return m, nil
+	if msg.Action == tea.MouseActionRelease && (msg.Button == tea.MouseButtonLeft || msg.Button == tea.MouseButtonRight) {
+		if msg.Button == tea.MouseButtonLeft {
+			if m.ResizingSidebar {
+				m.ResizingSidebar = false
+				return m, nil
+			}
+			if m.DraggingTabIdx >= 0 {
+				m.DraggingTabIdx = -1
+				m.IsDraggingTab = false
+				m.TabManager.DraggingIndex = -1
+				m.setMousePointer("default")
+				return m, nil
+			}
 		}
 		tab := m.TabManager.ActiveTab()
+		if tab != nil && tab.Type == editor.TabTerminal && tab.TerminalView != nil {
+			relX := msg.X - editorStartX
+			if relX < 0 {
+				relX = 0
+			}
+			relY := msg.Y - 2
+			if relY < 0 {
+				relY = 0
+			}
+			if tab.TerminalView.WantsMouse() {
+				_ = tab.TerminalView.ForwardMouse(msg, relX, relY)
+				return m, nil
+			}
+			if msg.Button == tea.MouseButtonLeft {
+				tab.TerminalView.UpdateSelection(relX, relY)
+				if !tab.TerminalView.HasSelection() {
+					tab.TerminalView.ClearSelection()
+				}
+			}
+			return m, nil
+		}
 		if tab != nil && tab.Type == editor.TabMarkdown && tab.MarkdownPreview && tab.MarkdownViewer != nil {
 			sR, sC, eR, eC := tab.MarkdownViewer.NormalizedSelection()
 			if sR == eR && sC == eC {
@@ -631,6 +688,18 @@ func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 			} else if tab.Type == editor.TabTerminal && tab.TerminalView != nil {
+				if tab.TerminalView.WantsMouse() {
+					relX := msg.X - editorStartX
+					relY := msg.Y - 2
+					if relX < 0 {
+						relX = 0
+					}
+					if relY < 0 {
+						relY = 0
+					}
+					_ = tab.TerminalView.ForwardMouse(msg, relX, relY)
+					return m, nil
+				}
 				if msg.Button == tea.MouseButtonWheelUp {
 					tab.TerminalView.ScrollUp(3)
 					return m, nil
@@ -863,6 +932,21 @@ func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 					relCol = 0
 				}
 				tab.MarkdownViewer.StartSelection(relRow, relCol)
+				return m, nil
+			} else if tab != nil && tab.Type == editor.TabTerminal && tab.TerminalView != nil {
+				relX := msg.X - editorStartX
+				if relX < 0 {
+					relX = 0
+				}
+				relY := msg.Y - 2
+				if relY < 0 {
+					relY = 0
+				}
+				if tab.TerminalView.WantsMouse() {
+					_ = tab.TerminalView.ForwardMouse(msg, relX, relY)
+					return m, nil
+				}
+				tab.TerminalView.StartSelection(relX, relY)
 				return m, nil
 			} else if tab != nil && tab.Buffer != nil {
 				relY := msg.Y - 2

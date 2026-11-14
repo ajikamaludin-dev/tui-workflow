@@ -169,6 +169,15 @@ func (m *Model) handleConfirmConfirmed() tea.Cmd {
 	case dialog.ConfirmUnsavedChanges:
 		if m.ConfirmDialog.TargetPath == "app.exit" {
 			_, _ = editor.TriggerAutoSave(m.TabManager)
+			if runningTerm := m.hasRunningTerminalProcesses(); runningTerm != nil {
+				m.ConfirmDialog.Open(
+					dialog.ConfirmCloseTerminal,
+					"Active Terminal Process",
+					fmt.Sprintf("Terminal '%s' still has active processes running.\nTerminate process and exit?", runningTerm.Name),
+					"app.exit",
+				)
+				return nil
+			}
 			_ = config.SaveWorkspaceSession(m.canonicalRootDir(), m.captureWorkspaceSession())
 			fmt.Print("\x1b]22;default\x1b\\")
 			return tea.Quit
@@ -178,6 +187,19 @@ func (m *Model) handleConfirmConfirmed() tea.Cmd {
 			m.ClosingTabIdx = -1
 			m.syncStatusBarWithActiveTab()
 			m.StatusBar.ShowToast("Saved & closed", false, 2*time.Second)
+		}
+
+	case dialog.ConfirmCloseTerminal:
+		if m.ConfirmDialog.TargetPath == "app.exit" {
+			_, _ = editor.TriggerAutoSave(m.TabManager)
+			_ = config.SaveWorkspaceSession(m.canonicalRootDir(), m.captureWorkspaceSession())
+			fmt.Print("\x1b]22;default\x1b\\")
+			return tea.Quit
+		} else if m.ClosingTabIdx >= 0 {
+			m.TabManager.CloseTab(m.ClosingTabIdx)
+			m.ClosingTabIdx = -1
+			m.syncStatusBarWithActiveTab()
+			m.StatusBar.ShowToast("Terminal closed", false, 2*time.Second)
 		}
 
 	case dialog.ConfirmExternalChange:
@@ -240,6 +262,15 @@ func (m *Model) handleConfirmConfirmed() tea.Cmd {
 func (m *Model) handleDiscardConfirmed() tea.Cmd {
 	if m.ConfirmDialog.Type == dialog.ConfirmUnsavedChanges {
 		if m.ConfirmDialog.TargetPath == "app.exit" {
+			if runningTerm := m.hasRunningTerminalProcesses(); runningTerm != nil {
+				m.ConfirmDialog.Open(
+					dialog.ConfirmCloseTerminal,
+					"Active Terminal Process",
+					fmt.Sprintf("Terminal '%s' still has active processes running.\nTerminate process and exit?", runningTerm.Name),
+					"app.exit",
+				)
+				return nil
+			}
 			_ = config.SaveWorkspaceSession(m.canonicalRootDir(), m.captureWorkspaceSession())
 			fmt.Print("\x1b]22;default\x1b\\")
 			return tea.Quit
@@ -249,6 +280,9 @@ func (m *Model) handleDiscardConfirmed() tea.Cmd {
 			m.syncStatusBarWithActiveTab()
 			m.StatusBar.ShowToast("Changes discarded", false, 2*time.Second)
 		}
+	} else if m.ConfirmDialog.Type == dialog.ConfirmCloseTerminal {
+		m.ClosingTabIdx = -1
+		m.StatusBar.ShowToast("Terminal close cancelled", false, 1500*time.Millisecond)
 	} else if m.ConfirmDialog.Type == dialog.ConfirmExternalChange {
 		targetPath := m.ConfirmDialog.TargetPath
 		for _, tab := range m.TabManager.Tabs {

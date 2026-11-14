@@ -72,6 +72,7 @@ func (b *Buffer) SetSearchQuery(query string) {
 		b.CursorRow = cur.Row
 		b.CursorCol = cur.Col
 		b.clampCursor()
+		b.CenterCursorRequested = true
 	}
 }
 
@@ -85,6 +86,7 @@ func (b *Buffer) FindNext() bool {
 	b.CursorRow = cur.Row
 	b.CursorCol = cur.Col
 	b.clampCursor()
+	b.CenterCursorRequested = true
 	return true
 }
 
@@ -98,6 +100,7 @@ func (b *Buffer) FindPrev() bool {
 	b.CursorRow = cur.Row
 	b.CursorCol = cur.Col
 	b.clampCursor()
+	b.CenterCursorRequested = true
 	return true
 }
 

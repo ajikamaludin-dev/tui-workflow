@@ -41,6 +41,7 @@ type TerminalView struct {
 	closed     bool
 	exited     bool
 	exitErr    error
+	selection  terminalSelection
 }
 
 // NewTerminalView spawns a new shell process attached to a PTY.
@@ -218,6 +219,16 @@ func (t *TerminalView) IsExited() bool {
 	return t.exited
 }
 
+// HasRunningProcess checks if the terminal's shell has spawned active child processes.
+func (t *TerminalView) HasRunningProcess() bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if t.closed || t.exited || t.cmd == nil || t.cmd.Process == nil {
+		return false
+	}
+	return hasRunningProcess(t.ptyFile, t.cmd.Process.Pid)
+}
+
 // ScrollUp sends Up arrow escape sequences to the PTY.
 func (t *TerminalView) ScrollUp(lines int) {
 	for i := 0; i < lines; i++ {
@@ -251,6 +262,8 @@ func (t *TerminalView) Render(width, height int, focused bool) string {
 		return strings.Repeat(" \n", height)
 	}
 
+	selStartX, selStartY, selEndX, selEndY, selActive := t.selectionRangeLocked()
+
 	cur := t.vt.Cursor()
 	curVis := t.vt.CursorVisible()
 
@@ -274,7 +287,8 @@ func (t *TerminalView) Render(width, height int, focused bool) string {
 			}
 
 			isCursor := focused && curVis && (x == cur.X && y == cur.Y)
-			isInverse := isCursor || ((attr.Mode & vtAttrReverse) != 0)
+			isSelected := selActive && selectionContains(selStartX, selStartY, selEndX, selEndY, x, y)
+			isInverse := isCursor || isSelected || ((attr.Mode & vtAttrReverse) != 0)
 			isUnderline := (attr.Mode & vtAttrUnderline) != 0
 			isBold := (attr.Mode & vtAttrBold) != 0
 			isItalic := (attr.Mode & vtAttrItalic) != 0

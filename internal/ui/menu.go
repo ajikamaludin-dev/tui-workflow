@@ -39,7 +39,7 @@ func NewMenuBar() *MenuBar {
 				Shortcut: "Alt+F",
 				Items: []MenuItem{
 					{Label: "New File", Shortcut: "a", ActionID: "file.new"},
-					{Label: "New Terminal Tab", Shortcut: "Ctrl+Shift+\\", ActionID: "terminal.new"},
+					{Label: "New Terminal Tab", Shortcut: "Ctrl+\\", ActionID: "terminal.new"},
 					{Label: "Open File", Shortcut: "Ctrl+O", ActionID: "file.open"},
 					{Label: "Open Folder", Shortcut: "Ctrl+K Ctrl+K", ActionID: "file.open_folder"},
 					{Label: "Save File", Shortcut: "Ctrl+S", ActionID: "file.save"},
@@ -112,13 +112,13 @@ func NewMenuBar() *MenuBar {
 					{Label: "Toggle Hidden Files", Shortcut: ".", ActionID: "setting.hidden"},
 					{Label: "Switch Git Branch...", Shortcut: "Alt+B", ActionID: "git.branch_switcher"},
 					{Label: "AI Settings...", Shortcut: "Alt+I", ActionID: "setting.ai"},
-					{Label: "Keyboard Shortcuts", Shortcut: "?", ActionID: "setting.shortcuts"},
 				},
 			},
 			{
 				Title:    "About",
 				Shortcut: "Alt+A",
 				Items: []MenuItem{
+					{Label: "Keyboard Shortcuts", Shortcut: "?", ActionID: "setting.shortcuts"},
 					{Label: "About tui-workflow", Shortcut: "", ActionID: "about.open"},
 				},
 			},

@@ -27,6 +27,15 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 			)
 			return nil
 		}
+		if runningTerm := m.hasRunningTerminalProcesses(); runningTerm != nil {
+			m.ConfirmDialog.Open(
+				dialog.ConfirmCloseTerminal,
+				"Active Terminal Process",
+				fmt.Sprintf("Terminal '%s' still has active processes running.\nTerminate process and exit?", runningTerm.Name),
+				"app.exit",
+			)
+			return nil
+		}
 		if m.AutoSave {
 			_, _ = editor.TriggerAutoSave(m.TabManager)
 		}
@@ -151,7 +160,7 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 			_ = config.SaveConfig(m.Config)
 		}
 
-	case "setting.shortcuts":
+	case "setting.shortcuts", "about.shortcuts":
 		m.ShowHelp = true
 		if m.HelpDialog != nil {
 			m.HelpDialog.Open(m.Height)
@@ -676,6 +685,27 @@ func (m *Model) handleContextMenuAction(action string) tea.Cmd {
 				m.syncStatusBarWithActiveTab()
 				m.StatusBar.ShowToast("Ditempel ke dokumen markdown", false, 2*time.Second)
 			}
+		}
+		return nil
+	}
+
+	if tab != nil && tab.Type == editor.TabTerminal && tab.TerminalView != nil {
+		switch action {
+		case "copy":
+			text := tab.TerminalView.SelectedText()
+			if text != "" {
+				_ = clipboard.WriteAll(text)
+				m.StatusBar.ShowToast("Disalin ke clipboard ("+strconv.Itoa(len(text))+" karakter)", false, 2*time.Second)
+			}
+		case "paste":
+			text, err := clipboard.ReadAll()
+			if err == nil && text != "" {
+				_, _ = tab.TerminalView.Write([]byte(text))
+				m.StatusBar.ShowToast("Ditempel ke terminal", false, 2*time.Second)
+			}
+		case "select_all":
+			tab.TerminalView.SelectAll()
+			m.StatusBar.ShowToast("Seluruh layar terminal dipilih", false, 2*time.Second)
 		}
 		return nil
 	}

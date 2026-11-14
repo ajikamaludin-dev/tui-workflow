@@ -653,6 +653,15 @@ func (m *Model) hasDirtyTabs() bool {
 	return false
 }
 
+func (m *Model) hasRunningTerminalProcesses() *editor.Tab {
+	for _, tab := range m.TabManager.Tabs {
+		if tab != nil && tab.Type == editor.TabTerminal && tab.TerminalView != nil && tab.TerminalView.HasRunningProcess() {
+			return tab
+		}
+	}
+	return nil
+}
+
 func (m *Model) attemptCloseTab(tabIdx int) {
 	if tabIdx < 0 || tabIdx >= m.TabManager.Count() {
 		return
@@ -661,6 +670,16 @@ func (m *Model) attemptCloseTab(tabIdx int) {
 	tab := m.TabManager.Tabs[tabIdx]
 	if tab.IsPinned {
 		m.StatusBar.ShowToast("Tab is pinned (unpin tab first to close)", true, 3*time.Second)
+		return
+	}
+	if tab.Type == editor.TabTerminal && tab.TerminalView != nil && tab.TerminalView.HasRunningProcess() {
+		m.ClosingTabIdx = tabIdx
+		m.ConfirmDialog.Open(
+			dialog.ConfirmCloseTerminal,
+			"Close Terminal?",
+			fmt.Sprintf("Terminal '%s' has active processes running.\nTerminate process and close?", tab.Name),
+			tab.Path,
+		)
 		return
 	}
 	if tab.IsDirty() && !m.AutoSave {

@@ -12,7 +12,7 @@
 
 ## 📌 Gambaran Umum (Overview)
 
-`tui-workflow` adalah aplikasi terminal modern berbasis Go yang mengadopsi fleksibilitas antarmuka IDE grafis (seperti VS Code) ke dalam terminal. Dirancang agar **sangat cepat**, **ringan** (< 30 MB RAM), **keyboard-driven**, dan **mouse-friendly**, memungkinkan developer mengelola file, menyunting kode dengan syntax highlighting real-time, meninjau perubahaan Git secara side-by-side, dan melihat preview Markdown secara langsung tanpa meninggalkan terminal.
+`tui-workflow` adalah aplikasi terminal modern berbasis Go yang mengadopsi fleksibilitas antamuka editor/desktop-like ke dalam terminal. Dirancang agar **sangat cepat**, **ringan** (< 30 MB RAM), **keyboard-driven**, dan **mouse-friendly**, memungkinkan developer mengelola file, menyunting kode dengan syntax highlighting real-time, meninjau perubahaan Git secara side-by-side, dan melihat preview Markdown secara langsung tanpa meninggalkan terminal.
 
 ---
 

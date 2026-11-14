@@ -26,6 +26,7 @@ type TabClickRegion struct {
 type TabManager struct {
 	Tabs              []*Tab
 	ActiveIndex       int
+	DraggingIndex     int
 	TabScrollOffset   int
 	DefaultSoftWrap   bool
 	ClickRegions      []TabClickRegion
@@ -41,6 +42,7 @@ func NewTabManager() *TabManager {
 	return &TabManager{
 		Tabs:              make([]*Tab, 0),
 		ActiveIndex:       -1,
+		DraggingIndex:     -1,
 		TabScrollOffset:   0,
 		DefaultSoftWrap:   true,
 		ClickRegions:      make([]TabClickRegion, 0),

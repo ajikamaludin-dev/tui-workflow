@@ -31,6 +31,7 @@ type Tab struct {
 	TerminalView    *terminal.TerminalView
 	MarkdownPreview bool
 	IsDiff          bool
+	IsPinned        bool
 	LastModTime     time.Time
 
 	// Diff metadata for staged/unstaged and hunk actions

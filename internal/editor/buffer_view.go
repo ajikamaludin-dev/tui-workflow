@@ -34,7 +34,19 @@ func (b *Buffer) GutterWidth() int {
 }
 
 // TabWidth defines visual spacing for tab characters in the editor.
-const TabWidth = 4
+// Configurable via SetTabWidth (1-4); defaults to 4.
+var TabWidth = 4
+
+// SetTabWidth sets the global tab/indent width, clamped to 1-4.
+func SetTabWidth(w int) {
+	if w < 1 {
+		w = 1
+	}
+	if w > 4 {
+		w = 4
+	}
+	TabWidth = w
+}
 
 // runeVisualWidth returns the visual cell width of rune r at the given visual column.
 func runeVisualWidth(r rune, curVisualCol int) int {

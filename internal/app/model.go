@@ -44,6 +44,7 @@ type Model struct {
 	CommandPalette    *dialog.CommandPalette
 	FindBar           *dialog.FindBar
 	BranchSwitcher    *dialog.BranchSwitcher
+	TabWidthPicker    *dialog.TabWidthPicker
 	AISettingsDialog  *dialog.AISettingsDialog
 	HelpDialog        *dialog.HelpDialog
 	AIClient          *ai.Client
@@ -165,6 +166,7 @@ func NewModelWithPath(targetPath string, explicitArg bool) (Model, error) {
 		CommandPalette:     dialog.NewCommandPalette(),
 		FindBar:            dialog.NewFindBar(),
 		BranchSwitcher:     dialog.NewBranchSwitcher(),
+		TabWidthPicker:     dialog.NewTabWidthPicker(),
 		AISettingsDialog:   dialog.NewAISettingsDialog(),
 		HelpDialog:         dialog.NewHelpDialog(),
 		AIClient:           ai.NewClient(),
@@ -187,6 +189,7 @@ func NewModelWithPath(targetPath string, explicitArg bool) (Model, error) {
 	m.Explorer.ShowHidden = cfg.ShowHidden
 	m.StatusBar.AutoSave = cfg.AutoSave
 	m.TabManager.SetSoftWrap(cfg.SoftWrap)
+	editor.SetTabWidth(cfg.TabWidth)
 	if repo != nil {
 		if branch, err := repo.GetBranchName(); err == nil {
 			m.StatusBar.Branch = branch

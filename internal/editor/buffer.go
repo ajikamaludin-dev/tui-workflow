@@ -637,17 +637,17 @@ func (b *Buffer) IndentCurrentLine() {
 		return
 	}
 	line := b.Lines[b.CursorRow]
-	newLine := make([]rune, 0, len(line)+4)
-	newLine = append(newLine, []rune("    ")...)
+	newLine := make([]rune, 0, len(line)+TabWidth)
+	newLine = append(newLine, []rune(strings.Repeat(" ", TabWidth))...)
 	newLine = append(newLine, line...)
 	b.Lines[b.CursorRow] = newLine
-	b.CursorCol += 4
+	b.CursorCol += TabWidth
 	b.IsDirty = true
 	b.markContentChanged()
 	b.clampCursor()
 }
 
-// IndentSelection adds 4 spaces to each line touched by current selection, or indents current line if no selection.
+// IndentSelection adds TabWidth spaces to each line touched by current selection, or indents current line if no selection.
 func (b *Buffer) IndentSelection() {
 	if !b.HasSelection {
 		b.IndentCurrentLine()
@@ -659,21 +659,22 @@ func (b *Buffer) IndentSelection() {
 	if eRow > sRow && eCol == 0 {
 		eRow--
 	}
+	// 3. Indent every line in selection using TabWidth (not hardcoded 4).
 	for r := sRow; r <= eRow && r < len(b.Lines); r++ {
 		line := b.Lines[r]
-		newLine := make([]rune, 0, len(line)+4)
-		newLine = append(newLine, []rune("    ")...)
+		newLine := make([]rune, 0, len(line)+TabWidth)
+		newLine = append(newLine, []rune(strings.Repeat(" ", TabWidth))...)
 		newLine = append(newLine, line...)
 		b.Lines[r] = newLine
 	}
-	b.SelectAnchorCol += 4
-	b.CursorCol += 4
+	b.SelectAnchorCol += TabWidth
+	b.CursorCol += TabWidth
 	b.IsDirty = true
 	b.markContentChanged()
 	b.clampCursor()
 }
 
-// OutdentSelection removes up to 4 leading spaces from each line touched by current selection.
+// OutdentSelection removes up to TabWidth leading spaces from each line touched by current selection.
 func (b *Buffer) OutdentSelection() {
 	if !b.HasSelection {
 		b.OutdentCurrentLine()
@@ -688,18 +689,18 @@ func (b *Buffer) OutdentSelection() {
 	for r := sRow; r <= eRow && r < len(b.Lines); r++ {
 		line := b.Lines[r]
 		spaces := 0
-		for spaces < 4 && spaces < len(line) && line[spaces] == ' ' {
+		for spaces < TabWidth && spaces < len(line) && line[spaces] == ' ' {
 			spaces++
 		}
 		if spaces > 0 {
 			b.Lines[r] = line[spaces:]
 		}
 	}
-	b.SelectAnchorCol -= 4
+	b.SelectAnchorCol -= TabWidth
 	if b.SelectAnchorCol < 0 {
 		b.SelectAnchorCol = 0
 	}
-	b.CursorCol -= 4
+	b.CursorCol -= TabWidth
 	if b.CursorCol < 0 {
 		b.CursorCol = 0
 	}
@@ -708,14 +709,14 @@ func (b *Buffer) OutdentSelection() {
 	b.clampCursor()
 }
 
-// OutdentCurrentLine removes up to 4 leading spaces from current line.
+// OutdentCurrentLine removes up to TabWidth leading spaces from current line.
 func (b *Buffer) OutdentCurrentLine() {
 	b.endTypingGroup()
 	b.pushUndo()
 	b.clampCursor()
 	line := b.Lines[b.CursorRow]
 	spaces := 0
-	for spaces < 4 && spaces < len(line) && line[spaces] == ' ' {
+	for spaces < TabWidth && spaces < len(line) && line[spaces] == ' ' {
 		spaces++
 	}
 	if spaces > 0 {

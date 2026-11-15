@@ -169,6 +169,31 @@ func (m Model) handleModalMouse(msg tea.MouseMsg, mouse tea.Mouse, isClick bool)
 		return m, nil, true
 	}
 
+	if m.TabWidthPicker != nil && m.TabWidthPicker.Active {
+		modalStr := m.TabWidthPicker.Render()
+		modalW := lipgloss.Width(modalStr)
+		modalH := lipgloss.Height(modalStr)
+		startX := (m.Width - modalW) / 2
+		startY := (m.Height - modalH) / 3
+		if startY < 1 {
+			startY = 1
+		}
+		relX := mouse.X - startX
+		relY := mouse.Y - startY
+		isWheelUp := mouse.Button == tea.MouseWheelUp
+		isWheelDown := mouse.Button == tea.MouseWheelDown
+		if isClick || isWheelUp || isWheelDown {
+			chosen, closed, handled := m.TabWidthPicker.HandleMouse(relX, relY, isWheelUp, isWheelDown)
+			if handled {
+				if closed && chosen >= 1 {
+					m.applyTabWidth(chosen)
+				}
+				return m, nil, true
+			}
+		}
+		return m, nil, true
+	}
+
 	if m.AISettingsDialog != nil && m.AISettingsDialog.Active {
 		modalStr := m.AISettingsDialog.Render()
 		modalW := lipgloss.Width(modalStr)

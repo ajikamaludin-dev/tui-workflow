@@ -265,6 +265,7 @@ Menghadirkan ergonomi pengembangan modern setara VS Code ke dalam terminal melal
    - **Tingkat Indentasi & Siklus Warna:** Menghitung kedalaman indentasi `level = leading_spaces / tabSize`. Setiap level diberi warna ANSI latar/teks berputar (cycle palette 4–6 warna: contoh `#E5C07B`, `#61AFEF`, `#C678DD`, `#98C379` dengan tint lembut).
    - **Deteksi Kesalahan Indentasi (Error Guard):** Jika spasi awal tidak habis dibagi `tabSize` (`leading_spaces % tabSize != 0`) atau terdapat kombinasi tab dan spasi ilegal, blok indentasi disorot dengan warna peringatan merah tegas (`#E06C75`).
    - **Toggle Configuration:** Dapat diaktifkan/dinonaktifkan melalui config atau menu `[Setting] ➔ Toggle Indent Rainbow`.
+   - **Lebar Tab/Indent Configurable:** Lebar indentasi (1, 2, 3, atau 4 spasi, default 4) dapat diubah via menu `[Setting] ➔ Tab Width...` (modal picker: `↑/↓` memilih, angka `1`-`4` langsung pick, `Enter` apply, `Esc` batal), Command Palette (`Tab Width...`), atau config `tab_width`. Berlaku global: rendering tab char, Tab key, indent/outdent selection, dan Indent Rainbow (level, offset, dan deteksi misaligned indent) ikut width yang sama — mis. Flutter (width 2) tidak memicu red block misaligned indent.
 
 2. **React & Component Snippet Expander (`dsznajder.es7-react-js-snippets` Clone):**
    - **Katalog Snippet Bawaan:** Mendukung ekspansi cepat boilerplate komponen React/JS/TS:

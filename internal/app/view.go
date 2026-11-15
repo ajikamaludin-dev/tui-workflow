@@ -74,6 +74,9 @@ func (m Model) View() tea.View {
 	} else if m.BranchSwitcher != nil && m.BranchSwitcher.Active {
 		modal := m.BranchSwitcher.Render()
 		baseView = overlayTopCenter(baseView, modal, m.Width, m.Height)
+	} else if m.TabWidthPicker != nil && m.TabWidthPicker.Active {
+		modal := m.TabWidthPicker.Render()
+		baseView = overlayTopCenter(baseView, modal, m.Width, m.Height)
 	} else if m.FilePicker != nil && m.FilePicker.Active {
 		modal := m.FilePicker.Render()
 		baseView = overlayCenter(baseView, modal, m.Width, m.Height)

@@ -56,6 +56,15 @@ func (m Model) handleModalKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool) {
 		return m, cmd, true
 	}
 
+	// 0.81. Tab Width Picker Handling if active
+	if m.TabWidthPicker != nil && m.TabWidthPicker.Active {
+		chosen, closed, cmd := m.TabWidthPicker.Update(msg)
+		if closed && chosen >= 1 {
+			m.applyTabWidth(chosen)
+		}
+		return m, cmd, true
+	}
+
 	// 0.85. AI Settings Dialog Handling if active
 	if m.AISettingsDialog != nil && m.AISettingsDialog.Active {
 		m.AISettingsDialog.SetScreenSize(m.Width, m.Height)

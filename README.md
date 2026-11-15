@@ -27,7 +27,7 @@
 
 ### 2. 📝 Modeless Text Editor & Syntax Highlighting
 - **Modeless Editing:** Pendekatan intuitif ala VS Code tanpa kerumitan modal Vim (ketik langsung tanpa menekan `i`).
-- **Line-based Buffer Engine:** Navigasi kursor presisi (panah, `Home`, `End`, `Page Up`, `Page Down`), soft-wrap baris panjang, dan indentasi 4 spasi via `Tab`.
+- **Line-based Buffer Engine:** Navigasi kursor presisi (panah, `Home`, `End`, `Page Up`, `Page Down`), soft-wrap baris panjang, dan indentasi via `Tab` (default 4 spasi; configurable 1-4 via `[Setting] ➔ Tab Width...` modal picker / Command Palette `Tab Width...` / config `tab_width`).
 - **Real-Time Chroma Highlighting:** Tokenisasi sintaksis langsung saat mengetik untuk berbagai bahasa populer (Go, Markdown, JSON, YAML, Shell, Python, JavaScript, TypeScript, HTML, CSS, SQL, Rust, C/C++).
 - **Auto-Save on Focus Change:** Otomatis menyimpan buffer saat berpindah tab atau fokus (`Alt+S` untuk toggle on/off).
 
@@ -145,7 +145,7 @@
 | `Alt + C` / `Alt + W` / `Alt + X` | Toggle Case-Sensitive / Whole-Word / Regex (Find Bar & Sidebar Search) |
 | `Ctrl + G` | Lompat ke baris dan kolom tertentu (Go to Line / Column) |
 | `Ctrl + Space` | Pemicu Autocomplete Sugesti LSP & Auto-Import |
-| `Tab` / `Shift + Tab` | Ekspansi Snippet / Lompat Tab-Stop / Indentasi & Outdentasi 4 spasi |
+| `Tab` / `Shift + Tab` | Ekspansi Snippet / Lompat Tab-Stop / Indentasi & Outdentasi (default 4 spasi; lebar configurable 1-4, lihat `tab_width`) |
 | `Ctrl + /` (`Ctrl + _`) | Toggle komentar baris atau blok seleksi otomatis sesuai bahasa |
 | `Ctrl + Shift + D` | Tambah kursor pada kemunculan kata berikutnya (Add Next Occurrence) |
 | `Ctrl + Alt + Up` / `Ctrl + Alt + Down` | Tambah kursor di baris atas / bawah |

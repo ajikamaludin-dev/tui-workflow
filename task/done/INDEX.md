@@ -32,3 +32,4 @@
 | 2026-11-15 | [2026-11-15 - Search & Replace Rework (Sidebar, Engine, Find Bar)](done/2026-11-15%20-%20Search%20%26%20Replace%20Rework%20%28Sidebar%2C%20Engine%2C%20Find%20Bar%29.md) | done |
 | 2026-11-15 | [2026-11-15 - GitHub Release Automation & Linux Binary Distribution](done/2026-11-15%20-%20GitHub%20Release%20Automation%20%26%20Linux%20Binary%20Distribution.md) | done |
 | 2026-11-15 | [2026-11-15 - Git Sidebar Right-Click Context Menu (Stage-Unstage, Open File, Copy Full Path)](done/2026-11-15%20-%20Git%20Sidebar%20Right-Click%20Context%20Menu%20%28Stage-Unstage,%20Open%20File,%20Copy%20Full%20Path%29.md) | done |
+| 2026-11-15 | [2026-11-15 Configurable Tab Indent Width (1-4)](done/2026-11-15%20-%20Configurable%20Tab%20Indent%20Width%20(1-4).md) | done |

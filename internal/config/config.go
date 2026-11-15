@@ -20,6 +20,7 @@ type Config struct {
 	SoftWrap     bool                `json:"soft_wrap"`
 	FormatOnSave bool                `json:"format_on_save"`
 	SidebarWidth int                 `json:"sidebar_width,omitempty"`
+	TabWidth     int                 `json:"tab_width,omitempty"`
 	LastDir      string              `json:"last_dir,omitempty"`
 	AI           AIConfig            `json:"ai"`
 	Formatters   map[string][]string `json:"formatters,omitempty"`
@@ -32,6 +33,7 @@ func DefaultConfig() *Config {
 		SoftWrap:     true,
 		FormatOnSave: false,
 		SidebarWidth: 30,
+		TabWidth:     4,
 		LastDir:      "",
 		AI: AIConfig{
 			ProviderURL:  "https://api.openai.com/v1",
@@ -81,6 +83,9 @@ func LoadConfig() (*Config, error) {
 	}
 	if cfg.SidebarWidth <= 0 {
 		cfg.SidebarWidth = 30
+	}
+	if cfg.TabWidth < 1 || cfg.TabWidth > 4 {
+		cfg.TabWidth = 4
 	}
 	if cfg.AI.ProviderURL == "" {
 		cfg.AI.ProviderURL = "https://api.openai.com/v1"

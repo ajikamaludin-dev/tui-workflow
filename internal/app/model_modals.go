@@ -157,6 +157,7 @@ func (m *Model) openCommandPalette() {
 		{ID: "edit.delete_word_left", Title: "Delete Word Left", Category: "Edit", Shortcut: "Alt+Backspace / Ctrl+Backspace"},
 		{ID: "edit.lsp_completion", Title: "Trigger LSP Completion & Auto-Import", Category: "Edit", Shortcut: "Ctrl+Space"},
 		{ID: "edit.indent_rainbow", Title: "Toggle Indent Rainbow Guide", Category: "Settings", Shortcut: ""},
+		{ID: "setting.tab_width", Title: "Tab Width...", Category: "Settings", Shortcut: ""},
 		{ID: "explorer.filter", Title: "Filter File Explorer", Category: "Explorer", Shortcut: "/"},
 
 		// View
@@ -293,6 +294,13 @@ func (m *Model) openBranchSwitcher() {
 		return
 	}
 	m.BranchSwitcher.Open(branches, current)
+}
+
+func (m *Model) openTabWidthPicker() {
+	if m.Config == nil {
+		return
+	}
+	m.TabWidthPicker.Open(m.Config.TabWidth)
 }
 
 func (m *Model) openAISettings() {

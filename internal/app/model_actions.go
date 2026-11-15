@@ -13,6 +13,19 @@ import (
 	"tui-workflow/internal/ui/dialog"
 )
 
+// applyTabWidth sets the global tab/indent width (1-4), persists it, and shows a toast.
+func (m *Model) applyTabWidth(w int) {
+	if w < 1 || w > 4 {
+		return
+	}
+	editor.SetTabWidth(w)
+	if m.Config != nil {
+		m.Config.TabWidth = w
+		_ = config.SaveConfig(m.Config)
+	}
+	m.StatusBar.ShowToast(fmt.Sprintf("Tab Width: %d spasi", w), false, 2*time.Second)
+}
+
 func (m *Model) toggleSoftWrap() {
 	m.SoftWrap = !m.SoftWrap
 	m.TabManager.SetSoftWrap(m.SoftWrap)

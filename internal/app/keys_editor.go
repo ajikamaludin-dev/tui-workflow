@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 	"tui-workflow/internal/editor"
 	"tui-workflow/internal/lsp"
@@ -217,8 +218,8 @@ func (m Model) handleTab() (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// 5. Default: insert 4 spaces
-	buf.InsertString("    ")
+	// 5. Default: insert TabWidth spaces
+	buf.InsertString(strings.Repeat(" ", editor.TabWidth))
 	m.syncStatusBarWithActiveTab()
 	return m, nil
 }

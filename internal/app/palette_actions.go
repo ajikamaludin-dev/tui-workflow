@@ -93,6 +93,10 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 		}
 		return nil
 
+	case "setting.tab_width":
+		m.openTabWidthPicker()
+		return nil
+
 	case "file.save":
 		if err := m.TabManager.SaveActive(); err != nil {
 			m.StatusBar.ShowToast("Save failed: "+err.Error(), true, 3*time.Second)

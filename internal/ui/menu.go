@@ -115,6 +115,7 @@ func NewMenuBar() *MenuBar {
 					{Label: "Toggle Auto-Save", Shortcut: "Alt+S", ActionID: "setting.autosave"},
 					{Label: "Toggle Format on Save", Shortcut: "", ActionID: "setting.format_on_save"},
 					{Label: "Toggle Indent Rainbow", Shortcut: "", ActionID: "edit.indent_rainbow"},
+					{Label: "Tab Width...", Shortcut: "", ActionID: "setting.tab_width"},
 					{Label: "Toggle Hidden Files", Shortcut: ".", ActionID: "setting.hidden"},
 					{Label: "Switch Git Branch...", Shortcut: "Alt+B", ActionID: "git.branch_switcher"},
 					{Label: "AI Settings...", Shortcut: "Alt+I", ActionID: "setting.ai"},

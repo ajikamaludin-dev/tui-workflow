@@ -163,6 +163,14 @@ Mulai sekarang, semua AI agent yang bekerja di repo ini berperan sebagai **Go & 
   - `go vet ./...` (wajib 0 error, 0 warning).
   - `go test -v -race ./...` (wajib 100% PASS, bebas race condition).
 
+### Rilis (Release)
+- Panduan rilis lengkap ada di **`docs/release.md`** — sumber kebenaran proses release repo ini. AGENTS.md hanya memuat ringkasan; detail alur, rollback, dan troubleshooting ada di sana.
+- Release dibuat dari **tag git** `vX.Y.Z`, bukan dari merge. Merge ke `main` hanya menjalankan CI.
+- Proses standar: merge `dev` → `main` → tambah baris Revision History di `PRD.md` (commit & push) → jalankan `./scripts/release.sh vX.Y.Z` dari branch `main` dengan tree bersih → workflow **Release** (`.github/workflows/release.yml`) build & publish GitHub Release.
+- Job `release` di workflow **wajib** punya `actions/checkout` (tanpa itu `gh release create` gagal: `fatal: not a git repository`). Jangan hapus langkah itu.
+- Perintah `git push` tag, penghapusan/pembuatan ulang tag, dan `gh release` hanya boleh dijalankan dengan persetujuan eksplisit user — sama seperti perintah git lainnya di section ini.
+- Jangan reuse nomor versi yang sudah pernah terbit & dipakai publik; terbitkan patch berikutnya.
+
 ---
 
 ## 6. Mode Khusus Agent

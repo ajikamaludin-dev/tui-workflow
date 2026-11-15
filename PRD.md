@@ -1,6 +1,6 @@
 # Product Requirement Document (PRD)
 ## Project: `tui-workflow`
-**Version:** v0.3.1  
+**Version:** v0.3.2  
 **Status:** Approved  
 **Language/Framework:** Go (1.24+), Bubble Tea Ecosystem 
 ## 1. Executive Summary

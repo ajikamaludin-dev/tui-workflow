@@ -3,7 +3,6 @@ package app
 import (
 	"bytes"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -72,49 +71,6 @@ func (m *Model) setMousePointer(shape string) {
 	if m.lastPointerShape != shape {
 		m.lastPointerShape = shape
 		fmt.Print("\x1b]22;" + shape + "\x1b\\")
-	}
-}
-
-func (m *Model) checkWatchedFiles() {
-	if m.TabManager == nil {
-		return
-	}
-	for _, tab := range m.TabManager.Tabs {
-		if tab == nil || tab.Path == "" || tab.Type == editor.TabDiff || tab.Buffer == nil {
-			continue
-		}
-		info, err := os.Stat(tab.Path)
-		if err != nil {
-			if os.IsNotExist(err) && !tab.LastModTime.IsZero() {
-				m.StatusBar.ShowToast(fmt.Sprintf("File '%s' was deleted from disk", tab.Name), true, 3*time.Second)
-				tab.LastModTime = time.Time{}
-			}
-			continue
-		}
-
-		if tab.LastModTime.IsZero() {
-			tab.LastModTime = info.ModTime()
-			continue
-		}
-
-		if info.ModTime().After(tab.LastModTime) {
-			tab.LastModTime = info.ModTime()
-			if !tab.Buffer.IsDirty {
-				if err := tab.ReloadFromDisk(); err == nil {
-					m.StatusBar.ShowToast(fmt.Sprintf("File '%s' diperbarui dari disk", tab.Name), false, 2*time.Second)
-				}
-			} else {
-				m.StatusBar.ShowToast(fmt.Sprintf("Warning: File '%s' changed externally (has local modifications)", tab.Name), true, 4*time.Second)
-				if m.ConfirmDialog != nil && !m.ConfirmDialog.Active {
-					m.ConfirmDialog.Open(
-						dialog.ConfirmExternalChange,
-						"External Change Conflict",
-						fmt.Sprintf("File '%s' was modified externally, but has local changes in editor.\nReload from disk or open Split Diff to merge?", tab.Name),
-						tab.Path,
-					)
-				}
-			}
-		}
 	}
 }
 

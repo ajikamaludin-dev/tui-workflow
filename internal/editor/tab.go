@@ -33,6 +33,12 @@ type Tab struct {
 	IsDiff          bool
 	IsPinned        bool
 	LastModTime     time.Time
+	// WatchedHash is the SHA-256 hex digest of the on-disk content as of the
+	// last known state (open, successful reload, or save). The external file
+	// watcher uses it to detect external writes even when mtime is preserved.
+	// Empty means "no baseline" (e.g. after the file disappeared).
+	WatchedHash string
+	WatchedSize int64
 
 	// Diff metadata for staged/unstaged and hunk actions
 	DiffStaged   bool
@@ -111,6 +117,8 @@ func (t *Tab) ReloadFromDisk() error {
 	if info, errStat := os.Stat(t.Path); errStat == nil {
 		t.LastModTime = info.ModTime()
 	}
+	t.WatchedHash = HashContent(content)
+	t.WatchedSize = int64(len(content))
 	t.Buffer.SetText(string(content))
 	t.Buffer.IsDirty = false
 	return nil

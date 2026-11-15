@@ -117,6 +117,8 @@ func (tm *TabManager) OpenFile(path string) (*Tab, error) {
 
 	tab := NewFileTab(path, string(content))
 	tab.LastModTime = info.ModTime()
+	tab.WatchedHash = HashContent(content)
+	tab.WatchedSize = int64(len(content))
 	if tab.Buffer != nil {
 		tab.Buffer.SoftWrap = tm.DefaultSoftWrap
 	}
@@ -170,7 +172,8 @@ func (tm *TabManager) SaveActive() error {
 		return nil
 	}
 
-	err := os.WriteFile(tab.Path, []byte(tab.Buffer.Text()), 0644)
+	saved := []byte(tab.Buffer.Text())
+	err := os.WriteFile(tab.Path, saved, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to save file: %w", err)
 	}
@@ -178,6 +181,8 @@ func (tm *TabManager) SaveActive() error {
 	if info, errStat := os.Stat(tab.Path); errStat == nil {
 		tab.LastModTime = info.ModTime()
 	}
+	tab.WatchedHash = HashContent(saved)
+	tab.WatchedSize = int64(len(saved))
 
 	tab.Buffer.IsDirty = false
 	return nil
@@ -192,7 +197,8 @@ func (tm *TabManager) SaveTab(idx int) error {
 		return nil
 	}
 
-	err := os.WriteFile(tab.Path, []byte(tab.Buffer.Text()), 0644)
+	saved := []byte(tab.Buffer.Text())
+	err := os.WriteFile(tab.Path, saved, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to save file '%s': %w", tab.Name, err)
 	}
@@ -200,6 +206,8 @@ func (tm *TabManager) SaveTab(idx int) error {
 	if info, errStat := os.Stat(tab.Path); errStat == nil {
 		tab.LastModTime = info.ModTime()
 	}
+	tab.WatchedHash = HashContent(saved)
+	tab.WatchedSize = int64(len(saved))
 
 	tab.Buffer.IsDirty = false
 	return nil
@@ -448,7 +456,6 @@ func (tm *TabManager) SetActiveIndex(idx int) bool {
 	return true
 }
 
-
 func (tm *TabManager) FindTabByDiffFile(path string, staged bool) int {
 	for i, t := range tm.Tabs {
 		if t.Type == TabDiff && t.Path == path && t.DiffStaged == staged {
@@ -472,7 +479,6 @@ func (tm *TabManager) OpenFileAt(path string, line, col int) (*Tab, error) {
 	tab.Buffer.ClampCursor()
 	return tab, nil
 }
-
 
 // FindTabAt returns tab index at clickX, or -1 if not on any tab.
 func (tm *TabManager) FindTabAt(clickX int) int {

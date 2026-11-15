@@ -81,6 +81,7 @@
 - **Dukungan Coding Agent & TUI:** Berjalan mulus menjalankan TUI nested dan coding agent seperti `pi`, `claude`, `btop`, `git`, `python`, `node`.
 - **Zero Scroll Overflow:** Clamping visual width dengan `ansi.Truncate` menjamin render terminal tidak pernah meluap dari batas terminal.
 - **Isolasi Keystroke & Safe Teardown:** Aliran input raw terisolasi di tab terminal aktif tanpa konflik dengan editor; teardown bersih mematikan proses shell tanpa zombie process.
+- **Penomoran Tab Title:** Tab terminal diberi judul `Terminal`; jika lebih dari satu terminal terbuka, tab kedua dst. menjadi `Terminal - 2`, `Terminal - 3`, … `Terminal - N` (renumber otomatis saat buka/tutup/reorder).
 
 ### 9. 🧭 Navigasi Simbol, Multi-Cursor & Code Folding (Ala VS Code)
 - **In-Memory Symbol Index:** Pengindeksan simbol Go (AST), JavaScript/TypeScript/React (JSX/TSX), PHP, JSON (nested depth ≤ 10), dan Markdown headings tanpa dependensi LSP yang berat.

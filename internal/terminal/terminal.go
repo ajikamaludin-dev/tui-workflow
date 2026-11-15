@@ -85,7 +85,7 @@ func NewTerminalView(id string, cols, rows int, shell string, cwd string) (*Term
 
 	term := &TerminalView{
 		ID:         id,
-		Title:      ">_ " + getBaseName(shell),
+		Title:      "Terminal",
 		ptyFile:    ptyFile,
 		cmd:        cmd,
 		vt:         vt,
@@ -136,14 +136,6 @@ func NewTerminalView(id string, cols, rows int, shell string, cwd string) (*Term
 	}()
 
 	return term, nil
-}
-
-func getBaseName(p string) string {
-	parts := strings.Split(p, "/")
-	if len(parts) > 0 && parts[len(parts)-1] != "" {
-		return parts[len(parts)-1]
-	}
-	return "terminal"
 }
 
 // OutputChan returns channel that receives notification when PTY outputs data.

@@ -159,6 +159,7 @@ func (tm *TabManager) OpenTerminal(id, name string, term *terminal.TerminalView)
 	tab := NewTerminalTab(id, name, term)
 	tm.Tabs = append(tm.Tabs, tab)
 	tm.ActiveIndex = len(tm.Tabs) - 1
+	tm.RenumberTerminalTabs()
 	tm.EnsureActiveTabVisible()
 	return tab
 }
@@ -225,6 +226,7 @@ func (tm *TabManager) CloseTab(idx int) {
 	} else if len(tm.Tabs) == 0 {
 		tm.TabScrollOffset = 0
 	}
+	tm.RenumberTerminalTabs()
 }
 
 // CloseOtherTabs closes all unpinned tabs except specified index.
@@ -256,6 +258,7 @@ func (tm *TabManager) CloseOtherTabs(keepIdx int) {
 	if tm.TabScrollOffset < 0 {
 		tm.TabScrollOffset = 0
 	}
+	tm.RenumberTerminalTabs()
 }
 
 // CloseTabsToRight closes all unpinned tabs to right of target index.
@@ -281,6 +284,7 @@ func (tm *TabManager) CloseTabsToRight(idx int) {
 	if tm.TabScrollOffset < 0 {
 		tm.TabScrollOffset = 0
 	}
+	tm.RenumberTerminalTabs()
 }
 
 // CloseTabsToLeft closes all unpinned tabs to left of target index.
@@ -312,6 +316,7 @@ func (tm *TabManager) CloseTabsToLeft(idx int) {
 	if tm.TabScrollOffset < 0 {
 		tm.TabScrollOffset = 0
 	}
+	tm.RenumberTerminalTabs()
 }
 
 // CloseAllTabs closes all unpinned tabs.
@@ -336,6 +341,7 @@ func (tm *TabManager) CloseAllTabs() {
 	} else if len(tm.Tabs) == 0 {
 		tm.TabScrollOffset = 0
 	}
+	tm.RenumberTerminalTabs()
 }
 
 // PinnedCount returns number of pinned tabs.
@@ -372,6 +378,7 @@ func (tm *TabManager) moveRawTab(from, to int) {
 	} else if from > tm.ActiveIndex && to <= tm.ActiveIndex {
 		tm.ActiveIndex++
 	}
+	tm.RenumberTerminalTabs()
 }
 
 // MoveTab moves tab from from index to to index, respecting pinned grouping.

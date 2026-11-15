@@ -240,6 +240,7 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
 4. **Window Resizing & Anti-Overflow:**
    - Sinkronisasi dimensi ukuran terminal via `TIOCSWINSZ` (`pty.Setsize`) dan `vt10x.Resize` saat resize terminal terjadi.
    - Pemotongan aman berbasis visual width (`ansi.Truncate`) menjamin output baris terminal tidak pernah meluap (*zero terminal scroll overflow*).
+5. **Tab Title Numbering:** Tab terminal diberi judul `Terminal`; jika lebih dari satu tab terminal terbuka, tab kedua dst. diberi judul `Terminal - 2`, `Terminal - 3`, … `Terminal - N` (penomoran ulang otomatis saat tab terminal dibuka, ditutup, atau diurutkan ulang).
 
 #### G. Symbol Navigation & Code Intelligence (Path B — In-Memory Symbol Index)
 1. **In-Memory Symbol Index:**

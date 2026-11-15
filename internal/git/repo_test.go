@@ -19,6 +19,13 @@ func TestRepoOperations(t *testing.T) {
 	}
 	defer os.RemoveAll(tempDir)
 
+	// Hermetic identity: repo.Commit resolves the author from GIT_AUTHOR_* env
+	// before any host git config, so CI runners without global git config pass too.
+	t.Setenv("GIT_AUTHOR_NAME", "Test Author")
+	t.Setenv("GIT_AUTHOR_EMAIL", "test@example.com")
+	t.Setenv("GIT_COMMITTER_NAME", "Test Author")
+	t.Setenv("GIT_COMMITTER_EMAIL", "test@example.com")
+
 	// Init git repo
 	r, err := gogit.PlainInit(tempDir, false)
 	if err != nil {

@@ -21,6 +21,13 @@ func setupTestGitRepoWithBranch(t *testing.T) (string, *git.Repo) {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 
+	// Hermetic identity: app-driven commits resolve GIT_AUTHOR_* / GIT_COMMITTER_*
+	// before any host git config, so CI runners without global git config pass too.
+	t.Setenv("GIT_AUTHOR_NAME", "Test Author")
+	t.Setenv("GIT_AUTHOR_EMAIL", "test@example.com")
+	t.Setenv("GIT_COMMITTER_NAME", "Test Author")
+	t.Setenv("GIT_COMMITTER_EMAIL", "test@example.com")
+
 	repo, err := gogit.PlainInit(tempDir, false)
 	if err != nil {
 		t.Fatalf("Failed to init git repo: %v", err)

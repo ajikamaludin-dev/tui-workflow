@@ -317,3 +317,70 @@ func TestViewEmptyQueryIsNotAnError(t *testing.T) {
 		t.Errorf("initial state must be clean, got:\n%s", rendered)
 	}
 }
+
+func TestViewResetClearsFormAndResults(t *testing.T) {
+	root, _, _ := groupFixture(t)
+	sv := NewSearchView(root)
+	sv.FindInput.SetValue("foo")
+	sv.DoSearch()
+	if sv.TotalFound == 0 {
+		t.Fatal("expected matches before reset")
+	}
+	sv.ReplaceInput.SetValue("bar")
+	sv.PathInput.SetValue("a/")
+	sv.ExcludeInput.SetValue("vendor/")
+	sv.CaseSensitive = true
+
+	sv.Reset()
+
+	for name, got := range map[string]string{
+		"find":    sv.FindInput.Value(),
+		"replace": sv.ReplaceInput.Value(),
+		"path":    sv.PathInput.Value(),
+		"exclude": sv.ExcludeInput.Value(),
+	} {
+		if got != "" {
+			t.Errorf("expected %s input cleared, got %q", name, got)
+		}
+	}
+	if sv.Matches != nil || sv.TotalFound != 0 || sv.Truncated || sv.ErrMsg != "" || sv.groups != nil {
+		t.Error("expected results state cleared")
+	}
+	if sv.Selected != 0 || sv.ScrollTop != 0 {
+		t.Error("expected selection and scroll reset")
+	}
+	if sv.FocusField != FocusFindInput {
+		t.Errorf("expected focus back on Find input, got %v", sv.FocusField)
+	}
+	if !sv.CaseSensitive {
+		t.Error("expected CaseSensitive toggle preserved")
+	}
+}
+
+func TestViewClearButtonHitTest(t *testing.T) {
+	root := t.TempDir()
+	writeViewFixture(t, root, "x.txt", "foo\n")
+	sv := NewSearchView(root)
+	sv.FindInput.SetValue("foo")
+	sv.ReplaceInput.SetValue("bar")
+	sv.DoSearch()
+
+	// Wide sidebar: [✕ Clear] label after the chips.
+	_ = sv.Render(40, 24, true)
+	act := sv.HandleMouseClick(18, 4)
+	if act.Kind != "clear" {
+		t.Fatalf("Expected clear action at clear button, got %+v", act)
+	}
+	if sv.FindInput.Value() != "" || sv.ReplaceInput.Value() != "" || sv.Matches != nil {
+		t.Error("Expected click on clear button to reset form and results")
+	}
+
+	// Narrow sidebar: icon-only [✕] fallback still hit-testable.
+	sv.FindInput.SetValue("foo")
+	sv.DoSearch()
+	_ = sv.Render(28, 24, true)
+	act = sv.HandleMouseClick(17, 4)
+	if act.Kind != "clear" {
+		t.Fatalf("Expected clear action in narrow sidebar, got %+v", act)
+	}
+}

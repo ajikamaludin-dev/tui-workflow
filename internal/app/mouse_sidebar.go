@@ -299,6 +299,8 @@ func (m Model) handleSidebarBodyClick(msg tea.MouseMsg, mouse tea.Mouse, isClick
 			case "open":
 				m.openFileAt(act.FilePath, act.LineNumber, act.ColNumber)
 				m.Focus = FocusEditor
+			case "clear":
+				m.StatusBar.ShowToast("Form pencarian dibersihkan", false, 2*time.Second)
 			case "replace-all":
 				nm, cmd := m.handleSearchReplaceRequest(search.ReplaceRequest{Scope: search.ReplaceScopeAll})
 				return nm, cmd, true

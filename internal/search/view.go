@@ -66,7 +66,7 @@ type ReplaceRequest struct {
 
 // MouseAction describes a click inside the search view.
 type MouseAction struct {
-	Kind       string // "ignore", "focus-*", "find", "replace-all", "replace-file", "open", "select-group", "toggle-case", "toggle-word", "toggle-regex"
+	Kind       string // "ignore", "focus-*", "find", "replace-all", "replace-file", "open", "select-group", "toggle-case", "toggle-word", "toggle-regex", "clear"
 	FilePath   string
 	LineNumber int
 	ColNumber  int
@@ -119,6 +119,9 @@ type SearchView struct {
 
 	generation int
 	groups     []*matchGroup
+
+	clearHitStart int // column range of the [✕] clear button on row 4
+	clearHitEnd   int
 }
 
 // NewSearchView creates a new SearchView instance.
@@ -174,6 +177,26 @@ func (sv *SearchView) SetRootDir(dir string) {
 
 // FocusFind focuses the find input.
 func (sv *SearchView) FocusFind() {
+	sv.FocusField = FocusFindInput
+	sv.syncFocus()
+}
+
+// Reset clears the whole form (Find/Replace/Path/Exclude) and the search
+// results. Case/whole-word/regex toggles are preserved. Focus returns to the
+// Find input and any in-flight async search is invalidated via generation++.
+func (sv *SearchView) Reset() {
+	sv.FindInput.SetValue("")
+	sv.ReplaceInput.SetValue("")
+	sv.PathInput.SetValue("")
+	sv.ExcludeInput.SetValue("")
+	sv.generation++
+	sv.ErrMsg = ""
+	sv.Matches = nil
+	sv.TotalFound = 0
+	sv.Truncated = false
+	sv.groups = nil
+	sv.Selected = 0
+	sv.ScrollTop = 0
 	sv.FocusField = FocusFindInput
 	sv.syncFocus()
 }
@@ -524,6 +547,10 @@ func (sv *SearchView) HandleMouseClick(relX, relY int) MouseAction {
 		sv.syncFocus()
 		return MouseAction{Kind: "focus-find"}
 	case relY == rowToggle:
+		if sv.clearHitEnd > sv.clearHitStart && relX >= sv.clearHitStart && relX < sv.clearHitEnd {
+			sv.Reset()
+			return MouseAction{Kind: "clear"}
+		}
 		switch {
 		case relX >= 1 && relX <= 5:
 			sv.CaseSensitive = !sv.CaseSensitive
@@ -656,13 +683,20 @@ func (sv *SearchView) Render(width, height int, focused bool) string {
 	} else if sv.TotalFound > 0 {
 		counter = lipgloss.NewStyle().Foreground(ui.CurrentTheme.FgSecondary).Render(fmt.Sprintf("%d", sv.TotalFound))
 	}
-	chipsRow := chips
+	clearLabel := " [✕]"
+	if width >= 38 {
+		clearLabel = " [✕ Clear]"
+	}
+	clearBtn := lipgloss.NewStyle().Foreground(ui.CurrentTheme.Red).Bold(true).Render(clearLabel)
+	sv.clearHitStart = ansi.StringWidth(chips)
+	sv.clearHitEnd = sv.clearHitStart + ansi.StringWidth(clearLabel)
+	chipsRow := chips + clearBtn
 	if counter != "" {
-		pad := width - 1 - ansi.StringWidth(chips) - ansi.StringWidth(counter)
-		if pad < 1 {
-			pad = 1
+		pad := width - 1 - ansi.StringWidth(chipsRow) - ansi.StringWidth(counter)
+		if pad >= 1 {
+			chipsRow = chipsRow + strings.Repeat(" ", pad) + counter
 		}
-		chipsRow = chips + strings.Repeat(" ", pad) + counter
+		// pad < 1: drop the counter rather than overflow the line
 	}
 
 	// Commit-style solid buttons (like the git Commit button): filled accent

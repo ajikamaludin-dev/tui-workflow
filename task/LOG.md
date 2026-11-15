@@ -33,3 +33,4 @@
 | 2026-11-15 | GitHub Release Automation & Linux Binary Distribution | done | dev |
 | 2026-11-15 | Git Sidebar Right-Click Context Menu (Stage/Unstage, Open File, Copy Full Path) | done | dev |
 | 2026-11-15 | Configurable Tab/Indent Width (1-4) | done | dev |
+| 2026-11-16 | Search & Replace Clear All Form Button | done | dev |

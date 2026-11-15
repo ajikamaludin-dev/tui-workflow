@@ -52,6 +52,7 @@
 - **Native go-git/v5 Engine:** Integrasi langsung membaca status repositori tanpa dependensi binary git eksternal.
 - **Sidebar Git View:** Menampilkan collapsible sections *Staged Changes*, *Working Tree Changes*, dan riwayat commit (*Commit History*).
 - **Interactive Staging:** Tombol `[+]` untuk stage (`git add`) dan `[-]` untuk unstage file via klik mouse atau tombol keyboard.
+- **Git File Context Menu:** Klik kanan pada file di section Staged/Changes membuka context menu — Stage/Unstage, Open File, Open Diff, Copy Full Path, Discard Changes (khusus Changes).
 - **Commit Box:** Input commit message dengan tombol shortcut `Ctrl+Enter` untuk melakukan commit langsung.
 - **Side-by-Side Split Diff Tab:** Tab diff khusus di editor yang membandingkan versi HEAD vs Working Tree secara berdampingan dengan sinkronisasi scroll baris dan pewarnaan diff jelas (merah/hijau).
 
@@ -69,6 +70,7 @@
 - Drag and drop tab editor dengan mouse (klik kiri tahan lalu geser) untuk mengubah posisi/urutan tab.
 - Right-click pada tab editor untuk membuka menu konteks (Sematkan Tab, Tutup, dll).
 - Klik tombol `[+]` dan `[-]` pada Git sidebar.
+- Right-click pada file di Git sidebar (Staged/Changes) untuk membuka menu konteks (Stage/Unstage, Open File, Open Diff, Copy Full Path, Discard Changes).
 - Mouse wheel scrolling pada editor buffer, markdown preview, dan split diff view.
 - `Alt+Click` pada simbol untuk Go to Definition.
 - `Ctrl+Alt+Click` untuk menambah multi-cursor pada posisi klik.

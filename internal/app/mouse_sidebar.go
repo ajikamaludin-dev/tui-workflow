@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 	"tui-workflow/internal/editor"
+	"tui-workflow/internal/git"
 	"tui-workflow/internal/search"
 	"tui-workflow/internal/ui"
 	"tui-workflow/internal/ui/dialog"
@@ -49,6 +50,51 @@ func (m Model) handleReleaseResizer(msg tea.MouseMsg, mouse tea.Mouse) (tea.Mode
 	return m, nil, false
 }
 
+func (m Model) handleSidebarGitRightClick(msg tea.MouseMsg, mouse tea.Mouse) (tea.Model, tea.Cmd, bool) {
+	// Right-click inside Git sidebar body: open context menu on file rows only
+	if !m.SidebarVisible || mouse.X >= m.SidebarWidth || mouse.Y < 3 || mouse.Y >= m.Height-2 || m.SidebarView != SidebarGit || m.GitView == nil {
+		return m, nil, false
+	}
+	relLine := mouse.Y - 3
+	actualLine := m.GitView.ScrollOffset + relLine
+	target, ok := m.GitView.ItemClickMap[actualLine]
+	if !ok {
+		return m, nil, false
+	}
+	var fileStatus *git.GitFileStatus
+	switch target.Type {
+	case git.ClickItemStaged:
+		if target.Index >= 0 && target.Index < len(m.GitView.Staged) {
+			fs := m.GitView.Staged[target.Index]
+			fileStatus = &fs
+			m.GitView.FocusArea = git.GitFocusStaged
+			m.GitView.StagedIdx = target.Index
+			m.GitView.ClampSelectedHunk(true)
+		}
+	case git.ClickItemChanges:
+		if target.Index >= 0 && target.Index < len(m.GitView.Changes) {
+			fs := m.GitView.Changes[target.Index]
+			fileStatus = &fs
+			m.GitView.FocusArea = git.GitFocusChanges
+			m.GitView.ChangesIdx = target.Index
+			m.GitView.ClampSelectedHunk(false)
+		}
+	default:
+		return m, nil, false
+	}
+	if fileStatus == nil {
+		return m, nil, false
+	}
+	m.Focus = FocusSidebar
+	m.GitView.CommitInput.Blur()
+	m.ContextMenuTabIdx = -1
+	m.ContextMenuGitPath = fileStatus.Path
+	m.ContextMenuGitStaged = fileStatus.IsStaged
+	m.ContextMenuGitStatus = fileStatus.Status
+	m.openGitContextMenu(mouse.X, mouse.Y+1)
+	return m, nil, true
+}
+
 func (m Model) handleSidebarRightClick(msg tea.MouseMsg, mouse tea.Mouse, editorStartX int) (tea.Model, tea.Cmd, bool) {
 	// Right-click inside File Explorer sidebar
 	if m.SidebarVisible && mouse.X < m.SidebarWidth && mouse.Y >= 3 && mouse.Y < m.Height-2 && m.SidebarView == SidebarFiles {
@@ -74,6 +120,10 @@ func (m Model) handleSidebarRightClick(msg tea.MouseMsg, mouse tea.Mouse, editor
 		m.ContextMenuTabIdx = -1
 		m.openExplorerContextMenu(mouse.X, mouse.Y+1)
 		return m, nil, true
+	}
+	// Right-click inside Git sidebar (file rows open a context menu)
+	if nm, cmd, handled := m.handleSidebarGitRightClick(msg, mouse); handled {
+		return nm, cmd, true
 	}
 	return m, nil, false
 }
@@ -232,7 +282,10 @@ func (m Model) handleSidebarBodyClick(msg tea.MouseMsg, mouse tea.Mouse, isClick
 			}
 			if targetFile != nil {
 				if targetFile.Status == "?" || targetFile.Status == "U" {
-					fullPath := filepath.Join(m.RootDir, targetFile.Path)
+					fullPath := targetFile.Path
+					if m.GitRepo != nil {
+						fullPath = filepath.Join(m.GitRepo.RootPath, targetFile.Path)
+					}
 					m.openFile(fullPath)
 					m.Focus = FocusEditor
 				} else {

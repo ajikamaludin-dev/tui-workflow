@@ -56,6 +56,10 @@ type Model struct {
 	ShowAbout         bool
 	ClosingTabIdx     int
 	ContextMenuTabIdx int
+	// Git sidebar context menu state (path is repo-root relative)
+	ContextMenuGitPath   string
+	ContextMenuGitStaged bool
+	ContextMenuGitStatus string
 	DraggingTabIdx    int
 	IsDraggingTab     bool
 	DragTabStartX     int

@@ -2,6 +2,7 @@ package app
 
 import (
 	tea "charm.land/bubbletea/v2"
+	"fmt"
 	"github.com/atotto/clipboard"
 	"path/filepath"
 	"strconv"
@@ -25,6 +26,37 @@ func (m *Model) openExplorerContextMenu(absX, absY int) {
 		items[4].Disabled = true
 	}
 	m.ContextMenu.OpenCustom(absX, absY, items, m.Width, m.Height)
+}
+
+func (m *Model) openGitContextMenu(absX, absY int) {
+	var items []ui.ContextMenuItem
+	if m.ContextMenuGitStaged {
+		items = append(items, ui.ContextMenuItem{ID: "git_unstage", Label: "Unstage"})
+	} else {
+		items = append(items, ui.ContextMenuItem{ID: "git_stage", Label: "Stage"})
+	}
+	items = append(items,
+		ui.ContextMenuItem{ID: "git_open_file", Label: "Open File", Disabled: m.ContextMenuGitStatus == "D"},
+		ui.ContextMenuItem{ID: "git_open_diff", Label: "Open Diff"},
+		ui.ContextMenuItem{ID: "git_copy_path", Label: "Copy Full Path"},
+	)
+	if !m.ContextMenuGitStaged {
+		items = append(items, ui.ContextMenuItem{ID: "git_discard", Label: "Discard Changes"})
+	}
+	m.ContextMenu.OpenCustom(absX, absY, items, m.Width, m.Height)
+}
+
+func (m *Model) resetGitContextMenu() {
+	m.ContextMenuGitPath = ""
+	m.ContextMenuGitStaged = false
+	m.ContextMenuGitStatus = ""
+}
+
+func (m *Model) gitContextFullPath() string {
+	if m.GitRepo == nil || m.ContextMenuGitPath == "" {
+		return ""
+	}
+	return filepath.Join(m.GitRepo.RootPath, m.ContextMenuGitPath)
 }
 
 func (m *Model) handleContextMenuAction(action string) tea.Cmd {
@@ -180,6 +212,73 @@ func (m *Model) handleContextMenuAction(action string) tea.Cmd {
 			}
 		}
 		return nil
+	case "git_stage":
+		if m.GitRepo != nil && m.ContextMenuGitPath != "" {
+			if err := m.GitRepo.StageFile(m.ContextMenuGitPath); err != nil {
+				m.StatusBar.ShowToast("Gagal stage: "+err.Error(), true, 3*time.Second)
+			} else if m.GitView != nil {
+				m.GitView.Refresh()
+			}
+		}
+		m.resetGitContextMenu()
+		return nil
+
+	case "git_unstage":
+		if m.GitRepo != nil && m.ContextMenuGitPath != "" {
+			if err := m.GitRepo.UnstageFile(m.ContextMenuGitPath); err != nil {
+				m.StatusBar.ShowToast("Gagal unstage: "+err.Error(), true, 3*time.Second)
+			} else if m.GitView != nil {
+				m.GitView.Refresh()
+			}
+		}
+		m.resetGitContextMenu()
+		return nil
+
+	case "git_open_file":
+		if m.ContextMenuGitStatus == "D" {
+			m.resetGitContextMenu()
+			return nil
+		}
+		if fullPath := m.gitContextFullPath(); fullPath != "" {
+			m.openFile(fullPath)
+			m.Focus = FocusEditor
+		}
+		m.resetGitContextMenu()
+		return nil
+
+	case "git_open_diff":
+		if m.ContextMenuGitPath != "" {
+			m.openDiff(m.ContextMenuGitPath, m.ContextMenuGitStaged)
+		}
+		m.resetGitContextMenu()
+		return nil
+
+	case "git_copy_path":
+		if fullPath := m.gitContextFullPath(); fullPath != "" {
+			if abs, err := filepath.Abs(fullPath); err == nil {
+				fullPath = abs
+			}
+			if err := clipboard.WriteAll(fullPath); err != nil {
+				m.StatusBar.ShowToast("Gagal menyalin path: "+err.Error(), true, 3*time.Second)
+			} else {
+				m.StatusBar.ShowToast("Full path disalin: "+fullPath, false, 2*time.Second)
+			}
+		}
+		m.resetGitContextMenu()
+		return nil
+
+	case "git_discard":
+		if m.ContextMenuGitPath != "" && !m.ContextMenuGitStaged {
+			m.ConfirmDialog.Open(
+				dialog.ConfirmDiscardGit,
+				"Discard Changes",
+				fmt.Sprintf("Discard all local changes in '%s'? This action cannot be undone.", filepath.Base(m.ContextMenuGitPath)),
+				m.ContextMenuGitPath,
+			)
+		}
+		m.resetGitContextMenu()
+		return nil
+
 	case "explorer_new_file":
 		parentDir := m.getSelectedParentDir()
 		m.InputDialog.Open(dialog.InputNewFile, "New File", parentDir, "")

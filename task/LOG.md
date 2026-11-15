@@ -30,3 +30,5 @@
 | 2026-11-14 | Peningkatan Terminal Safety, Menu Shortcut, Viewport Centering, dan Ergonomi Keymap | done | dev |
 | 2026-11-15 | Bubble Tea v2 Migration, PRD v0.2.0 & Refactor internal/app | done | dev |
 | 2026-11-15 | Search & Replace Rework (Sidebar, Engine, Find Bar) | done | dev |
+| 2026-11-15 | GitHub Release Automation & Linux Binary Distribution | done | dev |
+| 2026-11-15 | Git Sidebar Right-Click Context Menu (Stage/Unstage, Open File, Copy Full Path) | done | dev |

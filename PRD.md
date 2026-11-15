@@ -133,6 +133,7 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
    - `Alt+b` atau klik header branch: Buka modal dialog pemilihan dan perpindahan branch Git lokal.
    - `Alt+g` atau klik tombol `[✨ AI]`: Hasilkan pesan commit otomatis menggunakan LLM (OpenAI API format) dari staged changes.
    - `Alt+i` (atau menu Setting > AI Configuration): Konfigurasi endpoint OpenAI API, API Key, daftar model, dan model default.
+   - Klik kanan pada file (Staged/Changes): membuka context menu — Stage/Unstage (adaptif per section), Open File, Open Diff, Copy Full Path, Discard Changes (khusus Changes). Item "Open File" nonaktif untuk file dengan status deleted (`D`). File dibuka selalu di working tree (editor tab), bukan diff.
    - `Enter` atau klik file pada daftar Git: Buka **Git Side-by-Side Split Diff Tab** di Kolom 2.
    - `Ctrl+Enter`: Jalankan commit jika pesan tidak kosong dan ada staged changes.
    - Klik tombol `[Push]`: Mengirim commit lokal ke remote repository (dengan loading indicator di status bar).
@@ -366,6 +367,7 @@ Program diinisialisasi dengan `tea.WithMouseCellMotion()`.
 | **File Explorer Tree** | Left-Click pada File node | Membuka file ke tab editor |
 | **Git Staged/Changes** | Left-Click pada tombol `+` / `-` | Stage / Unstage file |
 | **Git File Item** | Left-Click pada nama file | Membuka Side-by-Side Diff Tab |
+| **Git File Item** | Right-Click pada file (Staged/Changes) | Membuka context menu (Stage/Unstage, Open File, Open Diff, Copy Full Path, Discard Changes) |
 | **Tab Bar** | Left-Click pada tab item | Mengaktifkan tab tersebut |
 | **Tab Bar** | Left-Click Drag pada tab item | Menggeser & memindahkan urutan tab editor (Drag & Drop) |
 | **Tab Bar** | Right-Click pada tab item | Membuka context menu tab (Sematkan/Lepas Sematan, Tutup, dll.) |

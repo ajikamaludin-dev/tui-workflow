@@ -31,6 +31,17 @@ func (m Model) handleTerminalKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 				m.TabManager.NextTab()
 				m.syncStatusBarWithActiveTab()
 				return m, m.requestSessionPersist(), true
+			case "ctrl+tab", "ctrl+shift+tab":
+				if m.AutoSave {
+					_, _ = editor.TriggerAutoSave(m.TabManager)
+				}
+				if ui.KeyName(msg) == "ctrl+shift+tab" {
+					m.TabManager.PrevTab()
+				} else {
+					m.TabManager.NextTab()
+				}
+				m.syncStatusBarWithActiveTab()
+				return m, m.requestSessionPersist(), true
 			case "ctrl+shift+p", "ctrl+P", "f1":
 				m.openCommandPalette()
 				return m, nil, true
@@ -171,6 +182,21 @@ func (m Model) handleTerminalKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 	case "ctrl+p":
 		m.openQuickOpen()
 		return m, nil, true
+
+	case "ctrl+tab", "ctrl+shift+tab":
+		// Cycle editor tabs from any focus. Requires Kitty keyboard protocol or
+		// xterm modifyOtherKeys (pushed by Bubble Tea v2 by default); on legacy
+		// terminals this sequence never arrives.
+		if m.AutoSave {
+			_, _ = editor.TriggerAutoSave(m.TabManager)
+		}
+		if ui.KeyName(msg) == "ctrl+shift+tab" {
+			m.TabManager.PrevTab()
+		} else {
+			m.TabManager.NextTab()
+		}
+		m.syncStatusBarWithActiveTab()
+		return m, m.requestSessionPersist(), true
 
 	case "ctrl+shift+i", "ctrl+shift+I", "alt+shift+f", "alt+F":
 		nm, cmd := m.triggerFormatCurrentBuffer()

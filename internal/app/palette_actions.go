@@ -108,19 +108,8 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 
 	case "file.close":
 		m.attemptCloseTab(m.TabManager.ActiveIndex)
-	case "tab.toggle_pin":
-		if m.TabManager.Count() > 0 && m.TabManager.ActiveIndex >= 0 {
-			tab := m.TabManager.ActiveTab()
-			wasPinned := tab != nil && tab.IsPinned
-			m.TabManager.TogglePinTab(m.TabManager.ActiveIndex)
-			if wasPinned {
-				m.StatusBar.ShowToast("Tab unpinned", false, 2*time.Second)
-			} else {
-				m.StatusBar.ShowToast("Tab pinned", false, 2*time.Second)
-			}
-			m.syncStatusBarWithActiveTab()
-		}
-		return nil
+	case "tab.toggle_pin", "tab.close_others", "tab.close_all", "tab.next", "tab.prev":
+		return m.handleTabPaletteAction(action)
 
 	case "setting.autosave":
 		m.AutoSave = !m.AutoSave
@@ -352,20 +341,6 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 
 	case "view.markdown":
 		m.TabManager.ToggleActiveMarkdown()
-		m.syncStatusBarWithActiveTab()
-
-	case "tab.close_others":
-		if m.blockBatchCloseIfRunning("others", m.TabManager.ActiveIndex) {
-			return nil
-		}
-		m.TabManager.CloseOtherTabs(m.TabManager.ActiveIndex)
-		m.syncStatusBarWithActiveTab()
-
-	case "tab.close_all":
-		if m.blockBatchCloseIfRunning("all", -1) {
-			return nil
-		}
-		m.TabManager.CloseAllTabs()
 		m.syncStatusBarWithActiveTab()
 
 	case "git.stage_all":

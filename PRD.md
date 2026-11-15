@@ -64,6 +64,7 @@ Layout terminal dibagi menjadi 4 zona: Baris 0 (Top Menu), Kolom 1 (Sidebar: Fil
    - `[ File ]` (`Alt+f`):
      - `New File` (`a`) ➔ Membuka modal dialog buat file baru.
      - `New Terminal Tab` (`Ctrl+Shift+\` / `Ctrl+T`) ➔ Membuka tab terminal interaktif baru.
+     - `Next Tab` (`Ctrl+Tab`) / `Previous Tab` (`Ctrl+Shift+Tab`) ➔ Beralih tab editor (memerlukan terminal dengan Kitty keyboard protocol atau `modifyOtherKeys`; sequence tidak dikirim oleh terminal legacy/VS Code integrated).
      - `Save File` (`Ctrl+s`) ➔ Simpan buffer aktif ke disk.
      - `Close Tab` (`Ctrl+w`) ➔ Tutup tab aktif (dengan konfirmasi jika dirty).
      - `Exit` (`Ctrl+q`) ➔ Tutup aplikasi (dengan konfirmasi jika ada unsaved tabs).
@@ -153,6 +154,8 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
    - Quick Buffer Switcher (`Ctrl+p`): Membuka fuzzy modal dropdown untuk beralih tab dengan cepat.
 3. **Navigasi Tab:**
    - `Ctrl+n`: Tab berikutnya.
+   - `Ctrl+Tab`: Tab berikutnya (alt, memerlukan Kitty keyboard protocol / xterm `modifyOtherKeys` aktif — default di Bubble Tea v2).
+   - `Ctrl+Shift+Tab`: Tab sebelumnya (alt, protokol yang sama).
    - `Ctrl+p`: Tab sebelumnya / buffer switcher.
    - `Ctrl+w`: Tutup tab aktif.
 

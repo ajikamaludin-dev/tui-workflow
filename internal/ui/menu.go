@@ -44,6 +44,8 @@ func NewMenuBar() *MenuBar {
 					{Label: "Open Folder", Shortcut: "Ctrl+K Ctrl+K", ActionID: "file.open_folder"},
 					{Label: "Save File", Shortcut: "Ctrl+S", ActionID: "file.save"},
 					{Label: "Format Document", Shortcut: "Ctrl+Shift+I", ActionID: "file.format"},
+					{Label: "Next Tab", Shortcut: "Ctrl+Tab", ActionID: "tab.next"},
+					{Label: "Previous Tab", Shortcut: "Ctrl+Shift+Tab", ActionID: "tab.prev"},
 					{Label: "Pin / Unpin Tab", Shortcut: "Alt+P", ActionID: "tab.toggle_pin"},
 					{Label: "Close Tab", Shortcut: "Ctrl+W", ActionID: "file.close"},
 					{Label: "Exit", Shortcut: "Ctrl+Q", ActionID: "app.exit"},

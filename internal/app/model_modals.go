@@ -123,6 +123,8 @@ func (m *Model) openCommandPalette() {
 		{ID: "file.open_folder", Title: "Open Folder", Category: "File", Shortcut: "Ctrl+K Ctrl+K"},
 		{ID: "file.save", Title: "Save File", Category: "File", Shortcut: "Ctrl+S"},
 		{ID: "file.close", Title: "Close Tab", Category: "File", Shortcut: "Ctrl+W"},
+		{ID: "tab.next", Title: "Switch to Next Tab", Category: "File", Shortcut: "Ctrl+Tab / Ctrl+N"},
+		{ID: "tab.prev", Title: "Switch to Previous Tab", Category: "File", Shortcut: "Ctrl+Shift+Tab"},
 		{ID: "tab.toggle_pin", Title: "Pin / Unpin Tab", Category: "File", Shortcut: "Alt+P"},
 		{ID: "tab.close_others", Title: "Close Other Tabs", Category: "File", Shortcut: ""},
 		{ID: "tab.close_all", Title: "Close All Tabs", Category: "File", Shortcut: ""},

@@ -136,6 +136,7 @@
 | `Ctrl + Shift + I` / `Alt + Shift + F` | Format dokumen aktif menggunakan CLI formatter (Prettier, Biome, Pint, Gofmt, dll) |
 | `Ctrl + W` | Tutup tab aktif |
 | `Ctrl + N` | Pindah ke tab berikutnya secara berurutan |
+| `Ctrl + Tab` / `Ctrl + Shift + Tab` | Pindah ke tab berikutnya / sebelumnya (memerlukan terminal dengan Kitty keyboard protocol atau `modifyOtherKeys`, aktif by default di Bubble Tea v2; tidak terkirim di terminal legacy/VS Code integrated) |
 | `Ctrl + Z` | Batalkan perubahan teks terakhir (Undo) |
 | `Ctrl + Y` / `Ctrl + Shift + Z` | Ulangi perubahan teks yang dibatalkan (Redo) |
 | `Ctrl + F` | Buka pencarian teks di buffer aktif (Find Bar) |
@@ -208,6 +209,7 @@
 | `Alt + Left` / `Alt + Right` / `Ctrl + Left` / `Ctrl + Right` | Lompat kata kursor shell CLI (Readline) |
 | `Alt + Backspace` / `Ctrl + Backspace` | Hapus satu kata ke belakang di shell CLI |
 | `Ctrl + N` | Pindah ke tab berikutnya |
+| `Ctrl + Tab` / `Ctrl + Shift + Tab` | Pindah ke tab berikutnya / sebelumnya |
 | `Ctrl + Shift + P` / `F1` | Buka Command Palette |
 | `exit` | Tutup shell dan tutup tab terminal otomatis |
 

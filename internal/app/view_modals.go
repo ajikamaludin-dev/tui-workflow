@@ -62,6 +62,7 @@ Editor & Buffer:
  • Click Gutter Fold: Toggle Fold Block (Marker ▸/▾)
  • Alt+P : Pin / Unpin Tab
  • Drag Tab Mouse : Drag & Drop Reorder Tabs
+ • Ctrl+Tab / Ctrl+Shift+Tab : Switch to Next / Previous Tab (Ctrl+N also works)
  • Ctrl+S / Ctrl+W : Save Buffer / Close Active Tab
  • Ctrl+Shift+I : Format Document (via CLI)
  • Ctrl+M / Alt+M : Toggle Markdown Preview (Glamour)

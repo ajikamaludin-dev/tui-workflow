@@ -23,7 +23,9 @@ func (m Model) handleBufferKeys(msg tea.KeyPressMsg, tab *editor.Tab) (tea.Model
 			nm, cmd := m.handleCtrlSpace()
 			return nm, cmd, true
 		}
-		if msg.Code == tea.KeyTab && msg.Mod.Contains(tea.ModShift) {
+		// Kitty/modifyOtherKeys-aware guard: keep Ctrl+Shift+Tab out of the snippet outdent path.
+		// (Ctrl+Tab / Ctrl+Shift+Tab tab cycling is handled globally in handleTerminalKeys.)
+		if msg.Code == tea.KeyTab && msg.Mod.Contains(tea.ModShift) && !msg.Mod.Contains(tea.ModCtrl) {
 			nm, cmd := m.handleShiftTab()
 			return nm, cmd, true
 		}

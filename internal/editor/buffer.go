@@ -37,6 +37,8 @@ type Buffer struct {
 	CursorCol       int
 	ScrollRow       int
 	ScrollCol       int
+	// CursorHidden is toggled by the app's blink ticker (true = blink-off phase).
+	CursorHidden    bool
 	SoftWrap        bool
 	IsDirty         bool
 	Highlighter     *syntax.Highlighter

@@ -52,6 +52,7 @@ type Model struct {
 	ContextMenu       *ui.ContextMenu
 	AutoSave          bool
 	SoftWrap          bool
+	CursorBlink       bool
 	ShowHelp          bool
 	ShowAbout         bool
 	ClosingTabIdx     int
@@ -172,6 +173,7 @@ func NewModelWithPath(targetPath string, explicitArg bool) (Model, error) {
 		ContextMenu:        ui.NewContextMenu(),
 		AutoSave:           cfg.AutoSave,
 		SoftWrap:           cfg.SoftWrap,
+		CursorBlink:        true,
 		ShowHelp:           false,
 		ShowAbout:          false,
 		ClosingTabIdx:      -1,
@@ -228,7 +230,7 @@ func NewModel() Model {
 
 func (m Model) Init() tea.Cmd {
 	var cmds []tea.Cmd
-	cmds = append(cmds, marqueeTickCmd(), fileWatchTickCmd())
+	cmds = append(cmds, marqueeTickCmd(), fileWatchTickCmd(), cursorBlinkTickCmd())
 	if m.SymbolIndex != nil {
 		cmds = append(cmds, buildSymbolIndexCmd(m.SymbolIndex))
 	}

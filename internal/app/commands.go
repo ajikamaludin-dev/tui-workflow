@@ -17,6 +17,14 @@ import (
 	"tui-workflow/internal/ui/dialog"
 )
 
+type CursorBlinkTickMsg time.Time
+
+func cursorBlinkTickCmd() tea.Cmd {
+	return tea.Tick(500*time.Millisecond, func(t time.Time) tea.Msg {
+		return CursorBlinkTickMsg(t)
+	})
+}
+
 type MarqueeTickMsg time.Time
 
 func marqueeTickCmd() tea.Cmd {

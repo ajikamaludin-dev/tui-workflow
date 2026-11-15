@@ -42,6 +42,8 @@ type TerminalView struct {
 	exited     bool
 	exitErr    error
 	selection  terminalSelection
+	// CursorHidden is toggled by the app's blink ticker (true = blink-off phase).
+	CursorHidden bool
 }
 
 // NewTerminalView spawns a new shell process attached to a PTY.
@@ -284,6 +286,7 @@ func (t *TerminalView) Render(width, height int, focused bool) string {
 		lastFG := vt10x.DefaultFG
 		lastBG := vt10x.DefaultBG
 		lastInverse := false
+		lastBlink := false
 		lastUnderline := false
 		lastBold := false
 		lastItalic := false
@@ -296,7 +299,9 @@ func (t *TerminalView) Render(width, height int, focused bool) string {
 				attr = vt10x.Glyph{Char: ' ', FG: vt10x.DefaultFG, BG: vt10x.DefaultBG}
 			}
 
-			isCursor := focused && curVis && (x == cur.X && y == cur.Y)
+				isCursor := focused && curVis && !t.CursorHidden && (x == cur.X && y == cur.Y)
+			// SGR blink attribute from the child application
+			isBlink := (attr.Mode & vtAttrBlink) != 0
 			isSelected := selActive && selectionContains(selStartX, selStartY, selEndX, selEndY, x, y)
 			isInverse := isCursor || isSelected || ((attr.Mode & vtAttrReverse) != 0)
 			isUnderline := (attr.Mode & vtAttrUnderline) != 0
@@ -304,7 +309,7 @@ func (t *TerminalView) Render(width, height int, focused bool) string {
 			isItalic := (attr.Mode & vtAttrItalic) != 0
 
 			styleChanged := (attr.FG != lastFG) || (attr.BG != lastBG) ||
-				(isInverse != lastInverse) || (isUnderline != lastUnderline) ||
+				(isInverse != lastInverse) || (isBlink != lastBlink) || (isUnderline != lastUnderline) ||
 				(isBold != lastBold) || (isItalic != lastItalic)
 
 			if styleChanged {
@@ -318,6 +323,9 @@ func (t *TerminalView) Render(width, height int, focused bool) string {
 				}
 				if isUnderline {
 					sb.WriteString("\x1b[4m")
+				}
+				if isBlink {
+					sb.WriteString("\x1b[5m")
 				}
 				if isInverse {
 					sb.WriteString("\x1b[7m")
@@ -350,6 +358,7 @@ func (t *TerminalView) Render(width, height int, focused bool) string {
 				lastFG = attr.FG
 				lastBG = attr.BG
 				lastInverse = isInverse
+				lastBlink = isBlink
 				lastUnderline = isUnderline
 				lastBold = isBold
 				lastItalic = isItalic

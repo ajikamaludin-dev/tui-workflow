@@ -353,7 +353,7 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 
 		for cIdx, r := range lineRunes {
 			physCol := vl.StartCol + cIdx
-			isCursor := vIdx == visualCursorRow && cIdx == visualCursorCol && focused
+			isCursor := vIdx == visualCursorRow && cIdx == visualCursorCol && focused && !b.CursorHidden
 			isExtraCursor := !isCursor && focused && !b.HasSelection && extraCursorHere(physCol)
 			isSelected := b.IsSelected(physRow, physCol)
 			isMatch, isActiveMatch := b.MatchAt(physRow, physCol)
@@ -457,7 +457,7 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 			activeStyle = ""
 		}
 
-		if vIdx == visualCursorRow && focused && !b.HasSelection && visualCursorCol >= len(lineRunes) {
+		if vIdx == visualCursorRow && focused && !b.HasSelection && visualCursorCol >= len(lineRunes) && !b.CursorHidden {
 			textPart.WriteString(cursorIBeamStyle.Render("│"))
 		}
 		if focused && !b.HasSelection {

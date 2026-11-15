@@ -42,9 +42,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Set cursor shape steady I-beam (\x1b[6 q) and restore default exit
+	// Set cursor shape steady I-beam (\x1b[6 q); restore default at teardown
 	fmt.Print("\x1b[6 q")
-	fmt.Print("\x1b[0 q\x1b]22;default\x1b\\")
+	defer fmt.Print("\x1b[0 q\x1b]22;default\x1b\\")
 
 	// Program options moved to declarative tea.View fields in Bubble Tea v2
 	// (see Model.View: AltScreen + MouseModeCellMotion).

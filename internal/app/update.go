@@ -192,6 +192,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return MarqueeTickMsg(t)
 		})
 
+	case CursorBlinkTickMsg:
+		m.CursorBlink = !m.CursorBlink
+		hidden := !m.CursorBlink
+		for _, tab := range m.TabManager.Tabs {
+			if tab.Buffer != nil {
+				tab.Buffer.CursorHidden = hidden
+			}
+			if tab.TerminalView != nil {
+				tab.TerminalView.CursorHidden = hidden
+			}
+		}
+		return m, cursorBlinkTickCmd()
+
 	case tea.WindowSizeMsg:
 		m.Width = msg.Width
 		m.Height = msg.Height

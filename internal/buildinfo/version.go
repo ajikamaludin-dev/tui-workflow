@@ -4,4 +4,4 @@
 package buildinfo
 
 // Version is the application version (semver without leading v).
-var Version = "0.3.0"
+var Version = "0.3.1"

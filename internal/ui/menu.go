@@ -40,6 +40,8 @@ func NewMenuBar() *MenuBar {
 				Items: []MenuItem{
 					{Label: "New File", Shortcut: "a", ActionID: "file.new"},
 					{Label: "New Terminal Tab", Shortcut: "Ctrl+\\", ActionID: "terminal.new"},
+					{Label: "Scroll Terminal Scrollback Up", Shortcut: "Shift+PgUp", ActionID: "terminal.scroll_back"},
+					{Label: "Scroll Terminal Scrollback Down", Shortcut: "Shift+PgDn", ActionID: "terminal.scroll_forward"},
 					{Label: "Open File", Shortcut: "Ctrl+O", ActionID: "file.open"},
 					{Label: "Open Folder", Shortcut: "Ctrl+K Ctrl+K", ActionID: "file.open_folder"},
 					{Label: "Save File", Shortcut: "Ctrl+S", ActionID: "file.save"},

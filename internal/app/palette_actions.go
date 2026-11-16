@@ -55,6 +55,24 @@ func (m *Model) handleMenuAction(action string) tea.Cmd {
 			m.attemptCloseTab(m.TabManager.ActiveIndex)
 		}
 		return nil
+	case "terminal.scroll_back":
+		if tab := m.TabManager.ActiveTab(); tab != nil && tab.Type == editor.TabTerminal {
+			page := m.Height - 3
+			if page < 1 {
+				page = 1
+			}
+			tab.TerminalView.ScrollBack(page)
+		}
+		return nil
+	case "terminal.scroll_forward":
+		if tab := m.TabManager.ActiveTab(); tab != nil && tab.Type == editor.TabTerminal {
+			page := m.Height - 3
+			if page < 1 {
+				page = 1
+			}
+			tab.TerminalView.ScrollForward(page)
+		}
+		return nil
 
 	case "file.open":
 		m.FilePicker.Open(dialog.PickerModeFile, m.RootDir, m.Explorer.ShowHidden)

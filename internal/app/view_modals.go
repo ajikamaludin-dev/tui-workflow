@@ -74,6 +74,7 @@ Terminal & Shell (PTY):
  • Ctrl+Shift+W : Close Active Terminal Shell Tab
  • Alt/Ctrl+Arrow : Jump Word in Shell CLI (Readline)
  • Alt/Ctrl+Bcksp : Delete Word Left in Shell CLI
+ • Shift+PgUp / Shift+PgDn : Scroll Terminal Scrollback
 
 Git Source Control:
  • Alt+B : Switch / Checkout Git Branch

@@ -143,13 +143,22 @@ func (m Model) handleEditorFocusMouse(msg tea.MouseMsg, mouse tea.Mouse, editorS
 							_ = tab.TerminalView.ForwardMouse(msg, relX, relY)
 							return m, nil, true
 						}
-						if mouse.Button == tea.MouseWheelUp {
-							tab.TerminalView.ScrollUp(3)
-							return m, nil, true
-						} else if mouse.Button == tea.MouseWheelDown {
-							tab.TerminalView.ScrollDown(3)
+						if tab.TerminalView.AltScreenActive() {
+							// Fullscreen app without mouse reporting: wheel acts like arrows.
+							if mouse.Button == tea.MouseWheelUp {
+								tab.TerminalView.SendArrowUp(3)
+								return m, nil, true
+							}
+							tab.TerminalView.SendArrowDown(3)
 							return m, nil, true
 						}
+						// Normal shell: wheel scrolls the scrollback history.
+						if mouse.Button == tea.MouseWheelUp {
+							tab.TerminalView.ScrollBack(3)
+							return m, nil, true
+						}
+						tab.TerminalView.ScrollForward(3)
+						return m, nil, true
 					}
 				}
 			} else if tab.Buffer != nil {

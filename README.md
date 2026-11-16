@@ -210,6 +210,8 @@
 | `Alt + W` / `Ctrl + Shift + W` | Tutup tab terminal aktif |
 | `Alt + Left` / `Alt + Right` / `Ctrl + Left` / `Ctrl + Right` | Lompat kata kursor shell CLI (Readline) |
 | `Alt + Backspace` / `Ctrl + Backspace` | Hapus satu kata ke belakang di shell CLI |
+| `Shift + PgUp` / `Shift + PgDn` | Scroll riwayat scrollback terminal (1000 baris) |
+| Scroll Wheel | Scroll scrollback terminal (mengirim arrow keys di alternate screen, forward ke aplikasi mouse) |
 | `Ctrl + N` | Pindah ke tab berikutnya |
 | `Ctrl + Tab` / `Ctrl + Shift + Tab` | Pindah ke tab berikutnya / sebelumnya |
 | `Ctrl + Shift + P` / `F1` | Buka Command Palette |

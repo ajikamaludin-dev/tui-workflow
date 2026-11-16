@@ -175,6 +175,8 @@ func (m *Model) openCommandPalette() {
 		{ID: "terminal.new", Title: "Terminal: New Integrated Terminal", Category: "Terminal", Shortcut: "Ctrl+Shift+\\"},
 		{ID: "terminal.toggle_focus", Title: "Terminal: Toggle Focus (Terminal / TUI)", Category: "Terminal", Shortcut: "Ctrl+\\"},
 		{ID: "terminal.close", Title: "Terminal: Close Active Terminal Tab", Category: "Terminal", Shortcut: "Ctrl+Shift+W"},
+		{ID: "terminal.scroll_back", Title: "Terminal: Scroll Scrollback Up", Category: "Terminal", Shortcut: "Shift+PgUp"},
+		{ID: "terminal.scroll_forward", Title: "Terminal: Scroll Scrollback Down", Category: "Terminal", Shortcut: "Shift+PgDn"},
 
 		// Settings & Tools
 		{ID: "setting.autosave", Title: "Toggle Auto-Save", Category: "Setting", Shortcut: "Alt+S"},

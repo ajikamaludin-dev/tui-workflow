@@ -64,6 +64,8 @@ func selectionContains(sx, sy, ex, ey, x, y int) bool {
 func (t *TerminalView) StartSelection(x, y int) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	// Selection operates on the live grid only; leave scrollback view first.
+	t.scrollOffset = 0
 	x, y = t.clampGrid(x, y)
 	t.selection = terminalSelection{active: true, anchorX: x, anchorY: y, cursorX: x, cursorY: y}
 }
@@ -101,6 +103,8 @@ func (t *TerminalView) HasSelection() bool {
 func (t *TerminalView) SelectAll() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	// Selection operates on the live grid only; leave scrollback view first.
+	t.scrollOffset = 0
 	if t.cols <= 0 || t.rows <= 0 {
 		return
 	}
@@ -113,7 +117,8 @@ func (t *TerminalView) SelectAll() {
 
 // SelectedText returns the selected text reconstructed from the visible grid.
 // Lines are trimmed of trailing spaces and joined with "\n". Returns "" when
-// there is no selection (vt10x has no scrollback, so only visible rows are selectable).
+// there is no selection (scrollback rows are not selectable, only the visible
+// grid is).
 func (t *TerminalView) SelectedText() string {
 	t.mu.Lock()
 	defer t.mu.Unlock()

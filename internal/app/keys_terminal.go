@@ -45,7 +45,23 @@ func (m Model) handleTerminalKeys(msg tea.KeyPressMsg) (tea.Model, tea.Cmd, bool
 			case "ctrl+shift+p", "ctrl+P", "f1":
 				m.openCommandPalette()
 				return m, nil, true
+			case "shift+pgup":
+				page := m.Height - 3
+				if page < 1 {
+					page = 1
+				}
+				tab.TerminalView.ScrollBack(page)
+				return m, nil, true
+			case "shift+pgdown":
+				page := m.Height - 3
+				if page < 1 {
+					page = 1
+				}
+				tab.TerminalView.ScrollForward(page)
+				return m, nil, true
 			default:
+				// Typing while scrolled up snaps back to the live output.
+				tab.TerminalView.ScrollToBottom()
 				bytes := terminal.KeyToBytes(msg)
 				if len(bytes) > 0 {
 					_, _ = tab.TerminalView.Write(bytes)

@@ -239,10 +239,13 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
    - Shortcut `Ctrl+\` / `Ctrl+` ` / `F6`: Beralih fokus antara Terminal dan Sidebar.
    - Shortcut `Alt+W` / `Ctrl+Shift+W` atau mengetik `exit`: Menutup tab terminal secara bersih (*clean teardown* proses shell & PTY descriptor).
    - Shortcut `Ctrl+Shift+P` / `F1`: Tetap dapat membuka Command Palette secara global.
-4. **Window Resizing & Anti-Overflow:**
+4. **Scrollback History:** 
+   - vt10x hanya menyimpan grid yang terlihat; baris yang ter-scroll dari tepi atas ditangkap ke ring buffer scrollback (maksimal 1000 baris) dengan membandingkan snapshot grid sebelum/sesudah setiap write (baris yang bergeser ke atas ditangkap).
+   - Shortcut `Shift+PgUp` / `Shift+PgDn` (dan mouse wheel / menu `[File] ➔ Scroll Terminal Scrollback` / Command Palette `terminal.scroll_back` / `terminal.scroll_forward`): menggeser viewport ke riwayat scrollback per halaman (`TerminalHeight - 3` baris). Mengetik karakter lain saat scrollback sedang terlihat mengembalikan viewport ke output live. Alternate screen (aplikasi fullscreen seperti vim/htop/less) tidak pernah ditangkap ke scrollback; output di sana menggunakan mode arrow keys legacy.
+5. **Window Resizing & Anti-Overflow:**
    - Sinkronisasi dimensi ukuran terminal via `TIOCSWINSZ` (`pty.Setsize`) dan `vt10x.Resize` saat resize terminal terjadi.
    - Pemotongan aman berbasis visual width (`ansi.Truncate`) menjamin output baris terminal tidak pernah meluap (*zero terminal scroll overflow*).
-5. **Tab Title Numbering:** Tab terminal diberi judul `Terminal`; jika lebih dari satu tab terminal terbuka, tab kedua dst. diberi judul `Terminal - 2`, `Terminal - 3`, … `Terminal - N` (penomoran ulang otomatis saat tab terminal dibuka, ditutup, atau diurutkan ulang).
+6. **Tab Title Numbering:** Tab terminal diberi judul `Terminal`; jika lebih dari satu tab terminal terbuka, tab kedua dst. diberi judul `Terminal - 2`, `Terminal - 3`, … `Terminal - N` (penomoran ulang otomatis saat tab terminal dibuka, ditutup, atau diurutkan ulang).
 
 #### G. Symbol Navigation & Code Intelligence (Path B — In-Memory Symbol Index)
 1. **In-Memory Symbol Index:**

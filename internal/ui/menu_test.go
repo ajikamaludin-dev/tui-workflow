@@ -76,16 +76,16 @@ func TestMenuBarMouseClick(t *testing.T) {
 		t.Errorf("Expected action 'terminal.new', got %q (handled=%v)", action, handled)
 	}
 
-	// 3b. Re-open File menu and click on item 2 "Open File" at Y = 4
+	// 3b. Re-open File menu and click on item 4 "Open File" at Y = 6
 	mb.Toggle(0)
-	action, handled = mb.HandleMouse(tea.MouseClickMsg{X: fileCat.StartX + 2, Y: 4, Button: tea.MouseLeft})
+	action, handled = mb.HandleMouse(tea.MouseClickMsg{X: fileCat.StartX + 2, Y: 6, Button: tea.MouseLeft})
 	if !handled || action != "file.open" {
 		t.Errorf("Expected action 'file.open', got %q (handled=%v)", action, handled)
 	}
 
-	// 4. Re-open File menu and click on item 4 "Save File" at Y = 6
+	// 4. Re-open File menu and click on item 6 "Save File" at Y = 8
 	mb.Toggle(0)
-	action, handled = mb.HandleMouse(tea.MouseClickMsg{X: fileCat.StartX + 2, Y: 6, Button: tea.MouseLeft})
+	action, handled = mb.HandleMouse(tea.MouseClickMsg{X: fileCat.StartX + 2, Y: 8, Button: tea.MouseLeft})
 	if !handled || action != "file.save" {
 		t.Errorf("Expected action 'file.save', got %q (handled=%v)", action, handled)
 	}

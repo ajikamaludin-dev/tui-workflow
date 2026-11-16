@@ -14,6 +14,12 @@ import (
 )
 
 func TestTerminalTabIntegration(t *testing.T) {
+	// Use /bin/sh: the user's $SHELL (e.g. zsh + powerlevel10k instant
+	// prompt) can fork a long-lived background zsh child, which is not
+	// related to what this test verifies and made the close assertion
+	// environment-dependent.
+	t.Setenv("SHELL", "/bin/sh")
+
 	m, _ := NewModelWithPath(t.TempDir(), false)
 	m.Width = 100
 	m.Height = 30
@@ -59,10 +65,9 @@ func TestTerminalTabIntegration(t *testing.T) {
 	// Wait for terminal output
 	time.Sleep(150 * time.Millisecond)
 
-	// Ensure the echo child process has fully exited (PTY children can lag
-	// behind in busy environments); Alt+W intentionally prompts when a child
-	// is still running.
-	for i := 0; i < 40 && tab.TerminalView.HasRunningProcess(); i++ {
+	// Ensure the echo child process has fully exited before the Alt+W
+	// assertion; the loop exits immediately once nothing runs.
+	for i := 0; i < 200 && tab.TerminalView.HasRunningProcess(); i++ {
 		time.Sleep(25 * time.Millisecond)
 	}
 

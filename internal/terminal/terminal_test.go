@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/hinshun/vt10x"
 )
 
 func TestBullet(t *testing.T) {
@@ -242,6 +243,191 @@ func TestTerminalTrueColorAnd256ColorRender(t *testing.T) {
 			t.Errorf("line %d visual width %d exceeds max 80", i, w)
 		}
 	}
+}
+
+func TestScrollbackCaptureAfterWrites(t *testing.T) {
+	term := &TerminalView{
+		ID:         "term:scrollback",
+		Title:      "Terminal",
+		vt:         vt10x.New(vt10x.WithSize(80, 10)),
+		cols:       80,
+		rows:       10,
+		outputChan: make(chan struct{}, 100),
+		done:       make(chan struct{}),
+	}
+
+	var b strings.Builder
+	for i := 1; i <= 30; i++ {
+		fmt.Fprintf(&b, "line%d\r\n", i)
+	}
+	if _, err := term.WriteToVT([]byte(b.String())); err != nil {
+		t.Fatalf("WriteToVT failed: %v", err)
+	}
+
+	// 30 lines, and the trailing LF scrolls once more: the screen holds
+	// 9 lines of text, the rest waits in the scrollback ring.
+	if len(term.scrollback) != 21 {
+		t.Fatalf("expected 21 scrollback rows, got %d", len(term.scrollback))
+	}
+	for i, row := range term.scrollback {
+		text := glyphRowText(row)
+		want := fmt.Sprintf("line%d", i+1)
+		if !strings.HasPrefix(strings.TrimSpace(text), want) {
+			t.Errorf("scrollback[%d] = %q, want prefix %q", i, text, want)
+		}
+	}
+
+	// Viewport is anchored to live output by default.
+	if term.IsScrolled() {
+		t.Fatal("expected viewport to be anchored to live output after writes")
+	}
+
+	// Scroll back shows the captured history.
+	term.ScrollBack(5)
+	if got := term.scrollOffset; got != 5 {
+		t.Fatalf("expected scrollOffset 5, got %d", got)
+	}
+	rendered := term.Render(80, 10, false)
+	if !strings.Contains(rendered, "line21") {
+		t.Errorf("scrolled render should contain history line21, got:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "line1\n") {
+		t.Errorf("scrolled render should not contain the first line, got:\n%s", rendered)
+	}
+
+	// Scrolling past the oldest row clamps.
+	term.ScrollBack(100)
+	if got := term.scrollOffset; got != 21 {
+		t.Fatalf("expected scrollOffset clamped to 21, got %d", got)
+	}
+	rendered = term.Render(80, 10, false)
+	if !strings.Contains(rendered, "line1") {
+		t.Errorf("fully scrolled render should contain line1, got:\n%s", rendered)
+	}
+
+	// Scroll back to the bottom.
+	term.ScrollForward(100)
+	if term.IsScrolled() {
+		t.Fatal("expected viewport back at live output after ScrollForward")
+	}
+	term.ScrollBack(3)
+	term.ScrollToBottom()
+	if term.IsScrolled() {
+		t.Fatal("expected ScrollToBottom to anchor viewport to live output")
+	}
+}
+
+func TestScrollbackAnchorWhenScrolledAndNewOutputArrives(t *testing.T) {
+	term := &TerminalView{
+		ID:         "term:anchor",
+		vt:         vt10x.New(vt10x.WithSize(80, 10)),
+		cols:       80,
+		rows:       10,
+		outputChan: make(chan struct{}, 100),
+		done:       make(chan struct{}),
+	}
+
+	var b strings.Builder
+	for i := 1; i <= 30; i++ {
+		fmt.Fprintf(&b, "line%d\r\n", i)
+	}
+	_, _ = term.WriteToVT([]byte(b.String()))
+
+	term.ScrollBack(4)
+	_, _ = term.WriteToVT([]byte("line31\r\n"))
+
+	if got := term.scrollOffset; got != 5 {
+		t.Fatalf("expected scrollOffset to track history growth (5), got %d", got)
+	}
+	if len(term.scrollback) != 22 {
+		t.Fatalf("expected 22 scrollback rows, got %d", len(term.scrollback))
+	}
+}
+
+func TestScrollbackCap(t *testing.T) {
+	term := &TerminalView{
+		ID:         "term:cap",
+		vt:         vt10x.New(vt10x.WithSize(80, 10)),
+		cols:       80,
+		rows:       10,
+		outputChan: make(chan struct{}, 100),
+		done:       make(chan struct{}),
+	}
+
+	var b strings.Builder
+	for i := 1; i <= ScrollbackLimit+50; i++ {
+		fmt.Fprintf(&b, "line%d\r\n", i)
+	}
+	_, _ = term.WriteToVT([]byte(b.String()))
+
+	if len(term.scrollback) != ScrollbackLimit {
+		t.Fatalf("expected scrollback capped at %d, got %d", ScrollbackLimit, len(term.scrollback))
+	}
+	term.ScrollBack(ScrollbackLimit * 2)
+	if got := term.scrollOffset; got != ScrollbackLimit {
+		t.Fatalf("expected scrollOffset clamped to %d, got %d", ScrollbackLimit, got)
+	}
+}
+
+func TestScrollbackAltScreenNotCaptured(t *testing.T) {
+	term := &TerminalView{
+		ID:         "term:alt",
+		vt:         vt10x.New(vt10x.WithSize(80, 10)),
+		cols:       80,
+		rows:       10,
+		outputChan: make(chan struct{}, 100),
+		done:       make(chan struct{}),
+	}
+
+	var live strings.Builder
+	for i := 1; i <= 15; i++ {
+		fmt.Fprintf(&live, "main%d\r\n", i)
+	}
+	_, _ = term.WriteToVT([]byte(live.String()))
+	captured := len(term.scrollback)
+	if captured == 0 {
+		t.Fatal("expected main-screen lines to be captured before entering alt screen")
+	}
+
+	term.ScrollBack(2)
+
+	// Enter alternate screen and print lines that would scroll a live grid.
+	var alt strings.Builder
+	alt.WriteString("\x1b[?1049h")
+	for i := 1; i <= 30; i++ {
+		fmt.Fprintf(&alt, "alt%d\r\n", i)
+	}
+	_, _ = term.WriteToVT([]byte(alt.String()))
+
+	if got := len(term.scrollback); got != captured {
+		t.Fatalf("alt-screen output must not pollute scrollback: len %d != %d", got, captured)
+	}
+	if term.IsScrolled() {
+		t.Fatal("expected viewport snapped to live while alt screen is active")
+	}
+	if !term.AltScreenActive() {
+		t.Fatal("expected AltScreenActive to report alt screen")
+	}
+
+	_, _ = term.WriteToVT([]byte("\x1b[?1049l"))
+	if term.AltScreenActive() {
+		t.Fatal("expected AltScreenActive to clear after leaving alt screen")
+	}
+	if got := len(term.scrollback); got != captured {
+		t.Fatalf("alt-screen exit must not add scrollback rows: len %d != %d", got, captured)
+	}
+}
+
+func glyphRowText(row []vt10x.Glyph) string {
+	var sb strings.Builder
+	for _, g := range row {
+		if g.Char == 0 {
+			sb.WriteRune(' ')
+			continue
+		}
+		sb.WriteRune(g.Char)
+	}
+	return sb.String()
 }
 
 func TestTerminalHasRunningProcess(t *testing.T) {

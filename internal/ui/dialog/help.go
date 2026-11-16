@@ -108,6 +108,7 @@ func NewHelpDialog() *HelpDialog {
 		" • Alt+W / Ctrl+Shift+W : Close Active Terminal Tab",
 		" • Alt/Ctrl+Arrow : Jump Word in Shell CLI (Readline)",
 		" • Alt/Ctrl+Bcksp : Delete Word Left in Shell CLI",
+		" • Shift+PgUp / Shift+PgDn : Scroll Terminal Scrollback",
 		" • Mouse Wheel : Scroll Terminal History",
 	}
 

@@ -171,6 +171,7 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
    - Dibangun dengan struktur custom line-based buffer (`[][]rune` atau `[]string`) untuk performa tinggi.
    - Integrasi tokenisasi syntax highlighting real-time via `alecthomas/chroma/v2` saat teks diketik.
    - Line numbers gutter di sisi kiri dengan warna muted dan separator vertikal.
+   - **Git Changes Gutter:** Kolom paling kiri gutter (1 kolom) menampilkan indikator perubahan **index vs worktree** per baris (ala VS Code "Changes"): bar `▎` hijau `#3FB950` (added), bar `▎` amber `#D29922` (modified), segitiga `▾` merah `#F85149` pada baris *setelah* blok yang dihapus (penghapusan di EOF → ditandai pada baris terakhir worktree). File yang seluruh perubahannya sudah di-stage tidak menampilkan indikator; file untracked menampilkan seluruh baris sebagai added. Indikator diperbarui saat membuka file, saat save, saat git status refresh (stage/unstage/commit/discard/branch), dan pada tick file watcher (digerbang by SHA-256 baseline disk agar LCS tidak dihitung ulang sia-sia). Indikator ini independen dari kolom fold/diagnostics di sebelahnya (klik kolom git bar tetap memicu perilaku gutter yang sama).
    - **Line Wrapping:** Fitur **Soft Wrap** aktif secara default (baris panjang melipat visual ke bawah tanpa menyisipkan karakter `\n` fisik).
    - **Multi-Cursor Editing (VSCode-Style):**
      - Menambah kursor pada kemunculan kata berikutnya via `Ctrl+Shift+D` (*Add Next Occurrence*).
@@ -206,6 +207,7 @@ Sidebar memiliki tab bar navigasi di baris paling bawah untuk beralih tampilan: 
      - **Sisi Kanan:** Versi Working Tree (Modified) dengan highlight baris hijau (`+`).
    - Line number gutter independen pada kedua sisi.
    - Scrolling tersinkronisasi (synchronized vertical scroll) antara sisi kiri dan kanan.
+   - **Soft Wrap Sel Diff:** Teks sel yang lebih panjang dari lebar kolom di-wrap menjadi beberapa segmen visual (tab diperluas jadi 4 spasi; titik potong dihitung per kolom visual rune, ANSI-aware) — tidak lagi terpotong/terpotong tanpa sisa. Nomor baris hanya tampil di segmen pertama; baris lanjutan menampilkan gutter kosong. Posisi `Ln` pada status bar, scroll wheel, dan navigasi hunk beroperasi pada unit **baris visual** (viewport tidak "meloncat-loncat" pada sel yang di-wrap).
 
 #### E. Document Code Formatter Engine (CLI Integration)
 1. **Pemicu:** Shortcut `Ctrl+Shift+I` / `Alt+Shift+F`, Top Menu `[File] ➔ Format Document`, Command Palette (`F1`).
@@ -524,6 +526,7 @@ tui-workflow/
 
 | Versi | Tanggal | Perubahan |
 |---|---|---|
+| v0.4.0 (unreleased) | 2026-11-16 | **Git Changes Gutter + Split Diff Soft Wrap**: kolom 1-karakter di tepi kiri gutter editor menandai baris yang berubah vs index (hijau `▎` added / amber `▎` modified / merah `▾` pada baris setelah penghapusan, via `internal/git.ComputeLineChanges`; baseline index↔worktree, ter-refresh pada open/save/git-status-refresh/file-watcher dengan digerbang SHA-256). Split Diff viewer kini me-wrap sel yang panjang menjadi segmen visual (soft wrap, bukan truncate); scroll, hunk navigation, dan `Ln` status bar beroperasi pada baris visual. Gutter editor melebar 1 kolom (`GutterDigits()+5`). |
 | v0.3.0 | 2026-11-15 | **Release automation & Linux binary distribution**: tag `vX.Y.Z` memicu GitHub Actions (`.github/workflows/release.yml`) — matrix build `linux/amd64` + `linux/arm64` (CGO disabled, ldflags inject `internal/buildinfo.Version`) → `workflow_<ver>_linux_<arch>.tar.gz` + `checksums.txt` → GitHub Release otomatis (`--generate-notes`). `.github/workflows/ci.yml` untuk vet/test pada push/PR. `install.sh` (wget, SHA-256 verify, install ke `~/.local/bin/workflow`) + section Install Cepat di README. `scripts/release.sh` untuk bump versi + tag + push satu perintah. About modal & `workflow --version` membaca `buildinfo.Version` (ldflags dari tag). Badge README → shields `github/v/release`. Lihat `docs/release.md`. |
 | v0.2.0 | 2026-11-14 | **Migrasi penuh Charm v2**: `bubbletea`/`lipgloss`/`bubbles`/`glamour` → `charm.land/*/v2` (+`x/ansi` latest). `View()` deklaratif (`tea.View` dengan `AltScreen`/`MouseMode`), `KeyPressMsg`, mouse interface (`MouseClickMsg`/`MouseWheelMsg`/`MouseMotionMsg`/`MouseReleaseMsg` + `msg.Mouse()`), program options dihapus dari `main.go`. `internal/app` dipecah (≤500 baris/file, Rule 12). TODO.md dikosongkan. `architecture.md` & `AGENTS.md` disinkronkan. LSP audit checklist ditambahkan. **Revision history ditambahkan.** |
 | v0.1.1 | 2026-11-12 | Doc baseline (workspace persistence P0, symbol navigation Path B, interactive terminal safety, keymap ergonomics). |

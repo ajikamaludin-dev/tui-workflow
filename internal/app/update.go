@@ -92,12 +92,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+		m.refreshGitGutters(true)
 		return m, nil
 
 	case quickOpenWarmupMsg:
 		return m, nil
 	case FileWatchTickMsg:
 		m.checkWatchedFiles()
+		m.refreshGitGutters(false)
 		return m, fileWatchTickCmd()
 
 	case gitLoadingTickMsg:

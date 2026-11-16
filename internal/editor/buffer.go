@@ -4,6 +4,7 @@ import (
 	"strings"
 	"unicode"
 
+	"tui-workflow/internal/git"
 	"tui-workflow/internal/search"
 	"tui-workflow/internal/syntax"
 )
@@ -32,11 +33,11 @@ type FoldRegion struct {
 }
 
 type Buffer struct {
-	Lines           [][]rune
-	CursorRow       int
-	CursorCol       int
-	ScrollRow       int
-	ScrollCol       int
+	Lines     [][]rune
+	CursorRow int
+	CursorCol int
+	ScrollRow int
+	ScrollCol int
 	// CursorHidden is toggled by the app's blink ticker (true = blink-off phase).
 	CursorHidden    bool
 	SoftWrap        bool
@@ -80,6 +81,9 @@ type Buffer struct {
 	// Indent Rainbow state & diagnostics
 	IndentRainbow   bool
 	LineDiagnostics map[int]string
+
+	// Git change markers per 0-based physical line (index vs worktree, VS Code "Changes" gutter)
+	LineGitChanges map[int]git.LineChange
 }
 
 func NewBuffer(content string) *Buffer {
@@ -97,6 +101,7 @@ func NewBuffer(content string) *Buffer {
 		maxUndoStack:    100,
 		IndentRainbow:   true,
 		LineDiagnostics: make(map[int]string),
+		LineGitChanges:  make(map[int]git.LineChange),
 	}
 
 	normalized := strings.ReplaceAll(content, "\r\n", "\n")

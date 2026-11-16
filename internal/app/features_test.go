@@ -535,9 +535,9 @@ func TestSoftWrapToggleAndWordJump(t *testing.T) {
 	}
 
 	// 5. Test Mouse Click Gutter alignment
-	// Gutter width for 5 lines is 7 (3 digits + 4)
-	if tab.Buffer.GutterWidth() != 7 {
-		t.Errorf("Expected gutter width 7, got %d", tab.Buffer.GutterWidth())
+	// Gutter width for 5 lines is 8 (3 digits + 5)
+	if tab.Buffer.GutterWidth() != 8 {
+		t.Errorf("Expected gutter width 8, got %d", tab.Buffer.GutterWidth())
 	}
 	// Click on Row 2 (first editor text row), X = sidebarWidth + gutterWidth + 3
 	editorStartX := 30

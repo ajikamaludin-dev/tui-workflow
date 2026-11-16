@@ -32,6 +32,67 @@ type SplitDiffResult struct {
 	Rows     []DiffRow
 }
 
+// LineChange classifies how a working-tree line differs from the index
+// (the VS Code "Changes" gutter semantics).
+type LineChange int
+
+const (
+	LineUnchanged LineChange = iota
+	LineAdded
+	LineModified
+	LineDeleted
+)
+
+// ComputeLineChanges maps an LCS split diff of (original → modified) to
+// per-modified-line markers keyed by 1-based modified line number.
+func ComputeLineChanges(original, modified string) map[int]LineChange {
+	res := ComputeSplitDiff("", original, modified)
+	return LineChangesFromSplitDiff(res.Rows)
+}
+
+// LineChangesFromSplitDiff converts split-diff rows into per-modified-line
+// change markers. Rules:
+//   - paired delete+add row → LineModified
+//   - pure add row → LineAdded
+//   - a pure delete block marks the next modified line LineDeleted (gutter
+//     marker on the line after the deletion); if the deletion is at EOF and
+//     no following modified line exists, the last modified line is marked.
+//   - a modified/added line is never overwritten by a pending delete marker.
+func LineChangesFromSplitDiff(rows []DiffRow) map[int]LineChange {
+	changes := make(map[int]LineChange)
+	pendingDel := false
+	lastModifiedLine := 0
+	for _, row := range rows {
+		hasRight := row.RightType != DiffEmpty && row.RightNum > 0
+		if row.RightType == DiffAdded {
+			if row.LeftType == DiffDeleted {
+				changes[row.RightNum] = LineModified
+			} else if _, ok := changes[row.RightNum]; !ok {
+				changes[row.RightNum] = LineAdded
+			}
+		}
+		if hasRight {
+			lastModifiedLine = row.RightNum
+			if pendingDel {
+				if _, ok := changes[row.RightNum]; !ok {
+					changes[row.RightNum] = LineDeleted
+				}
+				pendingDel = false
+			}
+			continue
+		}
+		if row.LeftType == DiffDeleted {
+			pendingDel = true
+		}
+	}
+	if pendingDel && lastModifiedLine > 0 {
+		if _, ok := changes[lastModifiedLine]; !ok {
+			changes[lastModifiedLine] = LineDeleted
+		}
+	}
+	return changes
+}
+
 // DiffHunk represents a unified-diff hunk derived from split diff rows.
 type DiffHunk struct {
 	Index     int
@@ -392,6 +453,142 @@ type DiffView struct {
 	ScrollOffset int
 	Hunks        []DiffHunk
 	ActiveHunk   int
+
+	vlCache       *diffVisualCache
+	lastTextWidth int
+}
+
+// DiffVisualLine maps one rendered visual line back to its logical diff row.
+// Long cell texts are soft-wrapped into multiple segments; a row occupies
+// max(leftSegs, rightSegs) visual lines.
+type DiffVisualLine struct {
+	RowIdx  int
+	Segment int
+}
+
+type diffVisualCache struct {
+	Lines       []DiffVisualLine
+	RowToVisual []int      // first visual index per row
+	LeftSegs    [][]string // per row, wrapped left-cell segments (nil if DiffEmpty)
+	RightSegs   [][]string // per row, wrapped right-cell segments (nil if DiffEmpty)
+	Width       int        // textWidth used to build the cache
+	RowCount    int        // len(Result.Rows) used to build the cache
+}
+
+// wrapDiffText expands tabs and splits s into segments of at most width visual
+// columns. ANSI-unaware by design: cell styling is applied after wrapping and
+// raw diff texts never carry escape sequences.
+func wrapDiffText(s string, width int) []string {
+	if width < 1 {
+		width = 1
+	}
+	s = strings.ReplaceAll(s, "\t", "    ")
+	if ansi.StringWidth(s) <= width {
+		return []string{s}
+	}
+	var segs []string
+	var seg strings.Builder
+	segWidth := 0
+	for _, r := range s {
+		rw := ansi.StringWidth(string(r))
+		if rw == 0 {
+			seg.WriteRune(r)
+			continue
+		}
+		if segWidth+rw > width && seg.Len() > 0 {
+			segs = append(segs, seg.String())
+			seg.Reset()
+			segWidth = 0
+		}
+		seg.WriteRune(r)
+		segWidth += rw
+	}
+	if seg.Len() > 0 || len(segs) == 0 {
+		segs = append(segs, seg.String())
+	}
+	return segs
+}
+
+func (dv *DiffView) visualCache(textWidth int) *diffVisualCache {
+	if dv.vlCache != nil && dv.vlCache.Width == textWidth && dv.vlCache.RowCount == len(dv.Result.Rows) {
+		return dv.vlCache
+	}
+	cache := &diffVisualCache{
+		RowToVisual: make([]int, len(dv.Result.Rows)),
+		LeftSegs:    make([][]string, len(dv.Result.Rows)),
+		RightSegs:   make([][]string, len(dv.Result.Rows)),
+		Width:       textWidth,
+		RowCount:    len(dv.Result.Rows),
+	}
+	for i := range dv.Result.Rows {
+		row := &dv.Result.Rows[i]
+		leftSegs, rightSegs := 0, 0
+		if row.LeftType != DiffEmpty {
+			cache.LeftSegs[i] = wrapDiffText(row.LeftText, textWidth-1)
+			leftSegs = len(cache.LeftSegs[i])
+		}
+		if row.RightType != DiffEmpty {
+			cache.RightSegs[i] = wrapDiffText(row.RightText, textWidth-1)
+			rightSegs = len(cache.RightSegs[i])
+		}
+		h := leftSegs
+		if rightSegs > h {
+			h = rightSegs
+		}
+		if h < 1 {
+			h = 1
+		}
+		cache.RowToVisual[i] = len(cache.Lines)
+		for s := 0; s < h; s++ {
+			cache.Lines = append(cache.Lines, DiffVisualLine{RowIdx: i, Segment: s})
+		}
+	}
+	dv.vlCache = cache
+	return cache
+}
+
+func (dv *DiffView) textWidth() int {
+	if dv.lastTextWidth > 0 {
+		return dv.lastTextWidth
+	}
+	return 60
+}
+
+func (dv *DiffView) maxScrollOffset(viewHeight int) int {
+	contentHeight := viewHeight - 1
+	if contentHeight < 1 {
+		contentHeight = 1
+	}
+	total := len(dv.visualCache(dv.textWidth()).Lines)
+	maxOffset := total - contentHeight
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	return maxOffset
+}
+
+// ActiveLine returns the 1-based working-tree (or HEAD) line number of the
+// first visible visual line; used for the status bar "Ln" indicator.
+func (dv *DiffView) ActiveLine() int {
+	cache := dv.visualCache(dv.textWidth())
+	if len(cache.Lines) == 0 {
+		return 1
+	}
+	idx := dv.ScrollOffset
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= len(cache.Lines) {
+		idx = len(cache.Lines) - 1
+	}
+	row := dv.Result.Rows[cache.Lines[idx].RowIdx]
+	if row.RightNum > 0 {
+		return row.RightNum
+	}
+	if row.LeftNum > 0 {
+		return row.LeftNum
+	}
+	return 1
 }
 
 func NewDiffView(filePath, original, modified string) *DiffView {
@@ -403,6 +600,7 @@ func NewDiffView(filePath, original, modified string) *DiffView {
 
 func (dv *DiffView) RecomputeHunks() {
 	dv.Hunks = SplitDiffHunks(dv.Result, 3)
+	dv.vlCache = nil
 	if len(dv.Hunks) == 0 {
 		dv.ActiveHunk = 0
 		return
@@ -450,14 +648,17 @@ func (dv *DiffView) ensureActiveHunkVisible(viewHeight int) {
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
-	target := h.StartRow
+	cache := dv.visualCache(dv.textWidth())
+	target := 0
+	if h.StartRow >= 0 && h.StartRow < len(cache.RowToVisual) {
+		target = cache.RowToVisual[h.StartRow]
+	}
 	// Position target at vertical center of viewport
 	dv.ScrollOffset = target - (contentHeight / 2)
 	if dv.ScrollOffset < 0 {
 		dv.ScrollOffset = 0
 	}
-	maxOffset := len(dv.Result.Rows) - contentHeight
-	if maxOffset > 0 && dv.ScrollOffset > maxOffset {
+	if maxOffset := dv.maxScrollOffset(viewHeight); dv.ScrollOffset > maxOffset {
 		dv.ScrollOffset = maxOffset
 	}
 }
@@ -470,12 +671,8 @@ func (dv *DiffView) ScrollUp(n int) {
 }
 
 func (dv *DiffView) ScrollDown(n int, viewHeight int) {
-	maxOffset := len(dv.Result.Rows) - viewHeight
-	if maxOffset < 0 {
-		maxOffset = 0
-	}
 	dv.ScrollOffset += n
-	if dv.ScrollOffset > maxOffset {
+	if maxOffset := dv.maxScrollOffset(viewHeight); dv.ScrollOffset > maxOffset {
 		dv.ScrollOffset = maxOffset
 	}
 }
@@ -490,6 +687,11 @@ func (dv *DiffView) Render(width, height int, isFocused bool) string {
 	if textWidth < 4 {
 		textWidth = 4
 	}
+	dv.lastTextWidth = textWidth
+	if so := dv.maxScrollOffset(height); dv.ScrollOffset > so {
+		dv.ScrollOffset = so
+	}
+	cache := dv.visualCache(textWidth)
 
 	delStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF7B72")).Background(lipgloss.Color("#3E1A1A"))
 	addStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#7EE787")).Background(lipgloss.Color("#132A1C"))
@@ -505,67 +707,74 @@ func (dv *DiffView) Render(width, height int, isFocused bool) string {
 	var outLines []string
 	headerLeft := lipgloss.NewStyle().Bold(true).Width(colWidth).Background(lipgloss.Color("#21262D")).Render(" HEAD / Original (-)")
 	headerRightText := " Working Tree / Modified (+)" + hunkInfo
-	headerRight := lipgloss.NewStyle().Bold(true).Width(colWidth).Background(lipgloss.Color("#21262D")).Render(headerRightText)
+	headerRight := lipgloss.NewStyle().Bold(true).Width(colWidth).Background(lipgloss.Color("#21262D")).Render(ansi.Truncate(headerRightText, colWidth, ""))
 	headerRow := lipgloss.JoinHorizontal(lipgloss.Top, headerLeft, "│", headerRight)
 	outLines = append(outLines, headerRow)
 
+	padDiff := func(s string, w int) string {
+		if sw := ansi.StringWidth(s); sw < w {
+			return s + strings.Repeat(" ", w-sw)
+		}
+		return ansi.Truncate(s, w, "")
+	}
+	cell := func(num int, typ LineDiffType, segs []string, segIdx int, marker string, inActiveHunk bool) (string, string) {
+		segText := ""
+		if segIdx >= 0 && segIdx < len(segs) {
+			segText = segs[segIdx]
+		}
+		continuation := segIdx > 0
+		switch typ {
+		case DiffDeleted:
+			gutter := gutterDelStyle.Width(gutterWidth).Render(" ")
+			if !continuation {
+				gutter = gutterDelStyle.Width(gutterWidth).Render(fmt.Sprintf("%4d ", num))
+			}
+			content := delStyle.Width(textWidth).Render(marker + padDiff(segText, textWidth-1))
+			return gutter, content
+		case DiffAdded:
+			gutter := gutterAddStyle.Width(gutterWidth).Render(" ")
+			if !continuation {
+				gutter = gutterAddStyle.Width(gutterWidth).Render(fmt.Sprintf("%4d ", num))
+			}
+			content := addStyle.Width(textWidth).Render(marker + padDiff(segText, textWidth-1))
+			return gutter, content
+		case DiffEmpty:
+			gutter := emptyStyle.Width(gutterWidth).Render(strings.Repeat(" ", gutterWidth))
+			content := emptyStyle.Width(textWidth).Render(strings.Repeat(" ", textWidth))
+			return gutter, content
+		default: // DiffUnchanged
+			gutter := gutterNormal.Width(gutterWidth).Render(" ")
+			if !continuation {
+				gutter = gutterNormal.Width(gutterWidth).Render(fmt.Sprintf("%4d ", num))
+			}
+			style := lipgloss.NewStyle().Width(textWidth)
+			if inActiveHunk {
+				style = style.Background(lipgloss.Color("#1F2A33"))
+			}
+			return gutter, style.Render(marker + padDiff(segText, textWidth-1))
+		}
+	}
+
 	contentHeight := height - 1
 	activeHunk, hasActive := dv.ActiveHunkData()
+	emptyLeft := strings.Repeat(" ", colWidth)
+	emptyRight := strings.Repeat(" ", colWidth)
 	for v := 0; v < contentHeight; v++ {
-		rowIdx := dv.ScrollOffset + v
-		if rowIdx >= len(dv.Result.Rows) {
-			emptyLeft := strings.Repeat(" ", colWidth)
-			emptyRight := strings.Repeat(" ", colWidth)
+		vlIdx := dv.ScrollOffset + v
+		if vlIdx >= len(cache.Lines) {
 			outLines = append(outLines, lipgloss.JoinHorizontal(lipgloss.Top, emptyLeft, "│", emptyRight))
 			continue
 		}
-		row := dv.Result.Rows[rowIdx]
-		inActiveHunk := hasActive && rowIdx >= activeHunk.StartRow && rowIdx < activeHunk.EndRow
+		dvl := cache.Lines[vlIdx]
+		row := dv.Result.Rows[dvl.RowIdx]
+		inActiveHunk := hasActive && dvl.RowIdx >= activeHunk.StartRow && dvl.RowIdx < activeHunk.EndRow
 		rowMarker := " "
 		if inActiveHunk {
 			rowMarker = "▌"
 		}
-
-		var leftGutter, leftContent string
-		switch row.LeftType {
-		case DiffDeleted:
-			leftGutter = gutterDelStyle.Width(gutterWidth).Render(fmt.Sprintf("%4d ", row.LeftNum))
-			txt := truncateOrPad(row.LeftText, textWidth-1)
-			leftContent = delStyle.Width(textWidth).Render(rowMarker + txt)
-		case DiffEmpty:
-			leftGutter = emptyStyle.Width(gutterWidth).Render(strings.Repeat(" ", gutterWidth))
-			leftContent = emptyStyle.Width(textWidth).Render(strings.Repeat(" ", textWidth))
-		default:
-			leftGutter = gutterNormal.Width(gutterWidth).Render(fmt.Sprintf("%4d ", row.LeftNum))
-			txt := truncateOrPad(row.LeftText, textWidth-1)
-			style := lipgloss.NewStyle().Width(textWidth)
-			if inActiveHunk {
-				style = style.Background(lipgloss.Color("#1F2A33"))
-			}
-			leftContent = style.Render(rowMarker + txt)
-		}
-		leftCol := leftGutter + leftContent
-
-		var rightGutter, rightContent string
-		switch row.RightType {
-		case DiffAdded:
-			rightGutter = gutterAddStyle.Width(gutterWidth).Render(fmt.Sprintf("%4d ", row.RightNum))
-			txt := truncateOrPad(row.RightText, textWidth-1)
-			rightContent = addStyle.Width(textWidth).Render(rowMarker + txt)
-		case DiffEmpty:
-			rightGutter = emptyStyle.Width(gutterWidth).Render(strings.Repeat(" ", gutterWidth))
-			rightContent = emptyStyle.Width(textWidth).Render(strings.Repeat(" ", textWidth))
-		default:
-			rightGutter = gutterNormal.Width(gutterWidth).Render(fmt.Sprintf("%4d ", row.RightNum))
-			txt := truncateOrPad(row.RightText, textWidth-1)
-			style := lipgloss.NewStyle().Width(textWidth)
-			if inActiveHunk {
-				style = style.Background(lipgloss.Color("#1F2A33"))
-			}
-			rightContent = style.Render(rowMarker + txt)
-		}
-		rightCol := rightGutter + rightContent
-		outLines = append(outLines, lipgloss.JoinHorizontal(lipgloss.Top, leftCol, "│", rightCol))
+		leftGutter, leftContent := cell(row.LeftNum, row.LeftType, cache.LeftSegs[dvl.RowIdx], dvl.Segment, rowMarker, inActiveHunk)
+		rightGutter, rightContent := cell(row.RightNum, row.RightType, cache.RightSegs[dvl.RowIdx], dvl.Segment, rowMarker, inActiveHunk)
+		outLines = append(outLines, lipgloss.JoinHorizontal(lipgloss.Top, leftGutter+leftContent, "│", rightGutter+rightContent))
 	}
 	return strings.Join(outLines, "\n")
 }

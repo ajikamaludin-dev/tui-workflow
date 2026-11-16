@@ -39,6 +39,9 @@ type Tab struct {
 	// Empty means "no baseline" (e.g. after the file disappeared).
 	WatchedHash string
 	WatchedSize int64
+	// GitGutterKey is the on-disk baseline hash used for the last git
+	// change-gutter computation; skips redundant LCS runs on watcher ticks.
+	GitGutterKey string
 
 	// Diff metadata for staged/unstaged and hunk actions
 	DiffStaged   bool

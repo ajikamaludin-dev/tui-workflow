@@ -29,6 +29,7 @@
 - **Modeless Editing:** Pendekatan intuitif ala VS Code tanpa kerumitan modal Vim (ketik langsung tanpa menekan `i`).
 - **Line-based Buffer Engine:** Navigasi kursor presisi (panah, `Home`, `End`, `Page Up`, `Page Down`), soft-wrap baris panjang, dan indentasi via `Tab` (default 4 spasi; configurable 1-4 via `[Setting] ➔ Tab Width...` modal picker / Command Palette `Tab Width...` / config `tab_width`).
 - **Real-Time Chroma Highlighting:** Tokenisasi sintaksis langsung saat mengetik untuk berbagai bahasa populer (Go, Markdown, JSON, YAML, Shell, Python, JavaScript, TypeScript, HTML, CSS, SQL, Rust, C/C++).
+- **Git Changes Gutter:** Indikator perubahan working tree vs index di tepi paling kiri gutter ala VS Code — bar hijau `▎` (added), bar amber `▎` (modified), segitiga merah `▾` pada baris setelah penghapusan (EOF deletion → baris terakhir). Hanya perubahan belum di-stage yang ditandai; file untracked tampil seluruhnya hijau. Update otomatis saat buka file, save, dan refresh git status.
 - **Auto-Save on Focus Change:** Otomatis menyimpan buffer saat berpindah tab atau fokus (`Alt+S` untuk toggle on/off).
 
 ### 3. 📑 Multi-Tab Manager & Quick Buffer Switcher
@@ -54,7 +55,7 @@
 - **Interactive Staging:** Tombol `[+]` untuk stage (`git add`) dan `[-]` untuk unstage file via klik mouse atau tombol keyboard.
 - **Git File Context Menu:** Klik kanan pada file di section Staged/Changes membuka context menu — Stage/Unstage, Open File, Open Diff, Copy Full Path, Discard Changes (khusus Changes).
 - **Commit Box:** Input commit message dengan tombol shortcut `Ctrl+Enter` untuk melakukan commit langsung.
-- **Side-by-Side Split Diff Tab:** Tab diff khusus di editor yang membandingkan versi HEAD vs Working Tree secara berdampingan dengan sinkronisasi scroll baris dan pewarnaan diff jelas (merah/hijau).
+- **Side-by-Side Split Diff Tab:** Tab diff khusus di editor yang membandingkan versi HEAD vs Working Tree secara berdampingan dengan sinkronisasi scroll baris dan pewarnaan diff jelas (merah/hijau). Sel yang lebih panjang dari lebar kolom kini di-**soft wrap** menjadi beberapa baris visual (bukan terpotong); scroll, navigasi hunk, dan posisi `Ln` status bar beroperasi pada baris visual.
 
 - **Hunk-Level Actions (P0):** Stage, unstage, dan discard perubahan per hunk terpilih langsung dari Sidebar Git maupun Diff Tab, dengan konfirmasi aman untuk discard dan fallback file-level untuk kasus ambigu/tidak terjamin (tanpa korupsi index/worktree).
 

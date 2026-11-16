@@ -210,7 +210,7 @@ func (m *Model) syncStatusBarWithActiveTab() {
 		m.StatusBar.FilePath = tab.Name
 		m.StatusBar.FileSyntax = "Git Diff"
 		if tab.DiffView != nil {
-			m.StatusBar.Line = tab.DiffView.ScrollOffset + 1
+			m.StatusBar.Line = tab.DiffView.ActiveLine()
 			m.StatusBar.Col = 1
 		}
 		return
@@ -287,6 +287,7 @@ func (m *Model) openFile(path string) {
 	}
 
 	m.syncStatusBarWithActiveTab()
+	m.refreshGitGutters(true)
 	m.StatusBar.ShowToast("Dibuka: "+tab.Name, false, 1500*time.Millisecond)
 	_ = config.SaveWorkspaceSession(m.canonicalRootDir(), m.captureWorkspaceSession())
 }

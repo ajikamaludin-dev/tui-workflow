@@ -187,8 +187,8 @@ func TestBufferGutterWidth(t *testing.T) {
 	if buf.GutterDigits() != 3 {
 		t.Errorf("Expected min 3 digits, got %d", buf.GutterDigits())
 	}
-	if buf.GutterWidth() != 7 {
-		t.Errorf("Expected gutter width 7 (3 digits + 4), got %d", buf.GutterWidth())
+	if buf.GutterWidth() != 8 {
+		t.Errorf("Expected gutter width 8 (3 digits + 5), got %d", buf.GutterWidth())
 	}
 
 	// 1000 lines
@@ -200,7 +200,7 @@ func TestBufferGutterWidth(t *testing.T) {
 	if bufBig.GutterDigits() < 4 {
 		t.Errorf("Expected at least 4 digits for 1000 lines, got %d", bufBig.GutterDigits())
 	}
-	if bufBig.GutterWidth() != bufBig.GutterDigits()+4 {
+	if bufBig.GutterWidth() != bufBig.GutterDigits()+5 {
 		t.Errorf("GutterWidth mismatch with digits")
 	}
 }
@@ -556,4 +556,3 @@ func TestBufferDeleteWordLeft(t *testing.T) {
 		t.Errorf("Expected 'hello ' after deleting selection with DeleteWordLeft, got %q", string(buf.Lines[0]))
 	}
 }
-

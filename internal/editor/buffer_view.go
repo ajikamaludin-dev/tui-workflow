@@ -7,6 +7,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"tui-workflow/internal/git"
 	"tui-workflow/internal/syntax"
 	"tui-workflow/internal/ui"
 )
@@ -30,7 +31,7 @@ func (b *Buffer) GutterDigits() int {
 
 // GutterWidth returns the total gutter column width including margins and separator.
 func (b *Buffer) GutterWidth() int {
-	return b.GutterDigits() + 4
+	return b.GutterDigits() + 5
 }
 
 // TabWidth defines visual spacing for tab characters in the editor.
@@ -280,6 +281,28 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 		Foreground(ui.CurrentTheme.FgSecondary).
 		Background(ui.CurrentTheme.BgPrimary)
 
+	gitAddBarStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#3FB950")).
+		Background(ui.CurrentTheme.BgPrimary)
+	gitModifiedBarStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#D29922")).
+		Background(ui.CurrentTheme.BgPrimary)
+	gitDeletedBarStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#F85149")).
+		Background(ui.CurrentTheme.BgPrimary)
+	gitBarFor := func(change git.LineChange) string {
+		switch change {
+		case git.LineAdded:
+			return gitAddBarStyle.Render("▎")
+		case git.LineModified:
+			return gitModifiedBarStyle.Render("▎")
+		case git.LineDeleted:
+			return gitDeletedBarStyle.Render("▾")
+		default:
+			return gutterStyle.Render(" ")
+		}
+	}
+
 	gutterActiveStyle := lipgloss.NewStyle().
 		Foreground(ui.CurrentTheme.Accent).
 		Bold(true).
@@ -303,6 +326,7 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 	for vIdx := b.ScrollRow; vIdx < endV; vIdx++ {
 		vl := vLines[vIdx]
 
+		bar := gitBarFor(b.GitChangeAt(vl.PhysicalLineIdx))
 		// Format gutter
 		var gutterText string
 		if !vl.IsContinuation {
@@ -319,12 +343,12 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 				}
 			}
 			if vl.PhysicalLineIdx == b.CursorRow && focused {
-				gutterText = gutterActiveStyle.Render(fmt.Sprintf("%s%*d │ ", marker, gutterDigits, lineNum))
+				gutterText = bar + gutterActiveStyle.Render(fmt.Sprintf("%s%*d │ ", marker, gutterDigits, lineNum))
 			} else {
-				gutterText = gutterStyle.Render(fmt.Sprintf("%s%*d │ ", marker, gutterDigits, lineNum))
+				gutterText = bar + gutterStyle.Render(fmt.Sprintf("%s%*d │ ", marker, gutterDigits, lineNum))
 			}
 		} else {
-			gutterText = gutterStyle.Render(fmt.Sprintf(" %*s ┊ ", gutterDigits, " "))
+			gutterText = bar + gutterStyle.Render(fmt.Sprintf(" %*s ┊ ", gutterDigits, " "))
 		}
 
 		// Text part
@@ -497,7 +521,7 @@ func (b *Buffer) Render(width, height int, path string, focused bool) string {
 
 	// Fill remaining height
 	for len(renderedRows) < height {
-		emptyGutter := gutterStyle.Render(fmt.Sprintf(" %*s │ ", gutterDigits, "~"))
+		emptyGutter := gutterStyle.Render(fmt.Sprintf("  %*s │ ", gutterDigits, "~"))
 		renderedRows = append(renderedRows, emptyGutter+strings.Repeat(" ", textWidth))
 	}
 

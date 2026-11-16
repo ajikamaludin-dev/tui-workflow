@@ -52,6 +52,7 @@ func (m Model) handleBufferKeys(msg tea.KeyPressMsg, tab *editor.Tab) (tea.Model
 				m.StatusBar.ShowToast("Save error: "+err.Error(), true, 3*time.Second)
 			} else {
 				m.StatusBar.ShowToast("Saved: "+tab.Name, false, 2*time.Second)
+				m.refreshGitGutters(true)
 				if m.SymbolIndex != nil {
 					m.SymbolIndex.UpdateFile(tab.Path)
 				}

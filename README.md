@@ -55,7 +55,7 @@
 - **Interactive Staging:** Tombol `[+]` untuk stage (`git add`) dan `[-]` untuk unstage file via klik mouse atau tombol keyboard.
 - **Git File Context Menu:** Klik kanan pada file di section Staged/Changes membuka context menu — Stage/Unstage, Open File, Open Diff, Copy Full Path, Discard Changes (khusus Changes).
 - **Commit Box:** Input commit message dengan tombol shortcut `Ctrl+Enter` untuk melakukan commit langsung.
-- **Side-by-Side Split Diff Tab:** Tab diff khusus di editor yang membandingkan versi HEAD vs Working Tree secara berdampingan dengan sinkronisasi scroll baris dan pewarnaan diff jelas (merah/hijau). Sel yang lebih panjang dari lebar kolom kini di-**soft wrap** menjadi beberapa baris visual (bukan terpotong); scroll, navigasi hunk, dan posisi `Ln` status bar beroperasi pada baris visual.
+- **Side-by-Side Split Diff Tab:** Tab diff khusus di editor yang membandingkan versi HEAD vs Working Tree secara berdampingan dengan sinkronisasi scroll baris dan pewarnaan diff jelas (merah/hijau). Sel yang lebih panjang dari lebar kolom kini di-**soft wrap** menjadi beberapa baris visual (bukan terpotong); scroll, navigasi hunk, dan posisi `Ln` status bar beroperasi pada baris visual. Pemisah vertikal antar kolom dapat di-**drag** (default 50/50, kursor `col-resize`) untuk mengatur rasio lebar kiri/kanan; rasio disimpan per-tab dan bertahan saat diff di-refresh.
 
 - **Hunk-Level Actions (P0):** Stage, unstage, dan discard perubahan per hunk terpilih langsung dari Sidebar Git maupun Diff Tab, dengan konfirmasi aman untuk discard dan fallback file-level untuk kasus ambigu/tidak terjamin (tanpa korupsi index/worktree).
 
@@ -76,6 +76,8 @@
 - `Alt+Click` pada simbol untuk Go to Definition.
 - `Ctrl+Alt+Click` untuk menambah multi-cursor pada posisi klik.
 - Klik marker fold `▸`/`▾` di kolom 0 gutter untuk melipat/membuka blok kode.
+- Drag pemisah vertikal (`│`) pada Split Diff Tab untuk mengubah rasio lebar kiri/kanan secara fleksibel.
+- **Auto-close tab file terhapus:** saat file pendukung dihapus dari disk, tab bersih ditutup otomatis; tab dengan perubahan belum disimpan memunculkan dialog `[Save]/[Discard]/[Cancel]` (tab pinned dikecualikan).
 
 ### 8. 💻 Integrated Pseudo-Terminal (PTY) Tab
 - **Full PTY Shell:** Membuka sesi shell interaktif langsung di tab editor menggunakan `creack/pty` dan emulasi VT100/Xterm via `hinshun/vt10x`.

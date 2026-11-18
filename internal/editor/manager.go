@@ -131,7 +131,13 @@ func (tm *TabManager) OpenFile(path string) (*Tab, error) {
 func (tm *TabManager) OpenDiff(path, original, modified string, staged bool, title string) *Tab {
 	for i, t := range tm.Tabs {
 		if t.Type == TabDiff && t.Path == path && t.DiffStaged == staged {
+			// Preserve the user's draggable split ratio across a diff refresh.
+			ratio := 0.5
+			if t.DiffView != nil {
+				ratio = t.DiffView.SplitRatio
+			}
 			t.DiffView = git.NewDiffView(path, original, modified)
+			t.DiffView.SetSplitRatio(ratio)
 			if title != "" {
 				t.Name = title
 			}

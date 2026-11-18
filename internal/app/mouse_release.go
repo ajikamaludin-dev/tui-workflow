@@ -35,6 +35,9 @@ func (m Model) handleReleaseMouse(msg tea.MouseMsg, mouse tea.Mouse, editorStart
 		if nm, cmd, handled := m.handleReleaseDragTab(msg, mouse); handled {
 			return nm, cmd, true
 		}
+		if nm, cmd, handled := m.handleReleaseDiffResize(msg, mouse); handled {
+			return nm, cmd, true
+		}
 	}
 	return m.handleReleaseEditor(msg, mouse, editorStartX)
 }

@@ -62,11 +62,12 @@ type Model struct {
 	ContextMenuGitPath   string
 	ContextMenuGitStaged bool
 	ContextMenuGitStatus string
-	DraggingTabIdx    int
-	IsDraggingTab     bool
-	DragTabStartX     int
-	ResizingSidebar   bool
-	lastPointerShape  string
+	DraggingTabIdx       int
+	IsDraggingTab        bool
+	DragTabStartX        int
+	ResizingSidebar      bool
+	ResizingDiff         bool
+	lastPointerShape     string
 
 	SessionExplicitArg bool
 

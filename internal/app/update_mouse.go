@@ -28,8 +28,20 @@ func (m Model) handleMouseMsg(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		editorStartX = m.SidebarWidth
 	}
 
-	// Update mouse pointer shape: col-resize at border, text over editor, default elsewhere
+	// Diff separator drag: intercept start / motion before generic editor
+	// handling so dragging the divider never selects text in the buffer.
+	if nm, cmd, handled := m.handleDiffResizeStart(msg, mouse, isClick); handled {
+		return nm, cmd
+	}
+	if nm, cmd, handled := m.handleDiffResizing(msg, mouse, isMotion, isRelease); handled {
+		return nm, cmd
+	}
+
+	// Update mouse pointer shape: col-resize at borders / diff separator,
+	// text over editor, default elsewhere.
 	if m.SidebarVisible && mouse.X == m.SidebarWidth-1 && mouse.Y >= 1 && mouse.Y < m.Height-1 {
+		m.setMousePointer("col-resize")
+	} else if m.diffHit(mouse.X, mouse.Y) {
 		m.setMousePointer("col-resize")
 	} else if mouse.X >= editorStartX && mouse.Y >= 2 && mouse.Y < m.Height-1 {
 		m.setMousePointer("text")

@@ -179,7 +179,7 @@ func TestDiffViewSoftWrap(t *testing.T) {
 	mod := longLine + " modified\nkeep\n"
 
 	dv := NewDiffView("test.txt", orig, mod)
-	cache := dv.visualCache(10) // narrow text width forces multiple segments
+	cache := dv.visualCache(10, 10) // narrow text width forces multiple segments
 	if len(cache.Lines) <= len(dv.Result.Rows) {
 		t.Errorf("expected visual lines (%d) > rows (%d) when wrapping", len(cache.Lines), len(dv.Result.Rows))
 	}
@@ -201,5 +201,97 @@ func TestDiffViewSoftWrap(t *testing.T) {
 	// ActiveLine falls back to right-side line numbers.
 	if ln := dv.ActiveLine(); ln < 1 {
 		t.Errorf("ActiveLine should be >= 1, got %d", ln)
+	}
+}
+
+func TestDiffViewSplitRatio(t *testing.T) {
+	orig := "alpha\nbeta\ngamma\n"
+	mod := "alpha\nBETA\ngamma\ndelta\n"
+	dv := NewDiffView("test.txt", orig, mod)
+
+	if dv.SplitRatio != 0.5 {
+		t.Fatalf("default SplitRatio = %v, want 0.5", dv.SplitRatio)
+	}
+
+	// At 50/50 the two columns are equal (separator = 1 col).
+	left, right := dv.ColumnWidths(101)
+	if left != 50 || right != 50 || left+right+1 != 101 {
+		t.Fatalf("50/50 ColumnWidths(101) = (%d,%d), want (50,50)", left, right)
+	}
+
+	// Dragging toward the right side widens left and narrows right.
+	dv.SetSplitRatio(0.75)
+	left, right = dv.ColumnWidths(101)
+	if left <= 50 || right >= 50 || left+right+1 != 101 {
+		t.Fatalf("0.75 ColumnWidths(101) = (%d,%d), want left>50,right<50,sum=100", left, right)
+	}
+}
+
+func TestDiffViewSplitRatioClamp(t *testing.T) {
+	dv := NewDiffView("test.txt", "a\n", "b\n")
+
+	// Truly out-of-range ratios fall back to 50/50.
+	dv.SetSplitRatio(-1)
+	if dv.SplitRatio != 0.5 {
+		t.Errorf("SetSplitRatio(-1) = %v, want 0.5 fallback", dv.SplitRatio)
+	}
+	dv.SetSplitRatio(2)
+	if dv.SplitRatio != 0.5 {
+		t.Errorf("SetSplitRatio(2) = %v, want 0.5 fallback", dv.SplitRatio)
+	}
+	// The 0/1 endpoints are treated as 50/50 by ColumnWidths.
+	for _, r := range []float64{0, 1} {
+		dv.SetSplitRatio(r)
+		left, right := dv.ColumnWidths(101)
+		if left != 50 || right != 50 {
+			t.Errorf("ratio %v ColumnWidths(101) = (%d,%d), want 50/50", r, left, right)
+		}
+	}
+
+	// Extreme but valid ratios must keep both sides readable.
+	dv.SetSplitRatio(0.99)
+	left, right := dv.ColumnWidths(80)
+	if left < minDiffColumnWidth || right < minDiffColumnWidth {
+		t.Fatalf("0.99 ColumnWidths(80) = (%d,%d), both must be >= %d", left, right, minDiffColumnWidth)
+	}
+	if left+right+1 != 80 {
+		t.Fatalf("columns must sum to width-1: got %d+%d+1", left, right)
+	}
+	dv.SetSplitRatio(0.01)
+	left, right = dv.ColumnWidths(80)
+	if left < minDiffColumnWidth || right < minDiffColumnWidth || left+right+1 != 80 {
+		t.Fatalf("0.01 ColumnWidths(80) = (%d,%d) violates clamp/sum", left, right)
+	}
+}
+
+func TestDiffViewRenderCustomRatioWidth(t *testing.T) {
+	long := "this is a fairly long line used to verify that both columns wrap independently at their own text widths"
+	orig := long + "\nkeep\n"
+	mod := long + " (mod)\nkeep\n"
+	dv := NewDiffView("test.txt", orig, mod)
+	dv.SetSplitRatio(0.7)
+
+	const width = 100
+	rendered := dv.Render(width, 12, true)
+	lines := strings.Split(rendered, "\n")
+	if len(lines) == 0 {
+		t.Fatal("Render returned no lines")
+	}
+	leftCol, rightCol := dv.ColumnWidths(width)
+	for i, line := range lines {
+		w := ansi.StringWidth(line)
+		if w != width {
+			t.Errorf("line %d width = %d, want %d (cols %d+%d+1)", i, w, width, leftCol, rightCol)
+		}
+	}
+	// Separator is exactly one column and sits at leftCol.
+	if got := ansi.StringWidth(strings.Split(lines[0], "│")[0]); got != leftCol {
+		t.Errorf("header left section width = %d, want %d", got, leftCol)
+	}
+
+	// Scroll navigation must not exceed bounds after a ratio change.
+	dv.ScrollDown(1000, 12)
+	if dv.ScrollOffset > dv.maxScrollOffset(12) {
+		t.Errorf("ScrollOffset %d exceeds max %d", dv.ScrollOffset, dv.maxScrollOffset(12))
 	}
 }

@@ -32,6 +32,10 @@ type Tab struct {
 	MarkdownPreview bool
 	IsDiff          bool
 	IsPinned        bool
+	// DeletedFromDisk is set by the file watcher when a dirty tab's backing
+	// file disappears. It prevents the unsaved-changes dialog from reopening
+	// on every 1s watcher tick while the user decides Save/Discard/Cancel.
+	DeletedFromDisk bool
 	LastModTime     time.Time
 	// WatchedHash is the SHA-256 hex digest of the on-disk content as of the
 	// last known state (open, successful reload, or save). The external file

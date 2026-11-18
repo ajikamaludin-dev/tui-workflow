@@ -448,14 +448,25 @@ func splitLines(text string) []string {
 	return lines
 }
 
+// diffGutterWidth is the fixed width of the per-side line-number gutter.
+const diffGutterWidth = 5
+
+// minDiffColumnWidth keeps both diff columns readable (5-col gutter + 4-col
+// text minimum). Dragging never narrows a side below this.
+const minDiffColumnWidth = diffGutterWidth + 4
+
 type DiffView struct {
 	Result       SplitDiffResult
 	ScrollOffset int
 	Hunks        []DiffHunk
 	ActiveHunk   int
+	// SplitRatio is the share of the editor width given to the left (original)
+	// column, in [0,1]. 0.5 is the default 50/50 split.
+	SplitRatio float64
 
-	vlCache       *diffVisualCache
-	lastTextWidth int
+	vlCache      *diffVisualCache
+	lastLeftCol  int
+	lastRightCol int
 }
 
 // DiffVisualLine maps one rendered visual line back to its logical diff row.
@@ -471,7 +482,8 @@ type diffVisualCache struct {
 	RowToVisual []int      // first visual index per row
 	LeftSegs    [][]string // per row, wrapped left-cell segments (nil if DiffEmpty)
 	RightSegs   [][]string // per row, wrapped right-cell segments (nil if DiffEmpty)
-	Width       int        // textWidth used to build the cache
+	LeftWidth   int        // left text width used to build the cache
+	RightWidth  int        // right text width used to build the cache
 	RowCount    int        // len(Result.Rows) used to build the cache
 }
 
@@ -509,26 +521,27 @@ func wrapDiffText(s string, width int) []string {
 	return segs
 }
 
-func (dv *DiffView) visualCache(textWidth int) *diffVisualCache {
-	if dv.vlCache != nil && dv.vlCache.Width == textWidth && dv.vlCache.RowCount == len(dv.Result.Rows) {
+func (dv *DiffView) visualCache(leftWidth, rightWidth int) *diffVisualCache {
+	if dv.vlCache != nil && dv.vlCache.LeftWidth == leftWidth && dv.vlCache.RightWidth == rightWidth && dv.vlCache.RowCount == len(dv.Result.Rows) {
 		return dv.vlCache
 	}
 	cache := &diffVisualCache{
 		RowToVisual: make([]int, len(dv.Result.Rows)),
 		LeftSegs:    make([][]string, len(dv.Result.Rows)),
 		RightSegs:   make([][]string, len(dv.Result.Rows)),
-		Width:       textWidth,
+		LeftWidth:   leftWidth,
+		RightWidth:  rightWidth,
 		RowCount:    len(dv.Result.Rows),
 	}
 	for i := range dv.Result.Rows {
 		row := &dv.Result.Rows[i]
 		leftSegs, rightSegs := 0, 0
 		if row.LeftType != DiffEmpty {
-			cache.LeftSegs[i] = wrapDiffText(row.LeftText, textWidth-1)
+			cache.LeftSegs[i] = wrapDiffText(row.LeftText, leftWidth-1)
 			leftSegs = len(cache.LeftSegs[i])
 		}
 		if row.RightType != DiffEmpty {
-			cache.RightSegs[i] = wrapDiffText(row.RightText, textWidth-1)
+			cache.RightSegs[i] = wrapDiffText(row.RightText, rightWidth-1)
 			rightSegs = len(cache.RightSegs[i])
 		}
 		h := leftSegs
@@ -547,11 +560,53 @@ func (dv *DiffView) visualCache(textWidth int) *diffVisualCache {
 	return cache
 }
 
-func (dv *DiffView) textWidth() int {
-	if dv.lastTextWidth > 0 {
-		return dv.lastTextWidth
+// ColumnWidths returns the (left, right) column widths in cells for a total
+// editor width, honouring SplitRatio while keeping both sides readable. The
+// middle separator occupies exactly one column, so left+right+1 == width.
+func (dv *DiffView) ColumnWidths(width int) (int, int) {
+	if width < 2*minDiffColumnWidth+1 {
+		// Too narrow to honour a split: fall back to a symmetric fit.
+		half := width / 2
+		if half < 1 {
+			half = 1
+		}
+		left, right := half, width-1-half
+		if right < 1 {
+			right = 1
+		}
+		return left, right
 	}
-	return 60
+	ratio := dv.SplitRatio
+	if ratio <= 0 || ratio >= 1 {
+		ratio = 0.5
+	}
+	left := int(float64(width-1)*ratio + 0.5)
+	if left < minDiffColumnWidth {
+		left = minDiffColumnWidth
+	}
+	maxLeft := width - 1 - minDiffColumnWidth
+	if left > maxLeft {
+		left = maxLeft
+	}
+	return left, width - 1 - left
+}
+
+// SetSplitRatio clamps r into [0,1]. Invalid values fall back to 0.5.
+func (dv *DiffView) SetSplitRatio(r float64) {
+	if r < 0 || r > 1 || r != r { // NaN guard
+		r = 0.5
+	}
+	dv.SplitRatio = r
+	dv.vlCache = nil
+}
+
+// textWidths returns the per-side text widths (column minus gutter). Falls
+// back to a symmetric 60/60 when Render has not run yet.
+func (dv *DiffView) textWidths() (int, int) {
+	if dv.lastLeftCol > 0 && dv.lastRightCol > 0 {
+		return dv.lastLeftCol - diffGutterWidth, dv.lastRightCol - diffGutterWidth
+	}
+	return 60, 60
 }
 
 func (dv *DiffView) maxScrollOffset(viewHeight int) int {
@@ -559,7 +614,8 @@ func (dv *DiffView) maxScrollOffset(viewHeight int) int {
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
-	total := len(dv.visualCache(dv.textWidth()).Lines)
+	leftW, rightW := dv.textWidths()
+	total := len(dv.visualCache(leftW, rightW).Lines)
 	maxOffset := total - contentHeight
 	if maxOffset < 0 {
 		maxOffset = 0
@@ -570,7 +626,8 @@ func (dv *DiffView) maxScrollOffset(viewHeight int) int {
 // ActiveLine returns the 1-based working-tree (or HEAD) line number of the
 // first visible visual line; used for the status bar "Ln" indicator.
 func (dv *DiffView) ActiveLine() int {
-	cache := dv.visualCache(dv.textWidth())
+	leftW, rightW := dv.textWidths()
+	cache := dv.visualCache(leftW, rightW)
 	if len(cache.Lines) == 0 {
 		return 1
 	}
@@ -593,7 +650,7 @@ func (dv *DiffView) ActiveLine() int {
 
 func NewDiffView(filePath, original, modified string) *DiffView {
 	res := ComputeSplitDiff(filePath, original, modified)
-	dv := &DiffView{Result: res}
+	dv := &DiffView{Result: res, SplitRatio: 0.5}
 	dv.Hunks = SplitDiffHunks(res, 3)
 	return dv
 }
@@ -648,7 +705,8 @@ func (dv *DiffView) ensureActiveHunkVisible(viewHeight int) {
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
-	cache := dv.visualCache(dv.textWidth())
+	leftW, rightW := dv.textWidths()
+	cache := dv.visualCache(leftW, rightW)
 	target := 0
 	if h.StartRow >= 0 && h.StartRow < len(cache.RowToVisual) {
 		target = cache.RowToVisual[h.StartRow]
@@ -681,17 +739,21 @@ func (dv *DiffView) Render(width, height int, isFocused bool) string {
 	if width < 20 || height < 2 {
 		return ""
 	}
-	gutterWidth := 5
-	colWidth := (width - 1) / 2
-	textWidth := colWidth - gutterWidth
-	if textWidth < 4 {
-		textWidth = 4
+	gutterWidth := diffGutterWidth
+	leftCol, rightCol := dv.ColumnWidths(width)
+	leftTextWidth := leftCol - gutterWidth
+	rightTextWidth := rightCol - gutterWidth
+	if leftTextWidth < 4 {
+		leftTextWidth = 4
 	}
-	dv.lastTextWidth = textWidth
+	if rightTextWidth < 4 {
+		rightTextWidth = 4
+	}
+	dv.lastLeftCol, dv.lastRightCol = leftCol, rightCol
 	if so := dv.maxScrollOffset(height); dv.ScrollOffset > so {
 		dv.ScrollOffset = so
 	}
-	cache := dv.visualCache(textWidth)
+	cache := dv.visualCache(leftTextWidth, rightTextWidth)
 
 	delStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#FF7B72")).Background(lipgloss.Color("#3E1A1A"))
 	addStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#7EE787")).Background(lipgloss.Color("#132A1C"))
@@ -705,9 +767,9 @@ func (dv *DiffView) Render(width, height int, isFocused bool) string {
 		hunkInfo = fmt.Sprintf("  Hunk %d/%d", dv.ActiveHunk+1, len(dv.Hunks))
 	}
 	var outLines []string
-	headerLeft := lipgloss.NewStyle().Bold(true).Width(colWidth).Background(lipgloss.Color("#21262D")).Render(" HEAD / Original (-)")
+	headerLeft := lipgloss.NewStyle().Bold(true).Width(leftCol).Background(lipgloss.Color("#21262D")).Render(ansi.Truncate(" HEAD / Original (-)", leftCol, ""))
 	headerRightText := " Working Tree / Modified (+)" + hunkInfo
-	headerRight := lipgloss.NewStyle().Bold(true).Width(colWidth).Background(lipgloss.Color("#21262D")).Render(ansi.Truncate(headerRightText, colWidth, ""))
+	headerRight := lipgloss.NewStyle().Bold(true).Width(rightCol).Background(lipgloss.Color("#21262D")).Render(ansi.Truncate(headerRightText, rightCol, ""))
 	headerRow := lipgloss.JoinHorizontal(lipgloss.Top, headerLeft, "│", headerRight)
 	outLines = append(outLines, headerRow)
 
@@ -717,7 +779,7 @@ func (dv *DiffView) Render(width, height int, isFocused bool) string {
 		}
 		return ansi.Truncate(s, w, "")
 	}
-	cell := func(num int, typ LineDiffType, segs []string, segIdx int, marker string, inActiveHunk bool) (string, string) {
+	cell := func(num int, typ LineDiffType, segs []string, segIdx int, marker string, inActiveHunk bool, textWidth int) (string, string) {
 		segText := ""
 		if segIdx >= 0 && segIdx < len(segs) {
 			segText = segs[segIdx]
@@ -757,8 +819,8 @@ func (dv *DiffView) Render(width, height int, isFocused bool) string {
 
 	contentHeight := height - 1
 	activeHunk, hasActive := dv.ActiveHunkData()
-	emptyLeft := strings.Repeat(" ", colWidth)
-	emptyRight := strings.Repeat(" ", colWidth)
+	emptyLeft := strings.Repeat(" ", leftCol)
+	emptyRight := strings.Repeat(" ", rightCol)
 	for v := 0; v < contentHeight; v++ {
 		vlIdx := dv.ScrollOffset + v
 		if vlIdx >= len(cache.Lines) {
@@ -772,8 +834,8 @@ func (dv *DiffView) Render(width, height int, isFocused bool) string {
 		if inActiveHunk {
 			rowMarker = "▌"
 		}
-		leftGutter, leftContent := cell(row.LeftNum, row.LeftType, cache.LeftSegs[dvl.RowIdx], dvl.Segment, rowMarker, inActiveHunk)
-		rightGutter, rightContent := cell(row.RightNum, row.RightType, cache.RightSegs[dvl.RowIdx], dvl.Segment, rowMarker, inActiveHunk)
+		leftGutter, leftContent := cell(row.LeftNum, row.LeftType, cache.LeftSegs[dvl.RowIdx], dvl.Segment, rowMarker, inActiveHunk, leftTextWidth)
+		rightGutter, rightContent := cell(row.RightNum, row.RightType, cache.RightSegs[dvl.RowIdx], dvl.Segment, rowMarker, inActiveHunk, rightTextWidth)
 		outLines = append(outLines, lipgloss.JoinHorizontal(lipgloss.Top, leftGutter+leftContent, "│", rightGutter+rightContent))
 	}
 	return strings.Join(outLines, "\n")

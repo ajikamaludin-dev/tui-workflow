@@ -35,3 +35,4 @@
 | 2026-11-15 | [2026-11-15 Configurable Tab Indent Width (1-4)](done/2026-11-15%20-%20Configurable%20Tab%20Indent%20Width%20(1-4).md) | done |
 | 2026-11-16 | [2026-11-16 - Search & Replace Clear All Form Button](done/2026-11-16%20-%20Search%20%26%20Replace%20Clear%20All%20Form%20Button.md) | done |
 | 2026-11-16 | [2026-11-16 - Git Change Gutter di Editor + Soft Wrap di Git Diff View](done/2026-11-16%20-%20Git%20Change%20Gutter%20di%20Editor%20%2B%20Soft%20Wrap%20di%20Git%20Diff%20View.md) | done |
+| 2026-11-18 | [2026-11-18 - Diff Splitter Drag 50-50 + Auto-Close Tab File Terhapus](done/2026-11-18%20-%20Diff%20Splitter%20Drag%2050-50%20%2B%20Auto-Close%20Tab%20File%20Terhapus.md) | done |

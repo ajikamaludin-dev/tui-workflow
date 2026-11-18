@@ -62,7 +62,7 @@ func TestWatcherDetectsPreservedMtimeExternalWrite(t *testing.T) {
 	}
 }
 
-func TestWatcherDeleteRecreateWithPreservedMtimeReloads(t *testing.T) {
+func TestWatcherCleanDeletedTabAutoCloses(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	tempDir, err := os.MkdirTemp("", "tui-watch-hash-*")
 	if err != nil {
@@ -86,32 +86,24 @@ func TestWatcherDeleteRecreateWithPreservedMtimeReloads(t *testing.T) {
 	if tab == nil || tab.Buffer == nil {
 		t.Fatalf("expected active tab with buffer")
 	}
+	if m.TabManager.Count() != 1 {
+		t.Fatalf("expected 1 open tab, got %d", m.TabManager.Count())
+	}
 
 	// Establish baseline
 	newM, _ := m.Update(FileWatchTickMsg(time.Now()))
 	m = newM.(Model)
 
-	info, err := os.Stat(filePath)
-	if err != nil {
-		t.Fatalf("stat: %v", err)
-	}
-	oldMtime := info.ModTime()
-
-	// Delete, then recreate with the same mtime and different content
+	// Delete the backing file: a clean tab should auto-close on the next tick.
 	_ = os.Remove(filePath)
 	newM, _ = m.Update(FileWatchTickMsg(time.Now()))
 	m = newM.(Model)
-	if tab.WatchedHash != "" {
-		t.Errorf("expected baseline cleared after delete detection")
+
+	if m.TabManager.Count() != 0 {
+		t.Errorf("expected clean tab to auto-close after file deletion, got %d tabs", m.TabManager.Count())
 	}
-
-	_ = os.WriteFile(filePath, []byte("# RENCANA_BARU\n"), 0644)
-	_ = os.Chtimes(filePath, oldMtime, oldMtime)
-	newM, _ = m.Update(FileWatchTickMsg(time.Now()))
-	m = newM.(Model)
-
-	if !strings.Contains(tab.Buffer.Text(), "RENCANA_BARU") {
-		t.Errorf("expected buffer reloaded after delete+recreate, got: %q", tab.Buffer.Text())
+	if m.ConfirmDialog != nil && m.ConfirmDialog.Active {
+		t.Errorf("clean deleted file must not raise a save dialog")
 	}
 }
 
